@@ -4,6 +4,8 @@ Checks: >
   clang-diagnostic-*,
   bugprone-*,
   cert-*,
+  readability-*,
+  misc-*,
   readability-braces-around-statements,
   readability-magic-numbers,
   readability-identifier-naming,

@@ -1,3 +1,13 @@
+/*
+ * ether2ser — Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/event_queue.c
+ * Purpose: Opaque event queue storage and operations.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 // Related headers
 #include "event_queue.h"

@@ -89,6 +89,7 @@ endfunction()
 add_executable(ether2serial
   src/main.c
   src/system/event_queue.c
+  src/system/cli_usb_cdc.c
 )
 # Generate PIO header for WIZnet's QSPI PIO code
 pico_generate_pio_header(ether2serial
