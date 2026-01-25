@@ -13,7 +13,7 @@ git clone https://github.com/raspberrypi/pico-sdk.git
 cd pico-sdk
 git submodule update --init
 
-# Add pico sdk to path 
+# Add pico sdk to path
 echo 'export PICO_SDK_PATH=$HOME/pico/pico-sdk' >> ~/.bashrc
 source ~/.bashrc
 
@@ -30,8 +30,8 @@ picotool help
 
 # Setup udev rules
 sudo tee /etc/udev/rules.d/99-rp2040.rules >/dev/null <<'EOF'
-# RP2040 BOOTSEL device (RPI-RP2)
-SUBSYSTEM=="usb", ATTRS{idVendor}=="2e8a", ATTRS{idProduct}=="0003", MODE="0666"
+# Any Raspberry Pi RP2040 / 2e8a devices (BOOTSEL + runtime firmwares)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2e8a", MODE="0660", GROUP="uucp", TAG+="uaccess"
 EOF
 
 sudo udevadm control --reload-rules
@@ -43,4 +43,4 @@ git clone https://github.com/raspberrypi/pico-examples.git
 cd pico-examples
 mkdir -p build && cd build
 cmake -G Ninja ..
-ninja 
+ninja

@@ -1,4 +1,5 @@
-# ether2serial roadmap
+# ether2ser roadmap
+Ethernet ↔ synchronous V.24 IP router implementation plan
 ## Dependencies
 Look at `setup_toolchain.sh`
 
@@ -99,66 +100,72 @@ cmake --build . --target flash_elf
 
 **Exit:** Payload passes with zero CRC errors at 19.2 and 64k.
 
-## Phase 6 — L2 tunnel fragmentation/reassembly (still no Ethernet)
+## Phase 6 — PPP protocol implementation (still no Ethernet)
 
-**Goal:** Carry 1500-byte "Ethernet frame blobs" over HDLC reliably.
+**Goal:** Carry IP packets over HDLC with PPP framing reliably.
 
-- Implement fragmentation header + reassembly
-  - choose initial fragment payload size (start 256–512B)
-  - reassembly timeout + drop stats
+- Implement PPP protocol handler
+  - PPP protocol negotiation (LCP, IPCP)
+  - IP packet encapsulation with PPP headers (protocol 0x0021)
+  - Handle standard PPP escape sequences
 - CLI synthetic test:
-  - `tunnel sendfake <len>` (64..1500)
-  - verify reassembled bytes match
+  - `ppp sendip <dst_ip> <len>` (synthetic IP packets)
+  - verify PPP framing and IP packet integrity
 
-**Exit:** Full 1500-byte payload survives your link.
+**Exit:** IP packets survive PPP encapsulation over your link.
 
-## Phase 7 — W5500 bring-up and raw L2 capture/transmit (critical risk area)
+## Phase 7 — W5500 bring-up and IP packet handling (critical risk area)
 
-**Goal:** Prove you can do "true L2 forwarding" with W5500 on this board.
+**Goal:** Prove you can do IP packet forwarding with W5500 on this board.
 
 - Bring up W5500 basic init + link status + SPI comms
-  - `eth status` (link up? MAC?)
-- Implement MACRAW receive
-  - capture raw Ethernet frames
-  - print summary: dst/src MAC, EtherType, len
-- Implement MACRAW transmit
-  - send a simple test frame (e.g., broadcast) and verify with a PC running tcpdump
+  - `eth status` (link up? IP config?)
+- Implement IP packet receive
+  - capture incoming IP packets using W5500 socket API
+  - print summary: src/dst IP, protocol, length
+- Implement IP packet transmit
+  - send test IP packets and verify with a PC running tcpdump
+- Test basic routing
+  - forward packets between different IP subnets
 
-**Exit:** You can RX and TX raw Ethernet frames on the W5500 reliably.
+**Exit:** You can RX, TX, and route IP packets via W5500 reliably.
 
-## Phase 8 — End-to-end bridging (final functional goal)
+## Phase 8 — End-to-end IP routing (final functional goal)
 
-**Goal:** Ethernet frames go over V.24 and back.
+**Goal:** IP packets route between Ethernet and V.24 interfaces.
 
 - Connect pipelines:
-  - W5500 RX → enqueue → fragment → HDLC TX → PIO → RS-232
-  - RS-232 RX → PIO → HDLC RX → reassemble → W5500 TX
+  - W5500 IP RX → route → PPP encap → HDLC TX → PIO → RS-232
+  - RS-232 RX → PIO → HDLC RX → PPP decap → route → W5500 IP TX
 - Use two devices for first real test (recommended):
-  - Device A ↔ V.24 ↔ Device B
-  - Each has Ethernet to a PC or switch
+  - Device A (192.168.1.0/24) ↔ V.24 ↔ Device B (192.168.2.0/24)
+  - Each has Ethernet to a PC with different subnet
 - Test plan:
-  - See ARP traverse (must for L2)
-  - ping across a topology that forces traffic through the link
-  - tcpdump -e on both sides to confirm byte-perfect frames
+  - Configure static routes on test PCs
+  - ping across subnets forcing traffic through the router
+  - tcpdump on both sides to confirm IP packet routing
+  - Test TCP connections (HTTP, SSH) across the link
 
-**Exit:** Stable L2 bridging at 19.2–64k.
+**Exit:** Stable IP routing at 19.2–64k.
 
-## ## Phase 9 — Configuration + persistence + robustness
+## Phase 9 — Configuration + persistence + robustness
 
 **Goal:** Make it usable and reliable.
 
 - USB CLI:
   - `set txc pin15|pin24`
   - `set rate …`
-  - `set ip …`
-  - `save / show / stats`
+  - `set ip eth <ip/mask> serial <ip/mask>`
+  - `set route add <dest/mask> <gateway>`
+  - `show routes / show stats / save`
 - Safe apply rules:
   - apply mode/rate only when TX idle
-  - IP changes re-init W5500
+  - IP/routing changes update W5500 config and routing table
 - Hardening:
   - buffer pool limits + drop policy
-  - reassembly timeout
+  - IP fragment timeout
+  - routing table limits
   - watchdog
-  - counters and diagnostics
+  - counters and diagnostics (packets routed, dropped, errors)
 
 **Exit:** "Appliance-like" behavior.
