@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.13)
 
+# WIZnet chip configuration for W55RP20-EVB-PICO
+# This board has an integrated W5500 connected via internal PIO-based SPI
+set(WIZNET_CHIP W5500)
+add_definitions(-D_WIZCHIP_=W5500)
+add_definitions(-DDEVICE_BOARD_NAME=W55RP20_EVB_PICO)
+
+# W55RP20 internal SiP uses standard SPI (QSPI_SINGLE_MODE), not quad SPI
+# This configures the PIO-based SPI driver in the WIZnet port layer
+set(WIZCHIP_QSPI_MODE QSPI_SINGLE_MODE)
+add_definitions(-D_WIZCHIP_QSPI_MODE_=${WIZCHIP_QSPI_MODE})
+
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(ether2serial C CXX ASM)
@@ -19,8 +30,8 @@ endif()
 function(configure_pico_target target_name)
   target_link_libraries(${target_name}
     pico_stdlib
-    hardware_spi
     hardware_gpio
+    hardware_spi
   )
 
   target_include_directories(${target_name} PRIVATE
@@ -103,6 +114,9 @@ pico_generate_pio_header(ex_blink_leds
 
 configure_pico_target(ex_blink_leds)
 
+# W5500 Ethernet initialization example for W55RP20-EVB-PICO
+# Demonstrates PIO-based SPI communication with internal W5500
+# NOTE: Requires Ethernet cable connected for PHY link establishment
 add_executable(ex_w55_echo
     src/examples/w55_udp_echo/main.c
 )
@@ -113,15 +127,27 @@ target_include_directories(ex_w55_echo PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500
   ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Internet
   ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/inc
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port
 )
 
-# Core ioLibrary sources needed for wizchip_conf/socket API
+# Core ioLibrary sources + WIZnet port layer for W55RP20
 target_sources(ex_w55_echo PRIVATE
   ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/wizchip_conf.c
   ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/socket.c
   ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500/w5500.c
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_spi.c
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.c
 )
 
-target_compile_definitions(ex_w55_echo PRIVATE _WIZCHIP_=W5500)
+# Generate PIO header for WIZnet's QSPI PIO code
+pico_generate_pio_header(ex_w55_echo
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.pio
+)
+
+target_link_libraries(ex_w55_echo
+  hardware_pio
+  hardware_dma
+)
 
 configure_pico_target(ex_w55_echo)
