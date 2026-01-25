@@ -1,16 +1,31 @@
-# Prerequisites
-*.d
+# Build directories
+build/
+cmake-build-*/
 
-# Object files
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+CTestTestfile.cmake
+_deps/
+
+# Compiled Object files
 *.o
-*.ko
 *.obj
 *.elf
+*.bin
+*.hex
+*.uf2
+*.dis
+*.lst
 
 # Linker output
-*.ilk
 *.map
 *.exp
+*.ilk
 
 # Precompiled Headers
 *.gch
@@ -22,19 +37,11 @@
 *.la
 *.lo
 
-# Shared objects (inc. Windows DLLs)
+# Shared objects
 *.dll
 *.so
 *.so.*
 *.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
 
 # Debug files
 *.dSYM/
@@ -42,14 +49,35 @@
 *.idb
 *.pdb
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# Prerequisites and dependencies
+*.d
+*.dep
 
-# debug information files
-*.dwo
+# Pico SDK generated files
+generated/
+pico_flash_region.ld
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# KiCAD temporary/backup files
+*.kicad_pcb-bak
+*.kicad_sch-bak
+*-backups/
+*.bak
+*.bck
+fp-info-cache
+~*.kicad_*
+*.lck
+\#auto_saved_files\#
+
+# OpenOCD
+openocd.log
+
+# picotool
+*.bin.elf2uf2
