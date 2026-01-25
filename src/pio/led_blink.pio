@@ -1,0 +1,19 @@
+.program led_blink
+; Visible blink using a delay loop.
+; Intended to run with clkdiv ~ 65535 (max) for ~1 Hz.
+
+.wrap_target
+    ; HIGH phase
+    set pins, 1
+    set y, 14          ; adjust this number to change blink rate
+high_delay:
+    nop        [31]
+    jmp y-- high_delay
+
+    ; LOW phase
+    set pins, 0
+    set y, 14
+low_delay:
+    nop        [31]
+    jmp y-- low_delay
+.wrap
