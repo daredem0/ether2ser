@@ -1,0 +1,6 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "custom")(type "KiCad")(uri "${KIPRJMOD}/custom.pretty")(options "")(descr ""))
+  (lib (name "custom_cap")(type "KiCad")(uri "C:/Users/fleuz/Documents/PCBLibs/RDER71H104K0S1H03A")(options "")(descr ""))
+  (lib (name "custom_sa15ca")(type "KiCad")(uri "C:/Users/fleuz/Documents/PCBLibs/ul_SA15CA/KiCADv6/footprints.pretty")(options "")(descr ""))
+)

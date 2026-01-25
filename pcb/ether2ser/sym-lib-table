@@ -1,0 +1,5 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "MAX3243")(type "KiCad")(uri "C:/Users/fleuz/Documents/PCBLibs/ul_MAX3243EIDWR/KiCADv6/2026-01-23_19-45-21.kicad_sym")(options "")(descr ""))
+  (lib (name "W55R")(type "KiCad")(uri "C:/Users/fleuz/Documents/PCBLibs/ul_W5500/KiCADv6/2026-01-23_19-56-51.kicad_sym")(options "")(descr ""))
+)
