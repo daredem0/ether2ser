@@ -28,52 +28,76 @@ endif()
 
 # Helper: common Pico target defaults
 function(configure_pico_target target_name)
-  target_link_libraries(${target_name}
-    pico_stdlib
-    hardware_gpio
-    hardware_spi
-  )
-
-  target_include_directories(${target_name} PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/src
-  )
-
-  # USB CDC serial (minicom) for CLI/printf
-  pico_enable_stdio_usb(${target_name} 1)
-  pico_enable_stdio_uart(${target_name} 0)
-
-  pico_add_extra_outputs(${target_name})
-
-  # Per-target flash helpers
-  if (PICOTOOL_EXE)
-    add_custom_target(flash_elf_${target_name}
-      COMMAND ${PICOTOOL_EXE} load -f $<TARGET_FILE:${target_name}>
-      COMMAND ${CMAKE_COMMAND} -E sleep 1
-      COMMAND ${PICOTOOL_EXE} reboot -f
-      DEPENDS ${target_name}
-      USES_TERMINAL
-      COMMENT "Flashing ELF for ${target_name} using picotool."
+    target_link_libraries(${target_name}
+        pico_stdlib
+        hardware_gpio
+        hardware_spi
+        hardware_dma
     )
 
-    add_custom_target(flash_uf2_${target_name}
-      COMMAND ${PICOTOOL_EXE} load -f $<TARGET_FILE_DIR:${target_name}>/$<TARGET_FILE_BASE_NAME:${target_name}>.uf2
-      COMMAND ${CMAKE_COMMAND} -E sleep 1
-      COMMAND ${PICOTOOL_EXE} reboot -f
-      DEPENDS ${target_name}
-      USES_TERMINAL
-      COMMENT "Flashing UF2 for ${target_name} using picotool."
+    target_include_directories(${target_name} PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/src
     )
-  endif()
+
+    # Core ioLibrary headers
+    target_include_directories(${target_name} PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Internet
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/inc
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port
+    )
+
+    # Core ioLibrary sources + WIZnet port layer for W55RP20
+    target_sources(${target_name} PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/wizchip_conf.c
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/socket.c
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500/w5500.c
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_spi.c
+    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.c
+    )
+
+    # USB CDC serial (minicom) for CLI/printf
+    pico_enable_stdio_usb(${target_name} 1)
+    pico_enable_stdio_uart(${target_name} 0)
+    pico_add_extra_outputs(${target_name})
+
+    # Per-target flash helpers
+    if (PICOTOOL_EXE)
+        add_custom_target(flash_elf_${target_name}
+        COMMAND ${PICOTOOL_EXE} load -f $<TARGET_FILE:${target_name}>
+        COMMAND ${CMAKE_COMMAND} -E sleep 1
+        COMMAND ${PICOTOOL_EXE} reboot -f
+        DEPENDS ${target_name}
+        USES_TERMINAL
+        COMMENT "Flashing ELF for ${target_name} using picotool."
+        )
+
+        add_custom_target(flash_uf2_${target_name}
+        COMMAND ${PICOTOOL_EXE} load -f $<TARGET_FILE_DIR:${target_name}>/$<TARGET_FILE_BASE_NAME:${target_name}>.uf2
+        COMMAND ${CMAKE_COMMAND} -E sleep 1
+        COMMAND ${PICOTOOL_EXE} reboot -f
+        DEPENDS ${target_name}
+        USES_TERMINAL
+        COMMENT "Flashing UF2 for ${target_name} using picotool."
+        )
+    endif()
 endfunction()
 
 # Main firmware target
 add_executable(ether2serial
   src/main.c
 )
+# Generate PIO header for WIZnet's QSPI PIO code
+pico_generate_pio_header(ether2serial
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.pio
+)
 
 target_link_libraries(ether2serial
   hardware_pio
   hardware_spi
+  hardware_dma
 )
 
 # Generate C header from the PIO program(s)
