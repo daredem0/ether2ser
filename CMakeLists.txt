@@ -23,3 +23,26 @@ pico_enable_stdio_usb(ether2serial 1)
 pico_enable_stdio_uart(ether2serial 0)
 
 pico_add_extra_outputs(ether2serial)
+
+
+# -------------------- Flash targets (picotool) --------------------
+# Find picotool
+find_program(PICOTOOL_EXE picotool)
+if (NOT PICOTOOL_EXE)
+  message(WARNING "picotool not found in PATH. 'flash' targets will not be available.")
+else()
+
+  add_custom_target(flash_elf
+    COMMAND ${PICOTOOL_EXE} load -f $<TARGET_FILE:ether2serial>
+    COMMAND ${PICOTOOL_EXE} reboot
+    DEPENDS ether2serial
+    USES_TERMINAL
+    COMMENT "Flashing ELF to RP2040 using picotool (device must be in BOOTSEL mode, unless your firmware supports reboot-to-bootsel)."
+  )
+
+  add_custom_target(reboot
+    COMMAND ${PICOTOOL_EXE} reboot
+    USES_TERMINAL
+    COMMENT "Reboot RP2040 via picotool (device must be accessible)."
+  )
+endif()

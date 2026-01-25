@@ -1,0 +1,70 @@
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  misc-*,
+  cert-*,
+  linuxkernel-*,
+  clang-diagnostic-*,
+  hicpp-*,
+  cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  cppcoreguidelines-pro-type-vararg,
+  cppcoreguidelines-pro-bounds-constant-array-index,
+  bugprone-integer-division,
+  bugprone-sizeof-expression,
+  bugprone-macro-parentheses,
+  bugprone-suspicious-memset-usage,
+  bugprone-branch-clone,
+  cert-dcl16-c,           # Avoid side effects in macros
+  cert-env33-c,           # Secure getenv usage
+  cert-err33-c,           # Check return values
+  cert-fio38-c,           # Safe use of fopen/fclose
+  cert-int30-c,           # Integer overflow
+  cert-str34-c,           # String safety
+  readability-braces-around-statements,
+  readability-implicit-bool-conversion,
+  readability-magic-numbers,
+  readability-function-size,
+  readability-named-parameter,
+  readability-identifier-naming,
+  performance-no-int-to-ptr,
+  performance-inefficient-vector-operation
+
+CheckOptions:
+  # --- Naming conventions ---
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+  - key: readability-identifier-naming.TypeCase
+    value: lower_case
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  # --- Magic number suppression ---
+  - key: readability-magic-numbers.IgnoredValues
+    value: '0,1,-1,2,3,4,8,16,32,64,128,256,512,1024'
+  # --- Function size limit ---
+  - key: readability-function-size.LineThreshold
+    value: '200'
+  # --- Braces around statements ---
+  - key: readability-braces-around-statements.ShortStatementLines
+    value: '1'
+
+WarningsAsErrors: >
+  clang-analyzer-*,
+  bugprone-*,
+  cert-*,
+  performance-*,
+  portability-*,
+  readability-braces-around-statements
+
+# HeaderFilterRegex: 'src/.*'
+HeaderFilterRegex: '^(?!external/).*'
+#AnalyzeTemporaryDtors: false
+FormatStyle: file
+UseColor: true
