@@ -1,3 +1,14 @@
+/*
+ * ether2ser — Ethernet ↔ synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/examples/blink/blink_pio.c
+ * Purpose: PIO helper to drive a GPIO blink state machine for the example.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
+
 // Related headers
 
 // Standard library headers

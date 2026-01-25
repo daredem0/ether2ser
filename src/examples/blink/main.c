@@ -1,4 +1,17 @@
-
+/*
+ * ether2ser — Ethernet ↔ synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/examples/blink/main.c
+ * Purpose: Example entry point blinking the USER LED via PIO and APU.
+ *
+ * Notes:
+ *  - Demonstrates concurrent PIO-driven and CPU-driven GPIO blinking.
+ *  - Targets the W55RP20-EVB-PICO (USER LED on GPIO19).
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 // Related headers
 #include "blink.h"
@@ -34,5 +47,5 @@ int main(void)
     start_pio_led_blink(pio0, 0, PIO_LED_PIN);
 
     // --- Keep your existing APU blink code unchanged ---
-    start_apu_led_blink(APU_LED_PIN);
+    start_cpu_led_blink(APU_LED_PIN);
 }

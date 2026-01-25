@@ -98,7 +98,7 @@ endif()
 # Create: src/examples/pio_blink/main.c
 add_executable(ex_blink_leds
   src/examples/blink/blink_pio.c
-  src/examples/blink/blink_apu.c
+  src/examples/blink/blink_cpu.c
   src/examples/blink/main.c
 )
 
