@@ -99,12 +99,11 @@ static void cli_poll(void)
     int c;
     while ((c = getchar_timeout_us(0)) != PICO_ERROR_TIMEOUT)
     {
-        if (c == '\r')
+
+        if (c == '\n' || c == '\r')
         {
-            continue;
-        }
-        if (c == '\n')
-        {
+            // add new line before processing command
+            printf("\r\n");
             event_t e = {.type = EV_CLI_LINE};
             buf[len] = 0;
             snprintf(e.u.cli.line, sizeof(e.u.cli.line), "%s", buf);
@@ -113,6 +112,7 @@ static void cli_poll(void)
         }
         else if (c == 0x08 || c == 0x7F)
         { // backspace
+            printf("\b \b");
             if (len)
             {
                 len--;
@@ -122,8 +122,14 @@ static void cli_poll(void)
         {
             if (len < sizeof(buf) - 1)
             {
+                // Echo character back and sore it in buffer
+                printf("%c", (char)c);
                 buf[len++] = (char)c;
             }
+        }
+        else
+        {
+            printf("[DEBUG] Ignoring char: 0x%02X\r\n", c);
         }
     }
 }
