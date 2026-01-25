@@ -9,20 +9,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 pico_sdk_init()
 
-# ------------------------------------------------------------
 # Tools
-# ------------------------------------------------------------
 find_program(PICOTOOL_EXE picotool)
 if (NOT PICOTOOL_EXE)
   message(WARNING "picotool not found in PATH. Flash targets will not be available.")
 endif()
 
-# ------------------------------------------------------------
 # Helper: common Pico target defaults
-# ------------------------------------------------------------
 function(configure_pico_target target_name)
   target_link_libraries(${target_name}
     pico_stdlib
+    hardware_spi
+    hardware_gpio
   )
 
   target_include_directories(${target_name} PRIVATE
@@ -57,9 +55,7 @@ function(configure_pico_target target_name)
   endif()
 endfunction()
 
-# ------------------------------------------------------------
 # Main firmware target
-# ------------------------------------------------------------
 add_executable(ether2serial
   src/main.c
 )
@@ -90,12 +86,7 @@ if (PICOTOOL_EXE)
   )
 endif()
 
-# ------------------------------------------------------------
 # Examples
-# ------------------------------------------------------------
-
-# Example: PIO blink (separate from main firmware)
-# Create: src/examples/pio_blink/main.c
 add_executable(ex_blink_leds
   src/examples/blink/blink_pio.c
   src/examples/blink/blink_cpu.c
@@ -111,3 +102,26 @@ pico_generate_pio_header(ex_blink_leds
 )
 
 configure_pico_target(ex_blink_leds)
+
+add_executable(ex_w55_echo
+    src/examples/w55_udp_echo/main.c
+)
+
+# Core ioLibrary headers
+target_include_directories(ex_w55_echo PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Internet
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver
+)
+
+# Core ioLibrary sources needed for wizchip_conf/socket API
+target_sources(ex_w55_echo PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/wizchip_conf.c
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/socket.c
+  ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500/w5500.c
+)
+
+target_compile_definitions(ex_w55_echo PRIVATE _WIZCHIP_=W5500)
+
+configure_pico_target(ex_w55_echo)

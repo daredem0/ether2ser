@@ -1,0 +1,3 @@
+[submodule "external/WIZnet-PICO-C"]
+	path = external/WIZnet-PICO-C
+	url = https://github.com/WIZnet-ioNIC/WIZnet-PICO-C.git
