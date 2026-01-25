@@ -31,16 +31,22 @@
 
 // Generated headers
 
+// USB CDC enumeration delay in milliseconds
+#define USB_ENUMERATION_DELAY_MS 1500
+
+// Heartbeat message interval in milliseconds
+#define HEARTBEAT_INTERVAL_MS 500
+
 int main(void)
 {
     stdio_init_all();
 
     // Give the USB CDC a moment to enumerate (harmless even if not using USB)
-    sleep_ms(1500);
+    sleep_ms(USB_ENUMERATION_DELAY_MS);
 
     while (true)
     {
         printf("v24-eth-bridge: hello from RP2040\r\n");
-        sleep_ms(500);
+        sleep_ms(HEARTBEAT_INTERVAL_MS);
     }
 }
