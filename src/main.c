@@ -1,63 +1,46 @@
-// src/main.c
+/*
+ * ether2ser — Ethernet ↔ synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/main.c
+ * Purpose: Firmware entry point and high-level scheduler.
+ *
+ * This project targets the W55RP20-EVB-PICO (RP2040 + W5500). The RP2040 CPU
+ * runs the control plane and protocol processing (L3 forwarding, framing/CRC,
+ * buffering, configuration). The RP2040 PIO implements the time-critical
+ * synchronous serial “PHY” (TXD/RXD with TXC/RXC).
+ *
+ * Notes:
+ *  - USB CDC is used for a simple CLI and status output.
+ *  - PIO programs live in /pio (top-level); PIO C glue lives in src/pio/.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
+
+// Related headers
+
+// Standard library headers
 #include <stdio.h>
-#include "pico/stdlib.h"
-#include "hardware/gpio.h"
-#include "hardware/pio.h"
 
-#include "led_blink.pio.h" // generated from src/pio/led_blink.pio
+// Library Headers
+#include "pico/stdio.h"
+#include "pico/time.h"
 
-#ifndef LED_PIN
-// Keep your existing APU blink pin as-is.
-#define LED_PIN 25
-#endif
+// Project Headers
 
-// W55RP20-EVB-PICO onboard USER LED is on GPIO19.
-#define PIO_LED_PIN 19
-
-static void start_pio_led_blink(PIO pio, uint sm, uint pin)
-{
-    // Load PIO program
-    uint offset = pio_add_program(pio, &led_blink_program);
-
-    // Route GPIO to PIO
-    pio_gpio_init(pio, pin);
-    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
-
-    // Configure state machine
-    pio_sm_config c = led_blink_program_get_default_config(offset);
-    sm_config_set_set_pins(&c, pin, 1);
-
-    // Slow down the state machine clock so blinking is visible.
-    // 125 MHz / 65535 / 64 cycles ≈ 30 Hz toggle rate (15 Hz blink)
-    // For slower: increase delay in PIO program [31] -> larger value
-    sm_config_set_clkdiv(&c, 65535.0f);
-    pio_sm_init(pio, sm, offset, &c);
-    pio_sm_set_enabled(pio, sm, true);
-}
+// Generated headers
 
 int main(void)
 {
     stdio_init_all();
 
     // Give the USB CDC a moment to enumerate (harmless even if not using USB)
-    sleep_ms(1000);
+    sleep_ms(1500);
 
-    printf("v24-eth-bridge: hello from RP2040\r\n");
-    printf("PIO blinking GPIO19 (USER LED), APU blinking GPIO%d\r\n", LED_PIN);
-
-    // --- Start PIO blink on onboard USER LED (GPIO19) ---
-    start_pio_led_blink(pio0, 0, PIO_LED_PIN);
-
-    // --- Keep your existing APU blink code unchanged ---
-    gpio_init(LED_PIN);
-    gpio_set_dir(LED_PIN, GPIO_OUT);
-
-    bool on = false;
     while (true)
     {
-        on = !on;
-        gpio_put(LED_PIN, on);
-        printf("tick: led=%d\r\n", on ? 1 : 0);
+        printf("v24-eth-bridge: hello from RP2040\r\n");
         sleep_ms(500);
     }
 }

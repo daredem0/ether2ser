@@ -9,48 +9,105 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 pico_sdk_init()
 
+# ------------------------------------------------------------
+# Tools
+# ------------------------------------------------------------
+find_program(PICOTOOL_EXE picotool)
+if (NOT PICOTOOL_EXE)
+  message(WARNING "picotool not found in PATH. Flash targets will not be available.")
+endif()
+
+# ------------------------------------------------------------
+# Helper: common Pico target defaults
+# ------------------------------------------------------------
+function(configure_pico_target target_name)
+  target_link_libraries(${target_name}
+    pico_stdlib
+  )
+
+  target_include_directories(${target_name} PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/src
+  )
+
+  # USB CDC serial (minicom) for CLI/printf
+  pico_enable_stdio_usb(${target_name} 1)
+  pico_enable_stdio_uart(${target_name} 0)
+
+  pico_add_extra_outputs(${target_name})
+
+  # Per-target flash helpers
+  if (PICOTOOL_EXE)
+    add_custom_target(flash_elf_${target_name}
+      COMMAND ${PICOTOOL_EXE} load -f $<TARGET_FILE:${target_name}>
+      COMMAND ${CMAKE_COMMAND} -E sleep 1
+      COMMAND ${PICOTOOL_EXE} reboot -f
+      DEPENDS ${target_name}
+      USES_TERMINAL
+      COMMENT "Flashing ELF for ${target_name} using picotool."
+    )
+
+    add_custom_target(flash_uf2_${target_name}
+      COMMAND ${PICOTOOL_EXE} load -f $<TARGET_FILE_DIR:${target_name}>/$<TARGET_FILE_BASE_NAME:${target_name}>.uf2
+      COMMAND ${CMAKE_COMMAND} -E sleep 1
+      COMMAND ${PICOTOOL_EXE} reboot -f
+      DEPENDS ${target_name}
+      USES_TERMINAL
+      COMMENT "Flashing UF2 for ${target_name} using picotool."
+    )
+  endif()
+endfunction()
+
+# ------------------------------------------------------------
+# Main firmware target
+# ------------------------------------------------------------
 add_executable(ether2serial
   src/main.c
 )
 
-
 target_link_libraries(ether2serial
-  pico_stdlib
   hardware_pio
   hardware_spi
 )
 
-# Generate C header from the PIO program
-pico_generate_pio_header(ether2serial ${CMAKE_CURRENT_LIST_DIR}/src/pio/led_blink.pio)
+# Generate C header from the PIO program(s)
+pico_generate_pio_header(ether2serial
+  ${CMAKE_CURRENT_LIST_DIR}/pio/led_blink.pio
+)
 
+configure_pico_target(ether2serial)
 
-
-# USB CDC serial for your CLI
-pico_enable_stdio_usb(ether2serial 1)
-pico_enable_stdio_uart(ether2serial 0)
-
-pico_add_extra_outputs(ether2serial)
-
-
-# -------------------- Flash targets (picotool) --------------------
-# Find picotool
-find_program(PICOTOOL_EXE picotool)
-if (NOT PICOTOOL_EXE)
-  message(WARNING "picotool not found in PATH. 'flash' targets will not be available.")
-else()
-
+if (PICOTOOL_EXE)
   add_custom_target(flash_elf
-    COMMAND ${PICOTOOL_EXE} load -f $<TARGET_FILE:ether2serial>
-    COMMAND ${CMAKE_COMMAND} -E sleep 1
-    COMMAND ${PICOTOOL_EXE} reboot -f
-    DEPENDS ether2serial
-    USES_TERMINAL
-    COMMENT "Flashing ELF to RP2040 using picotool (device must be in BOOTSEL mode, unless your firmware supports reboot-to-bootsel)."
+    DEPENDS flash_elf_ether2serial
   )
-
+  add_custom_target(flash_uf2
+    DEPENDS flash_uf2_ether2serial
+  )
   add_custom_target(reboot
     COMMAND ${PICOTOOL_EXE} reboot
     USES_TERMINAL
-    COMMENT "Reboot RP2040 via picotool (device must be accessible)."
+    COMMENT "Reboot RP2040 via picotool."
   )
 endif()
+
+# ------------------------------------------------------------
+# Examples
+# ------------------------------------------------------------
+
+# Example: PIO blink (separate from main firmware)
+# Create: src/examples/pio_blink/main.c
+add_executable(ex_blink_leds
+  src/examples/blink/blink_pio.c
+  src/examples/blink/blink_apu.c
+  src/examples/blink/main.c
+)
+
+target_link_libraries(ex_blink_leds
+  hardware_pio
+)
+
+pico_generate_pio_header(ex_blink_leds
+  ${CMAKE_CURRENT_LIST_DIR}/pio/led_blink.pio
+)
+
+configure_pico_target(ex_blink_leds)
