@@ -23,21 +23,15 @@
 // Standard library headers
 #include <stdio.h>
 #include <stdint.h>
-#include <string.h>
 
 // Library Headers
-#include "pico/stdlib.h"
 #include "pico/stdio.h"
 #include "pico/time.h"
-#include "pico/error.h"
-#include "hardware/gpio.h"
 #include "wizchip_conf.h"
-#include "w5500.h"
-#include "socket.h"
-#include "wizchip_spi.h"
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
+#include "system/cli_commands.h"
 #include "system/event_queue.h"
 #include "system/cli_usb_cdc.h"
 

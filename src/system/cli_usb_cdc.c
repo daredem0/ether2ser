@@ -23,13 +23,13 @@
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 #include "system/event_queue.h"
+#include "cli_commands.h"
 
 // Project Headers
 
 // Generated headers
 
 // Heartbeat message interval in milliseconds
-#define HEARTBEAT_INTERVAL_MS 500
 #define CLI_BUFFER_SIZE 128
 #define CLI_EVENT_POOL_SIZE EVENT_QUEUE_CAPACITY
 #define ASCII_BACKSPACE 0x08
@@ -107,29 +107,5 @@ void cli_poll(void)
         {
             printf("[DEBUG] Ignoring char: 0x%02X\r\n", input_char);
         }
-    }
-}
-
-void handle_cli_line(const char *line)
-{
-    if (strcmp(line, "help") == 0)
-    {
-        printf("Commands: help, status, net\r\n");
-    }
-    else if (strcmp(line, "status") == 0)
-    {
-        printf("status: ok\r\n");
-    }
-    else if (strcmp(line, "net") == 0)
-    {
-        wiz_NetInfo net_info;
-        wizchip_getnetinfo(&net_info);
-        printf("ip=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n",
-               net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3],
-               net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
-    }
-    else if (line[0] != '\0')
-    {
-        printf("unknown: '%s' (try 'help')\r\n", line);
     }
 }
