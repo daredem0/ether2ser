@@ -91,6 +91,7 @@ add_executable(ether2serial
   src/system/event_queue.c
   src/system/cli_usb_cdc.c
   src/system/cli_commands.c
+  src/drivers/w5500_driver.c
 )
 # Generate PIO header for WIZnet's QSPI PIO code
 pico_generate_pio_header(ether2serial

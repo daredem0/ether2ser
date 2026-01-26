@@ -34,6 +34,7 @@
 #include "system/cli_commands.h"
 #include "system/event_queue.h"
 #include "system/cli_usb_cdc.h"
+#include "drivers/w5500_driver.h"
 
 // Generated headers
 
@@ -45,12 +46,16 @@
 int main(void)
 {
     stdio_init_all();
-    event_queue_init();
-
     // Give the USB CDC a moment to enumerate (harmless even if not using USB)
     sleep_ms(USB_ENUMERATION_DELAY_MS);
-    printf("v24-eth-bridge: hello from RP2040\r\n");
+    w5500_driver_init();
+    w5500_set_network_defaults();
+
+    printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
     printf("\r\nType 'help' in USB serial.\r\n> ");
+
+    event_queue_init();
+
 
     while (true)
     {
