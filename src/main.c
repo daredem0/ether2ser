@@ -50,6 +50,8 @@ int main(void)
     sleep_ms(USB_ENUMERATION_DELAY_MS);
     w5500_driver_init();
     w5500_set_network_defaults();
+    w5500_open_ipraw_socket();
+    w5500_poll_rx();
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
     printf("\r\nType 'help' in USB serial.\r\n> ");
