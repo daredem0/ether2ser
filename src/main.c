@@ -45,13 +45,19 @@
 
 int main(void)
 {
+    UDP_CONFIG_T local_config = {
+        .ip_address = DEFAULT_IP_ADDR,
+        .port = DEFAULT_UDP_PORT,
+    };
+    UDP_CONFIG_T sender_config;
+
     stdio_init_all();
     // Give the USB CDC a moment to enumerate (harmless even if not using USB)
     sleep_ms(USB_ENUMERATION_DELAY_MS);
     w5500_driver_init();
     w5500_set_network_defaults();
-    w5500_open_ipraw_socket();
-    w5500_poll_rx();
+    w5500_open_udp_socket(&local_config);
+    w5500_debug_status();
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
     printf("\r\nType 'help' in USB serial.\r\n> ");
@@ -62,6 +68,7 @@ int main(void)
     while (true)
     {
         cli_poll();
+        w5500_poll_rx(&sender_config);
 
         event_t event_item;
         while (event_queue_pop(&event_item))
