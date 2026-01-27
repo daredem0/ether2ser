@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <string.h>
 
 // Library Headers
 #include "pico/stdlib.h"
@@ -29,7 +30,15 @@
 #define IP_SOCKET 0 // Socket number for IPRAW
 #define UDP_SOCKET 1
 
-#define RX_BUF_SIZE 2048
+
+static void ipv4_calc_broadcast_u8(const uint8_t ip[4],
+                            const uint8_t mask[4],
+                            uint8_t bcast[4])
+{
+    for (int i = 0; i < 4; i++) {
+        bcast[i] = (uint8_t)((ip[i] & mask[i]) | (uint8_t)(~mask[i]));
+    }
+}
 
 
 void w5500_debug_status(void) {
@@ -43,11 +52,26 @@ void w5500_debug_status(void) {
     printf("Socket Mode: 0x%02X, Status: 0x%02X\r\n", mode, status);
 }
 
-void w5500_poll_rx(UDP_CONFIG_T *send_config){
-    uint8_t recv_buf[RX_BUF_SIZE]; // Payload buffer
-    int32_t recv_len = recvfrom(UDP_SOCKET, recv_buf, sizeof(recv_buf), send_config->ip_address, &(send_config->port));
+void w5500_udp_tx(UDP_CONFIG_T *send_config, UDP_FRAME_T *frame){
+    int32_t sent_len = sendto(UDP_SOCKET, frame->payload, (uint16_t)frame->length, send_config->ip_address, send_config->port);
+    printf("TX %ld bytes to %u.%u.%u.%u:%u\r\n",
+        (long)frame->length, send_config->ip_address[0],
+        send_config->ip_address[1], send_config->ip_address[2],
+        send_config->ip_address[3], send_config->port);
+    if (sent_len < 0)
+    {
+        printf("sendto() error %ld\r\n", (long)sent_len);
+    }
+}
 
+void w5500_poll_rx(UDP_CONFIG_T *send_config, UDP_FRAME_T *frame){
+    // Clean up frame buffer first to ensure no data corruption
+    if(frame->length > 0){
+        memset(frame->payload, 0, frame->length);
+    }
+    int32_t recv_len = recvfrom(UDP_SOCKET, frame->payload, RX_BUF_SIZE, send_config->ip_address, &(send_config->port));
     if (recv_len > 0){
+        frame->length = (size_t)recv_len;
         printf("RX %ld bytes from %u.%u.%u.%u:%u\r\n",
             (long)recv_len, send_config->ip_address[0],
             send_config->ip_address[1], send_config->ip_address[2],
@@ -57,7 +81,7 @@ void w5500_poll_rx(UDP_CONFIG_T *send_config){
         printf("Data: ");
         int print_len = (recv_len < 16) ? recv_len : 16;
         for (int i = 0; i < print_len; i++) {
-            printf("%02X ", recv_buf[i]);
+            printf("%02X ", frame->payload[i]);
         }
         printf("\r\n");
     }
@@ -95,20 +119,24 @@ void w5500_open_udp_socket(UDP_CONFIG_T *config){
 
 }
 
-void w5500_set_network_defaults(void){
+
+void w5500_set_network_defaults(NETWORK_CONFIG_T *config) {
 
     // Configure network settings
-    wiz_NetInfo net_info = {
-        .mac = DEFAULT_MAC_ADDR,
-        .ip = DEFAULT_IP_ADDR,
-        .sn = DEFAULT_SUBNET_MASK,
-        .gw = DEFAULT_GATEWAY_ADDR,
-        .dns = DEFAULT_DNS_ADDR,
+    config->net_info = (wiz_NetInfo){
+        .mac  = DEFAULT_MAC_ADDR,
+        .ip   = DEFAULT_IP_ADDR,
+        .sn   = DEFAULT_SUBNET_MASK,
+        .gw   = DEFAULT_GATEWAY_ADDR,
+        .dns  = DEFAULT_DNS_ADDR,
         .dhcp = NETINFO_STATIC
     };
-
-    network_initialize(net_info);
-    print_network_information(net_info);
+    ipv4_calc_broadcast_u8(config->net_info.ip, config->net_info.sn, config->broadcast_address);
+    printf("Derived broadcast address %u.%u.%u.%u\r\n",
+        config->broadcast_address[0], config->broadcast_address[1],
+        config->broadcast_address[2], config->broadcast_address[3]);
+    network_initialize(config->net_info);
+    print_network_information(config->net_info);
 }
 
 void w5500_driver_init(void)

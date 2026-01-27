@@ -23,6 +23,9 @@
 // Standard library headers
 #include <stdio.h>
 #include <stdint.h>
+#include <inttypes.h>
+#include <string.h>
+#include <stdlib.h>
 
 // Library Headers
 #include "pico/stdio.h"
@@ -50,13 +53,23 @@ int main(void)
         .port = DEFAULT_UDP_PORT,
     };
     UDP_CONFIG_T sender_config;
+    NETWORK_CONFIG_T net_config;
+    UDP_FRAME_T rx_frame_buffer = {
+        .length = RX_BUF_SIZE,
+        .payload = (uint8_t *)malloc(RX_BUF_SIZE),
+    };
 
     stdio_init_all();
     // Give the USB CDC a moment to enumerate (harmless even if not using USB)
     sleep_ms(USB_ENUMERATION_DELAY_MS);
     w5500_driver_init();
-    w5500_set_network_defaults();
+    w5500_set_network_defaults(&net_config);
     w5500_open_udp_socket(&local_config);
+
+    UDP_CONFIG_T destination_config = {
+        .port = DEFAULT_UDP_PORT,
+    };
+    memcpy(destination_config.ip_address, net_config.broadcast_address, 4);
     w5500_debug_status();
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
@@ -68,7 +81,10 @@ int main(void)
     while (true)
     {
         cli_poll();
-        w5500_poll_rx(&sender_config);
+        w5500_poll_rx(&sender_config, &rx_frame_buffer);
+        if(rx_frame_buffer.length > 0){
+            w5500_udp_tx(&destination_config, &rx_frame_buffer);
+        }
 
         event_t event_item;
         while (event_queue_pop(&event_item))
