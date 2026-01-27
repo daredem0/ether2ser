@@ -21,6 +21,7 @@
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
+#include "system/event_queue.h"
 
 // Generated headers.h"
 
@@ -85,6 +86,11 @@ void w5500_poll_rx(UDP_CONFIG_T *send_config, UDP_FRAME_T *frame){
             printf("%02X ", frame->payload[i]);
         }
         printf("\r\n");
+        event_t udp_event = {
+                .type = EV_UDP_RX,
+                .data = NULL
+            };
+        event_queue_push(&udp_event);
     }
 }
 
@@ -116,7 +122,7 @@ void w5500_open_udp_socket(UDP_CONFIG_T *config){
             sleep_ms(1000);
         }
     }
-    printf("W5500: Socket opened successfully in blocking mode\r\n");
+    printf("W5500: Socket opened successfully in non blocking mode\r\n");
 
 }
 

@@ -20,6 +20,7 @@ typedef enum
 {
     EV_NONE = 0,
     EV_CLI_LINE,
+    EV_UDP_RX,
 } event_type_t;
 
 typedef struct

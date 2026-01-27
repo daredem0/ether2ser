@@ -82,9 +82,6 @@ int main(void)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
-        if(rx_frame_buffer.length > 0){
-            w5500_udp_tx(&destination_config, &rx_frame_buffer);
-        }
 
         event_t event_item;
         while (event_queue_pop(&event_item))
@@ -93,6 +90,12 @@ int main(void)
             {
             case EV_CLI_LINE:
                 handle_cli_line((const char *)event_item.data);
+                printf("> ");
+                break;
+            case EV_UDP_RX:
+                w5500_udp_tx(&destination_config, &rx_frame_buffer);
+                memset(rx_frame_buffer.payload, 0, rx_frame_buffer.length);
+                rx_frame_buffer.length = 0;
                 printf("> ");
                 break;
             default:
