@@ -68,6 +68,7 @@ void w5500_poll_rx(UDP_CONFIG_T *send_config, UDP_FRAME_T *frame){
     // Clean up frame buffer first to ensure no data corruption
     if(frame->length > 0){
         memset(frame->payload, 0, frame->length);
+        frame->length = 0;
     }
     int32_t recv_len = recvfrom(UDP_SOCKET, frame->payload, RX_BUF_SIZE, send_config->ip_address, &(send_config->port));
     if (recv_len > 0){
@@ -106,7 +107,7 @@ void w5500_open_udp_socket(UDP_CONFIG_T *config){
     // socket() allocates one of the W5500's 8 hardware sockets
     // Parameters: socket_number, protocol_mode, local_port, flags
     // Returns: socket_number on success, negative on failure
-    int8_t ret = socket(UDP_SOCKET, Sn_MR_UDP, config->port, 0);
+    int8_t ret = socket(UDP_SOCKET, Sn_MR_UDP, config->port, SF_IO_NONBLOCK);
     if (ret != UDP_SOCKET)
     {
         printf("W5500: socket() failed, ret=%d\r\n", (int)ret);
