@@ -15,7 +15,7 @@ void test_decode_empty_frame_no_escape(void) {
         .length = sizeof(frame_buffer),
         .capacity = sizeof(frame_buffer)
     };
-    const size_t out_capacity = 1;
+    const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
 
@@ -33,7 +33,7 @@ void test_decode_one_byte_frame_no_escape(void) {
         .length = sizeof(frame_buffer),
         .capacity = sizeof(frame_buffer)
     };
-    const size_t out_capacity = 1;
+    const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
 
@@ -51,7 +51,7 @@ void test_decode_three_bytes_frame_no_escape(void){
         .length = sizeof(frame_buffer),
         .capacity = sizeof(frame_buffer)
     };
-    const size_t out_capacity = 3;
+    const size_t out_capacity = 3+2;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
 
@@ -141,7 +141,7 @@ void test_decode_payload_fits_exact_capacity(void){
         .length = sizeof(frame_buffer),
         .capacity = sizeof(frame_buffer)
     };
-    const size_t out_capacity = 3;
+    const size_t out_capacity = 3+2;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
     bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
@@ -160,7 +160,7 @@ void test_decode_one_byte_flag_escape(void){
         .length = sizeof(frame_buffer),
         .capacity = sizeof(frame_buffer)
     };
-    const size_t out_capacity = 1;
+    const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
     bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
@@ -178,7 +178,7 @@ void test_decode_second_byte_flag_escape(void){
         .length = sizeof(frame_buffer),
         .capacity = sizeof(frame_buffer)
     };
-    const size_t out_capacity = 2;
+    const size_t out_capacity = 2+2;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
     bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
@@ -196,7 +196,7 @@ void test_decode_one_byte_escape_escape(void){
         .length = sizeof(frame_buffer),
         .capacity = sizeof(frame_buffer)
     };
-    const size_t out_capacity = 1;
+    const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
     bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
@@ -214,7 +214,7 @@ void test_decode_second_byte_escape_escape(void){
         .length = sizeof(frame_buffer),
         .capacity = sizeof(frame_buffer)
     };
-    const size_t out_capacity = 2;
+    const size_t out_capacity = 2+2;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
     bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
@@ -233,7 +233,7 @@ void test_decode_mixed_escape_and_plain_bytes(void){
         .length = sizeof(frame_buffer),
         .capacity = sizeof(frame_buffer)
     };
-    const size_t out_capacity = 5;
+    const size_t out_capacity = 5+2;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
     bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
@@ -247,5 +247,78 @@ void test_decode_mixed_escape_and_plain_bytes(void){
     TEST_ASSERT_EQUAL_HEX8(0x33, payload_out[4]);
 }
 
-// void test_encode_one_byte_crc_check(void){
-// }
+void test_decode_one_byte_crc_check_sunny_day(void){
+    // Frame: 7E 01 F1 D1 7E
+    uint8_t frame_buffer[] = {HDLC_FLAG_BYTE, 0x01, 0xF1, 0xD1, HDLC_FLAG_BYTE};
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = sizeof(frame_buffer),
+        .capacity = sizeof(frame_buffer)
+    };
+    const size_t out_capacity = 10;
+    uint8_t payload_out[out_capacity];
+    size_t payload_length = 0;
+    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    TEST_ASSERT_TRUE(result);
+}
+
+
+void test_decode_one_byte_crc_check_rainy_day(void){
+    // Frame: 7E 01 F1 D1 7E
+    uint8_t frame_buffer[] = {HDLC_FLAG_BYTE, 0x02, 0xF1, 0xD1, HDLC_FLAG_BYTE};
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = sizeof(frame_buffer),
+        .capacity = sizeof(frame_buffer)
+    };
+    const size_t out_capacity = 10;
+    uint8_t payload_out[out_capacity];
+    size_t payload_length = 0;
+    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    TEST_ASSERT_FALSE(result);
+}
+
+void test_decode_one_byte_crc_contains_flag_byte(void){
+    // Frame: 7E 4A 08 7D 5E 7E
+    uint8_t frame_buffer[] = {HDLC_FLAG_BYTE, 0x4A, 0x08, HDLC_ESCAPE_BYTE, 0x5E, HDLC_FLAG_BYTE};
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = sizeof(frame_buffer),
+        .capacity = sizeof(frame_buffer)
+    };
+    const size_t out_capacity = 10;
+    uint8_t payload_out[out_capacity];
+    size_t payload_length = 0;
+    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    TEST_ASSERT_TRUE(result);
+}
+
+void test_decode_one_byte_crc_contains_escape_byte(void){
+    // Frame: 7E 2F 34 7D 5D 7E
+    uint8_t frame_buffer[] = {HDLC_FLAG_BYTE, 0x2F, 0x34, HDLC_ESCAPE_BYTE, 0x5D, HDLC_FLAG_BYTE};
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = sizeof(frame_buffer),
+        .capacity = sizeof(frame_buffer)
+    };
+    const size_t out_capacity = 10;
+    uint8_t payload_out[out_capacity];
+    size_t payload_length = 0;
+    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    TEST_ASSERT_TRUE(result);
+}
+
+void test_decode_one_byte_crc_contains_escape_and_flag_byte(void){
+    // Frame: 7E 39 F3 7D 5D 7D 5E 7E
+    uint8_t frame_buffer[] = {HDLC_FLAG_BYTE, 0x39, 0xF3, HDLC_ESCAPE_BYTE, 0x5D, HDLC_ESCAPE_BYTE, 0x5E, HDLC_FLAG_BYTE};
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = sizeof(frame_buffer),
+        .capacity = sizeof(frame_buffer)
+    };
+    const size_t out_capacity = 10;
+    uint8_t payload_out[out_capacity];
+    size_t payload_length = 0;
+    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    TEST_ASSERT_TRUE(result);
+}

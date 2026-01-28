@@ -33,6 +33,11 @@ extern void test_decode_one_byte_flag_escape(void);
 extern void test_decode_second_byte_flag_escape(void);
 extern void test_decode_one_byte_escape_escape(void);
 extern void test_decode_mixed_escape_and_plain_bytes(void);
+extern void test_decode_one_byte_crc_check_sunny_day(void);
+extern void test_decode_one_byte_crc_check_rainy_day(void);
+extern void test_decode_one_byte_crc_contains_flag_byte(void);
+extern void test_decode_one_byte_crc_contains_escape_byte(void);
+extern void test_decode_one_byte_crc_contains_escape_and_flag_byte(void);
 
 void setUp(void) {
     // set stuff up here
@@ -76,5 +81,10 @@ int main(void) {
     RUN_TEST(test_decode_second_byte_flag_escape);
     RUN_TEST(test_decode_one_byte_escape_escape);
     RUN_TEST(test_decode_mixed_escape_and_plain_bytes);
+    RUN_TEST(test_decode_one_byte_crc_check_sunny_day);
+    RUN_TEST(test_decode_one_byte_crc_check_rainy_day);
+    RUN_TEST(test_decode_one_byte_crc_contains_flag_byte);
+    RUN_TEST(test_decode_one_byte_crc_contains_escape_byte);
+    RUN_TEST(test_decode_one_byte_crc_contains_escape_and_flag_byte);
     return UNITY_END();
 }
