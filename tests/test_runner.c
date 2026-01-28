@@ -38,6 +38,7 @@ extern void test_decode_one_byte_crc_check_rainy_day(void);
 extern void test_decode_one_byte_crc_contains_flag_byte(void);
 extern void test_decode_one_byte_crc_contains_escape_byte(void);
 extern void test_decode_one_byte_crc_contains_escape_and_flag_byte(void);
+extern void test_round_trip(void);
 
 void setUp(void) {
     // set stuff up here
@@ -86,5 +87,6 @@ int main(void) {
     RUN_TEST(test_decode_one_byte_crc_contains_flag_byte);
     RUN_TEST(test_decode_one_byte_crc_contains_escape_byte);
     RUN_TEST(test_decode_one_byte_crc_contains_escape_and_flag_byte);
+    RUN_TEST(test_round_trip);
     return UNITY_END();
 }

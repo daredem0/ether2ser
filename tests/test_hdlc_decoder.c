@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "protocol/hdlc_common.h"
 #include "protocol/hdlc_decoder.h"
+#include "protocol/hdlc_encoder.h"
 
 
 // bool hdlc_decode(const HDLC_FRAME_T *frame, uint8_t *payload, const size_t out_capacity, size_t *payload_length)
@@ -321,4 +322,33 @@ void test_decode_one_byte_crc_contains_escape_and_flag_byte(void){
     size_t payload_length = 0;
     bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
+}
+
+void test_round_trip(void){
+    uint8_t payload[] =  {
+    0x0E, 0x30, 0x2C, 0xD3, 0xDD, 0x7E, 0xFD, 0x9F, 0x9E, 0xF3,
+    0xB9, 0x22, 0x52, 0xDB, 0x83, 0xEE, 0x3B, 0x4B, 0x02, 0x44,
+    0xC4, 0x07, 0x28, 0xBD, 0x99, 0xF6, 0xDA, 0x7D, 0x43, 0x18,
+    0x09, 0xB0, 0xCA, 0x92, 0x46, 0x9B, 0x08, 0xAD, 0xA5, 0xE0
+    };
+    uint8_t frame_buffer[128];
+
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = 0,
+        .capacity = sizeof(frame_buffer)
+    };
+
+    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    TEST_ASSERT_TRUE(result);
+
+    const size_t out_capacity = 256;
+    uint8_t payload_out[out_capacity];
+    size_t payload_length = 0;
+    result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    TEST_ASSERT_TRUE(result);
+
+    for(size_t i = 0; i < sizeof(payload); i++){
+        TEST_ASSERT_EQUAL_HEX8(payload[i], payload_out[i]);
+    }
 }
