@@ -48,6 +48,8 @@ bool hdlc_decode(const HDLC_FRAME_T *frame, uint8_t *payload, const size_t out_c
         found_escape = false;
     }
 
+    if (outbyte_ctr < 2) goto abort;
+
     uint16_t crc16 = payload[outbyte_ctr - 2] << 8 | payload[outbyte_ctr-1];
     *payload_length = (outbyte_ctr - 2);
 
