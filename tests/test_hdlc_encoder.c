@@ -20,9 +20,11 @@ void test_encode_empty_frame_no_escape(void){
 
     bool result = hdlc_encode(NULL, 0, &frame);
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL(2, frame.length);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[0]);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[1]);
+    TEST_ASSERT_EQUAL(4, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
+    TEST_ASSERT_EQUAL_HEX8(0xFF, frame.payload[1]);
+    TEST_ASSERT_EQUAL_HEX8(0xFF, frame.payload[2]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[3]);
 }
 
 void test_encode_one_byte_frame_no_escape(void){
@@ -36,10 +38,12 @@ void test_encode_one_byte_frame_no_escape(void){
 
     bool result = hdlc_encode(payload, 1, &frame);
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL(3, frame.length);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[0]);
+    TEST_ASSERT_EQUAL(5, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
     TEST_ASSERT_EQUAL_HEX8(0x42, frame.payload[1]);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[2]);
+    TEST_ASSERT_EQUAL_HEX8(0x89, frame.payload[2]);
+    TEST_ASSERT_EQUAL_HEX8(0x76, frame.payload[3]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[4]);
 }
 
 void test_encode_three_bytes_frame_no_escape(void){
@@ -52,12 +56,14 @@ void test_encode_three_bytes_frame_no_escape(void){
     };
     bool result = hdlc_encode(payload, 3, &frame);
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL(5, frame.length);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[0]);
+    TEST_ASSERT_EQUAL(7, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
     TEST_ASSERT_EQUAL_HEX8(0x01, frame.payload[1]);
     TEST_ASSERT_EQUAL_HEX8(0x02, frame.payload[2]);
     TEST_ASSERT_EQUAL_HEX8(0x03, frame.payload[3]);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(0xAD, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(0xAD, frame.payload[5]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[6]);
 
 }
 
@@ -104,7 +110,7 @@ void test_encode_abort_frame_capacity_invalid(void){
 }
 
 void test_encode_payload_fits_exact_capacity(void){
-    uint8_t frame_buffer[5]; // 2 flags + 3 payload
+    uint8_t frame_buffer[7]; // 2 flags + 3 payload + 2 crc
     uint8_t payload[] = {0x01, 0x02, 0x03};
     HDLC_FRAME_T frame = {
         .payload = frame_buffer,
@@ -115,16 +121,18 @@ void test_encode_payload_fits_exact_capacity(void){
     bool result = hdlc_encode(payload, 3, &frame);
 
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL(5, frame.length);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[0]);
+    TEST_ASSERT_EQUAL(7, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
     TEST_ASSERT_EQUAL_HEX8(0x01, frame.payload[1]);
     TEST_ASSERT_EQUAL_HEX8(0x02, frame.payload[2]);
     TEST_ASSERT_EQUAL_HEX8(0x03, frame.payload[3]);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(0xAD, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(0xAD, frame.payload[5]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[6]);
 }
 
 void test_encode_one_byte_flag_escape(void){
-    uint8_t frame_buffer[5]; // 2 flags + 1 payload + 1 escape
+    uint8_t frame_buffer[7]; // 2 flags + 1 payload + 1 escape + 2 crc + 1 escape
     uint8_t payload[] = {HDLC_FLAG_BYTE};
     HDLC_FRAME_T frame = {
         .payload = frame_buffer,
@@ -133,15 +141,18 @@ void test_encode_one_byte_flag_escape(void){
     };
     bool result = hdlc_encode(payload, 1, &frame);
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL(4, frame.length);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[0]);
+    TEST_ASSERT_EQUAL(7, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
     TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[1]);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE^HDLC_ESCAPE_XOR, frame.payload[2]);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[3]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[3]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE^HDLC_ESCAPE_XOR, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(0xA9, frame.payload[5]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[6]);
 }
 
 void test_encode_second_byte_flag_escape(void){
-    uint8_t frame_buffer[6]; // 2 flags + 2 payload + 1 escape
+    uint8_t frame_buffer[7]; // 2 flags + 2 payload + 1 escape + 2crc
     uint8_t payload[] = {0x42, HDLC_FLAG_BYTE};
     HDLC_FRAME_T frame = {
         .payload = frame_buffer,
@@ -150,16 +161,18 @@ void test_encode_second_byte_flag_escape(void){
     };
     bool result = hdlc_encode(payload, 2, &frame);
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL(5, frame.length);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[0]);
+    TEST_ASSERT_EQUAL(7, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
     TEST_ASSERT_EQUAL_HEX8(0x42, frame.payload[1]);
     TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[2]);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE^HDLC_ESCAPE_XOR, frame.payload[3]);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(0xE9, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(0xF8, frame.payload[5]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[6]);
 }
 
 void test_encode_one_byte_escape_escape(void){
-    uint8_t frame_buffer[5]; // 2 flags + 1 payload + 1 escape
+    uint8_t frame_buffer[6]; // 2 flags + 1 payload + 1 escape + 2 crc
     uint8_t payload[] = {HDLC_ESCAPE_BYTE};
     HDLC_FRAME_T frame = {
         .payload = frame_buffer,
@@ -168,15 +181,17 @@ void test_encode_one_byte_escape_escape(void){
     };
     bool result = hdlc_encode(payload, 1, &frame);
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL(4, frame.length);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[0]);
+    TEST_ASSERT_EQUAL(6, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
     TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[1]);
     TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE^HDLC_ESCAPE_XOR, frame.payload[2]);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[3]);
+    TEST_ASSERT_EQUAL_HEX8(0x4E, frame.payload[3]);
+    TEST_ASSERT_EQUAL_HEX8(0xCA, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[5]);
 }
 
 void test_encode_second_byte_escape_escape(void){
-    uint8_t frame_buffer[6]; // 2 flags + 2 payload + 1 escape
+    uint8_t frame_buffer[7]; // 2 flags + 2 payload + 1 escape + 2 crcc
     uint8_t payload[] = {0x42, HDLC_ESCAPE_BYTE};
     HDLC_FRAME_T frame = {
         .payload = frame_buffer,
@@ -185,12 +200,14 @@ void test_encode_second_byte_escape_escape(void){
     };
     bool result = hdlc_encode(payload, 2, &frame);
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL(5, frame.length);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[0]);
+    TEST_ASSERT_EQUAL(7, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
     TEST_ASSERT_EQUAL_HEX8(0x42, frame.payload[1]);
     TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[2]);
     TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE^HDLC_ESCAPE_XOR, frame.payload[3]);
-    TEST_ASSERT_EQUAL_HEX8(0x7E, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(0xD9, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(0x9B, frame.payload[5]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[6]);
 }
 
 void test_encode_mixed_escape_and_plain_bytes(void){
@@ -205,8 +222,8 @@ void test_encode_mixed_escape_and_plain_bytes(void){
     bool result = hdlc_encode(payload, sizeof(payload), &frame);
     TEST_ASSERT_TRUE(result);
 
-    // expected: flag + 0x11 + 0x7D 0x5E + 0x22 + 0x7D 0x5D + 0x33 + flag
-    TEST_ASSERT_EQUAL(2 + 5 + 2, frame.length); // 2 flags + (5 + 2 escapes)
+    // expected: flag + 0x11 + 0x7D 0x5E + 0x22 + 0x7D 0x5D + 0x33 + 0xCF + 0xBB + flag
+    TEST_ASSERT_EQUAL(2 + 5 + 2 + 2, frame.length); // 2 flags + (5 + 2 escapes) + 2 crc
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
     TEST_ASSERT_EQUAL_HEX8(0x11, frame.payload[1]);
     TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[2]);
@@ -215,7 +232,9 @@ void test_encode_mixed_escape_and_plain_bytes(void){
     TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[5]);
     TEST_ASSERT_EQUAL_HEX8(0x5D, frame.payload[6]);
     TEST_ASSERT_EQUAL_HEX8(0x33, frame.payload[7]);
-    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[8]);
+    TEST_ASSERT_EQUAL_HEX8(0xCF, frame.payload[8]);
+    TEST_ASSERT_EQUAL_HEX8(0xBB, frame.payload[9]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[10]);
 }
 
 void test_encode_buffer_of_due_to_escape(void){

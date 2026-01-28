@@ -15,7 +15,7 @@
     } while(0)
 
 
-static void hdlc_escape_if_needed(uint8_t byte, HDLC_FRAME_T *frame){
+static bool hdlc_escape_if_needed(uint8_t byte, HDLC_FRAME_T *frame){
     if(byte == HDLC_FLAG_BYTE || byte == HDLC_ESCAPE_BYTE){
         HDLC_TRY_PUT_BYTE(HDLC_ESCAPE_BYTE, frame, abort);
         HDLC_TRY_PUT_BYTE(byte^HDLC_ESCAPE_XOR, frame, abort);
@@ -23,7 +23,9 @@ static void hdlc_escape_if_needed(uint8_t byte, HDLC_FRAME_T *frame){
     else{
         HDLC_TRY_PUT_BYTE(byte, frame, abort);
     }
+    return true;
 abort:
+    return false;
 }
 
 
@@ -38,12 +40,12 @@ bool hdlc_encode(const uint8_t *payload, const size_t payload_length, HDLC_FRAME
 
     // Write data (only if there is actual data to write)
     for(size_t i = 0; i < payload_length; i++){
-        hdlc_escape_if_needed(payload[i], frame);
+        if (!hdlc_escape_if_needed(payload[i], frame)) goto abort;
     }
 
     uint16_t crc16 = hdlc_crc16(payload, payload_length);
-    hdlc_escape_if_needed((crc16 >> 8) & 0xFF, frame);
-    hdlc_escape_if_needed(crc16 & 0xFF, frame);
+    if (!hdlc_escape_if_needed((crc16 >> 8) & 0xFF, frame)) goto abort;
+    if (!hdlc_escape_if_needed(crc16 & 0xFF, frame)) goto abort;
 
     // Write closing flag
     HDLC_TRY_PUT_BYTE(HDLC_FLAG_BYTE, frame, abort);
