@@ -11,14 +11,23 @@
 
 #ifndef W5500_DRIVER_H
 #define W5500_DRIVER_H
-#include <stdint.h>
-#include <stddef.h>
+// Related headers
+
+// Standard library headers
 #include <inttypes.h>
+#include <stddef.h>
+#include <stdint.h>
+
+// Library Headers
 #include "wizchip_conf.h"
 #include "w5500.h"
 #include "socket.h"
 #include "wizchip_spi.h"
 #include "wizchip_qspi_pio.h"
+
+// Project Headers
+
+// Generated headers
 
 // Defaults
 #define DEFAULT_MAC_ADDR {0x00, 0x08, 0xDC, 0x12, 0x34, 0x56}

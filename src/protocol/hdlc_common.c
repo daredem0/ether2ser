@@ -9,9 +9,18 @@
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */
 
+// Related headers
+#include "hdlc_common.h"
+
+// Standard library headers
 #include <stddef.h>
 #include <stdint.h>
-#include "hdlc_common.h"
+
+// Library Headers
+
+// Project Headers
+
+// Generated headers
 
 #define HDLC_CRC16_CCITT_INIT     0xFFFFu
 #define HDLC_CRC16_CCITT_POLY     0x1021u

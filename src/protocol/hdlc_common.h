@@ -12,8 +12,17 @@
 #ifndef HDLC_COMMON_H
 #define HDLC_COMMON_H
 
-#include <stdint.h>
+// Related headers
+
+// Standard library headers
 #include <stddef.h>
+#include <stdint.h>
+
+// Library Headers
+
+// Project Headers
+
+// Generated headers
 
 // HDLC protocol constants
 #define HDLC_FLAG_BYTE 0x7E

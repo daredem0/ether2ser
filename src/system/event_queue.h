@@ -12,8 +12,17 @@
 #ifndef SYSTEM_EVENT_QUEUE_H
 #define SYSTEM_EVENT_QUEUE_H
 
+// Related headers
+
+// Standard library headers
 #include <stdbool.h>
 #include <stddef.h>
+
+// Library Headers
+
+// Project Headers
+
+// Generated headers
 #define EVENT_QUEUE_CAPACITY 16
 
 typedef enum

@@ -9,12 +9,21 @@
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */
 
+// Related headers
+#include "hdlc_encoder.h"
+
+// Standard library headers
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stddef.h>
 #include <string.h>
+
+// Library Headers
+
+// Project Headers
 #include "hdlc_common.h"
-#include "hdlc_encoder.h"
+
+// Generated headers
 
 
 #define HDLC_TRY_PUT_BYTE(byte, frame, error_handling) \

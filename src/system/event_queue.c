@@ -16,6 +16,12 @@
 #include <stdint.h>
 #include <string.h>
 
+// Library Headers
+
+// Project Headers
+
+// Generated headers
+
 // Event queue storage (opaque payload pointers)
 static event_t event_queue[EVENT_QUEUE_CAPACITY];
 static uint8_t event_queue_write = 0;

@@ -9,11 +9,20 @@
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */
 
+// Related headers
 #include "hdlc_decoder.h"
-#include <stdio.h>
+
+// Standard library headers
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+
+// Library Headers
+
+// Project Headers
 #include "hdlc_common.h"
+
+// Generated headers
 
 
 bool hdlc_decode(const HDLC_FRAME_T *frame, uint8_t *payload, const size_t out_capacity, size_t *payload_length){
