@@ -8,6 +8,7 @@ set(SOURCES
     src/system/cli_commands.c
     src/drivers/w5500_driver.c
     src/protocol/hdlc_encoder.c
+    src/protocol/hdlc_common.c
 )
 
 if(NOT BUILD_TESTS)
@@ -202,6 +203,7 @@ else()
 
     add_executable(unit_tests
         tests/test_hdlc_encoder.c
+        src/protocol/hdlc_common.c
         src/protocol/hdlc_encoder.c
     )
 

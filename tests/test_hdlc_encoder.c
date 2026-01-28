@@ -230,13 +230,91 @@ void test_encode_buffer_of_due_to_escape(void){
     bool result = hdlc_encode(payload, sizeof(payload), &frame);
     TEST_ASSERT_FALSE(result);
 
-    // TEST_ASSERT_EQUAL(2 + 2 + 2, frame.length);
-    // TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
-    // TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[1]);
-    // TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE^HDLC_ESCAPE_XOR, frame.payload[2]);
-    // TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[3]);
-    // TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE^HDLC_ESCAPE_XOR, frame.payload[4]);
-    // TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[5]);
+}
+
+void test_encode_one_byte_crc_check(void){
+    uint8_t payload[] = {0x01};
+    uint8_t frame_buffer[5];
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = 0,
+        .capacity = sizeof(frame_buffer)
+    };
+
+    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    TEST_ASSERT_TRUE(result);
+
+    TEST_ASSERT_EQUAL(5, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x01, frame.payload[1]);
+    TEST_ASSERT_EQUAL_HEX8(0xF1, frame.payload[2]);
+    TEST_ASSERT_EQUAL_HEX8(0xD1, frame.payload[3]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[4]);
+}
+
+void test_encode_one_byte_crc_contains_flag_byte(void){
+    uint8_t payload[] = {0x4A}; // Should generate crc with flag byte
+    uint8_t frame_buffer[6]; // 2 flags + 1 payload + 2 crc + 1 escape crc
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = 0,
+        .capacity = sizeof(frame_buffer)
+    };
+
+    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    TEST_ASSERT_TRUE(result);
+
+    TEST_ASSERT_EQUAL(6, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x4A, frame.payload[1]);
+    TEST_ASSERT_EQUAL_HEX8(0x08, frame.payload[2]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[3]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE^HDLC_ESCAPE_XOR, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[5]);
+}
+
+void test_encode_one_byte_crc_contains_escape_byte(void){
+    uint8_t payload[] = {0x2F}; // Should generate crc with escape byte
+    uint8_t frame_buffer[6]; // 2 flags + 1 payload + 2 crc + 1 escape crc
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = 0,
+        .capacity = sizeof(frame_buffer)
+    };
+
+    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    TEST_ASSERT_TRUE(result);
+
+    TEST_ASSERT_EQUAL(6, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x2F, frame.payload[1]);
+    TEST_ASSERT_EQUAL_HEX8(0x34, frame.payload[2]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[3]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE^HDLC_ESCAPE_XOR, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[5]);
+}
+
+void test_encode_one_byte_crc_contains_escape_and_flag_byte(void){
+    uint8_t payload[] = {0x39, 0xF3}; // Should generate crc with escape and flag byte
+    uint8_t frame_buffer[8]; // 2 flags + 2 payload + 2 crc + 2 escape crc
+    HDLC_FRAME_T frame = {
+        .payload = frame_buffer,
+        .length = 0,
+        .capacity = sizeof(frame_buffer)
+    };
+
+    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    TEST_ASSERT_TRUE(result);
+
+    TEST_ASSERT_EQUAL(8, frame.length);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x39, frame.payload[1]);
+    TEST_ASSERT_EQUAL_HEX8(0xF3, frame.payload[2]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[3]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE^HDLC_ESCAPE_XOR, frame.payload[4]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, frame.payload[5]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE^HDLC_ESCAPE_XOR, frame.payload[6]);
+    TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[7]);
 }
 
 
@@ -257,5 +335,9 @@ int main(void) {
     RUN_TEST(test_encode_second_byte_escape_escape);
     RUN_TEST(test_encode_mixed_escape_and_plain_bytes);
     RUN_TEST(test_encode_buffer_of_due_to_escape);
+    RUN_TEST(test_encode_one_byte_crc_check);
+    RUN_TEST(test_encode_one_byte_crc_contains_flag_byte);
+    RUN_TEST(test_encode_one_byte_crc_contains_escape_byte);
+    RUN_TEST(test_encode_one_byte_crc_contains_escape_and_flag_byte);
     return UNITY_END();
 }
