@@ -51,7 +51,6 @@ bool hdlc_encode(const uint8_t *payload, const size_t payload_length, HDLC_FRAME
     HDLC_TRY_PUT_BYTE(HDLC_FLAG_BYTE, frame, abort);
     return true;
 abort:
-    printf("Warning: HDLC encode failed!\r\n");
     if (frame){frame->length = 0;}
     return false;
 }
