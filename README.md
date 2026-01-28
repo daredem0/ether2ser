@@ -20,6 +20,12 @@ cmake --build . --target flash_elf_ether2serial
 cmake --build . --target flash_elf_ex_blink_leds
 cmake --build . --target flash_elf_ex_w55_echo
 ```
+## Test
+```
+mkdir build-test && cd build-test
+cmake -DBUILD_TESTS=ON ..
+cmake --build .
+```
 
 ## System Overview
 

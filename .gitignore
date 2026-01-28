@@ -1,5 +1,6 @@
 # Build directories
 build/
+build-tests/
 cmake-build-*/
 
 # CMake
@@ -81,3 +82,4 @@ openocd.log
 
 # picotool
 *.bin.elf2uf2
+.claude
