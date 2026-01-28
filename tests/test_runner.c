@@ -21,6 +21,18 @@ extern void test_encode_one_byte_crc_contains_escape_byte(void);
 extern void test_encode_one_byte_crc_contains_escape_and_flag_byte(void);
 
 extern void test_decode_empty_frame_no_escape(void);
+extern void test_decode_one_byte_frame_no_escape(void);
+extern void test_decode_three_bytes_frame_no_escape(void);
+extern void test_decode_abort_empty_frame(void);
+extern void test_decode_abort_empty_frame_2(void);
+extern void test_decode_abort_payload_null(void);
+extern void test_decode_abort_no_capacity(void);
+extern void test_decode_frame_too_long(void);
+extern void test_decode_payload_fits_exact_capacity(void);
+extern void test_decode_one_byte_flag_escape(void);
+extern void test_decode_second_byte_flag_escape(void);
+extern void test_decode_one_byte_escape_escape(void);
+extern void test_decode_mixed_escape_and_plain_bytes(void);
 
 void setUp(void) {
     // set stuff up here
@@ -52,5 +64,17 @@ int main(void) {
     RUN_TEST(test_encode_one_byte_crc_contains_escape_and_flag_byte);
 
     RUN_TEST(test_decode_empty_frame_no_escape);
+    RUN_TEST(test_decode_one_byte_frame_no_escape);
+    RUN_TEST(test_decode_three_bytes_frame_no_escape);
+    RUN_TEST(test_decode_abort_empty_frame);
+    RUN_TEST(test_decode_abort_empty_frame_2);
+    RUN_TEST(test_decode_abort_payload_null);
+    RUN_TEST(test_decode_abort_no_capacity);
+    RUN_TEST(test_decode_frame_too_long);
+    RUN_TEST(test_decode_payload_fits_exact_capacity);
+    RUN_TEST(test_decode_one_byte_flag_escape);
+    RUN_TEST(test_decode_second_byte_flag_escape);
+    RUN_TEST(test_decode_one_byte_escape_escape);
+    RUN_TEST(test_decode_mixed_escape_and_plain_bytes);
     return UNITY_END();
 }

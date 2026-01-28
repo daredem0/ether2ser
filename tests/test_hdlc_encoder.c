@@ -11,6 +11,7 @@
 // }
 
 void test_encode_empty_frame_no_escape(void){
+    // Frame: 7E FF FF 7E
     uint8_t frame_buffer[10];
     HDLC_FRAME_T frame = {
         .payload = frame_buffer,
@@ -28,6 +29,7 @@ void test_encode_empty_frame_no_escape(void){
 }
 
 void test_encode_one_byte_frame_no_escape(void){
+    // Frame: 7E 42 89 76 7E
     uint8_t payload[] = {0x42}; // single byte that should not be escaped
     uint8_t frame_buffer[10];
     HDLC_FRAME_T frame = {
@@ -47,6 +49,7 @@ void test_encode_one_byte_frame_no_escape(void){
 }
 
 void test_encode_three_bytes_frame_no_escape(void){
+    // Frame: 7E 01 02 03 AD AD 7E
     uint8_t frame_buffer[16];
     uint8_t payload[] = {0x01, 0x02, 0x03}; // three bytes that should not be escaped
     HDLC_FRAME_T frame = {
@@ -68,12 +71,14 @@ void test_encode_three_bytes_frame_no_escape(void){
 }
 
 void test_encode_abort_empty_frame(void){
+    // Frame: <none> (encode fails)
     uint8_t payload[] = {0x01};
     bool result = hdlc_encode(payload, 0, NULL);
     TEST_ASSERT_FALSE(result);
 }
 
 void test_encode_abort_payload_null_but_length(void){
+    // Frame: <none> (encode fails)
     int8_t frame_buffer[16];
     uint8_t payload[] = {0x01, 0x02, 0x03}; // three bytes that should not be escaped
     HDLC_FRAME_T frame = {
@@ -86,6 +91,7 @@ void test_encode_abort_payload_null_but_length(void){
 }
 
 void test_encode_abort_payload_too_long(void){
+    // Frame: <none> (encode fails)
     int8_t frame_buffer[16];
     uint8_t payload[] = {0x01, 0x02, 0x03}; // three bytes that should not be escaped
     HDLC_FRAME_T frame = {
@@ -98,6 +104,7 @@ void test_encode_abort_payload_too_long(void){
 }
 
 void test_encode_abort_frame_capacity_invalid(void){
+    // Frame: <none> (encode fails)
     int8_t frame_buffer[16];
     uint8_t payload[] = {0x01, 0x02, 0x03}; // three bytes that should not be escaped
     HDLC_FRAME_T frame = {
@@ -110,6 +117,7 @@ void test_encode_abort_frame_capacity_invalid(void){
 }
 
 void test_encode_payload_fits_exact_capacity(void){
+    // Frame: 7E 01 02 03 AD AD 7E
     uint8_t frame_buffer[7]; // 2 flags + 3 payload + 2 crc
     uint8_t payload[] = {0x01, 0x02, 0x03};
     HDLC_FRAME_T frame = {
@@ -132,6 +140,7 @@ void test_encode_payload_fits_exact_capacity(void){
 }
 
 void test_encode_one_byte_flag_escape(void){
+    // Frame: 7E 7D 5E 7D 5E A9 7E
     uint8_t frame_buffer[7]; // 2 flags + 1 payload + 1 escape + 2 crc + 1 escape
     uint8_t payload[] = {HDLC_FLAG_BYTE};
     HDLC_FRAME_T frame = {
@@ -152,6 +161,7 @@ void test_encode_one_byte_flag_escape(void){
 }
 
 void test_encode_second_byte_flag_escape(void){
+    // Frame: 7E 42 7D 5E E9 F8 7E
     uint8_t frame_buffer[7]; // 2 flags + 2 payload + 1 escape + 2crc
     uint8_t payload[] = {0x42, HDLC_FLAG_BYTE};
     HDLC_FRAME_T frame = {
@@ -172,6 +182,7 @@ void test_encode_second_byte_flag_escape(void){
 }
 
 void test_encode_one_byte_escape_escape(void){
+    // Frame: 7E 7D 5D 4E CA 7E
     uint8_t frame_buffer[6]; // 2 flags + 1 payload + 1 escape + 2 crc
     uint8_t payload[] = {HDLC_ESCAPE_BYTE};
     HDLC_FRAME_T frame = {
@@ -191,6 +202,7 @@ void test_encode_one_byte_escape_escape(void){
 }
 
 void test_encode_second_byte_escape_escape(void){
+    // Frame: 7E 42 7D 5D D9 9B 7E
     uint8_t frame_buffer[7]; // 2 flags + 2 payload + 1 escape + 2 crcc
     uint8_t payload[] = {0x42, HDLC_ESCAPE_BYTE};
     HDLC_FRAME_T frame = {
@@ -211,6 +223,7 @@ void test_encode_second_byte_escape_escape(void){
 }
 
 void test_encode_mixed_escape_and_plain_bytes(void){
+    // Frame: 7E 11 7D 5E 22 7D 5D 33 CF BB 7E
     uint8_t payload[] = {0x11, HDLC_FLAG_BYTE, 0x22, HDLC_ESCAPE_BYTE, 0x33};
     uint8_t frame_buffer[16];
     HDLC_FRAME_T frame = {
@@ -238,6 +251,7 @@ void test_encode_mixed_escape_and_plain_bytes(void){
 }
 
 void test_encode_buffer_of_due_to_escape(void){
+    // Frame: <none> (encode fails)
     uint8_t payload[] = {HDLC_FLAG_BYTE, HDLC_ESCAPE_BYTE};
     uint8_t frame_buffer[5];
     HDLC_FRAME_T frame = {
@@ -252,6 +266,7 @@ void test_encode_buffer_of_due_to_escape(void){
 }
 
 void test_encode_one_byte_crc_check(void){
+    // Frame: 7E 01 F1 D1 7E
     uint8_t payload[] = {0x01};
     uint8_t frame_buffer[5];
     HDLC_FRAME_T frame = {
@@ -272,6 +287,7 @@ void test_encode_one_byte_crc_check(void){
 }
 
 void test_encode_one_byte_crc_contains_flag_byte(void){
+    // Frame: 7E 4A 08 7D 5E 7E
     uint8_t payload[] = {0x4A}; // Should generate crc with flag byte
     uint8_t frame_buffer[6]; // 2 flags + 1 payload + 2 crc + 1 escape crc
     HDLC_FRAME_T frame = {
@@ -293,6 +309,7 @@ void test_encode_one_byte_crc_contains_flag_byte(void){
 }
 
 void test_encode_one_byte_crc_contains_escape_byte(void){
+    // Frame: 7E 2F 34 7D 5D 7E
     uint8_t payload[] = {0x2F}; // Should generate crc with escape byte
     uint8_t frame_buffer[6]; // 2 flags + 1 payload + 2 crc + 1 escape crc
     HDLC_FRAME_T frame = {
@@ -314,6 +331,7 @@ void test_encode_one_byte_crc_contains_escape_byte(void){
 }
 
 void test_encode_one_byte_crc_contains_escape_and_flag_byte(void){
+    // Frame: 7E 39 F3 7D 5D 7D 5E 7E
     uint8_t payload[] = {0x39, 0xF3}; // Should generate crc with escape and flag byte
     uint8_t frame_buffer[8]; // 2 flags + 2 payload + 2 crc + 2 escape crc
     HDLC_FRAME_T frame = {
