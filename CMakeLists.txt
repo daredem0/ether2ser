@@ -7,6 +7,7 @@ set(SOURCES
     src/system/cli_usb_cdc.c
     src/system/cli_commands.c
     src/drivers/w5500_driver.c
+    src/drivers/pio_tx_driver.c
     src/protocol/hdlc_common.c
     src/protocol/hdlc_encoder.c
     src/protocol/hdlc_decoder.c
@@ -109,14 +110,14 @@ if(NOT BUILD_TESTS)
     )
 
     target_link_libraries(ether2serial
-    hardware_pio
-    hardware_spi
-    hardware_dma
+        hardware_pio
+        hardware_spi
+        hardware_dma
     )
 
     # Generate C header from the PIO program(s)
     pico_generate_pio_header(ether2serial
-    ${CMAKE_CURRENT_LIST_DIR}/pio/led_blink.pio
+        ${CMAKE_CURRENT_LIST_DIR}/pio/tx_clock.pio
     )
 
     configure_pico_target(ether2serial)
@@ -137,17 +138,17 @@ if(NOT BUILD_TESTS)
 
     # Examples
     add_executable(ex_blink_leds
-    src/examples/blink/blink_pio.c
-    src/examples/blink/blink_cpu.c
-    src/examples/blink/main.c
+        src/examples/blink/blink_pio.c
+        src/examples/blink/blink_cpu.c
+        src/examples/blink/main.c
     )
 
     target_link_libraries(ex_blink_leds
-    hardware_pio
+        hardware_pio
     )
 
     pico_generate_pio_header(ex_blink_leds
-    ${CMAKE_CURRENT_LIST_DIR}/pio/led_blink.pio
+        ${CMAKE_CURRENT_LIST_DIR}/pio/led_blink.pio
     )
 
     configure_pico_target(ex_blink_leds)
