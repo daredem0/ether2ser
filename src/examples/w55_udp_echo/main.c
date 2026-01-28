@@ -1,4 +1,13 @@
-
+/*
+ * ether2ser — Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/examples/w55_udp_echo/main.c
+ * Purpose: W5500 UDP echo example.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 // Related headers
 

@@ -1,3 +1,13 @@
+/*
+ * ether2ser — Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/cli_commands.c
+ * Purpose: CLI command handlers and dispatch.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 // Related headers
 #include "cli_commands.h"

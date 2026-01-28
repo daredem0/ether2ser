@@ -1,3 +1,13 @@
+/*
+ * ether2ser — Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/protocol/hdlc_decoder.h
+ * Purpose: HDLC decoder API.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 
 #ifndef HDLC_DECODER_H

@@ -1,3 +1,13 @@
+/*
+ * ether2ser — Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/protocol/hdlc_decoder.c
+ * Purpose: HDLC decoder (deframing, unescaping, and CRC check).
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #include "hdlc_decoder.h"
 #include <stdio.h>

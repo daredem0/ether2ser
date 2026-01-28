@@ -1,3 +1,14 @@
+/*
+ * ether2ser — Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/drivers/w5500_driver.c
+ * Purpose: W5500 driver implementation and helpers.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
+
 // Related headers
 #include "w5500_driver.h"
 
