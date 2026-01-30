@@ -25,6 +25,7 @@
 
 // Project Headers
 #include "board_pins.h"
+#include "baudrate_monitor.h"
 
 // Generated headers
 
@@ -85,6 +86,10 @@ static void cmd_help(const char *args)
 static void cmd_status(const char *args)
 {
     printf("status: ok\r\n");
+    printf("Current Baudrate estimation on pin %d: %.1f Hz\r\n",
+        V24_RXC,
+        baudrate_estimator_get_current_estimation(V24_RXC));
+
 }
 
 static void cmd_net(const char *args)

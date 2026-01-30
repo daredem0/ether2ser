@@ -88,7 +88,6 @@ int main(void)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
-        baudrate_estimator_poll(V24_RXC);
 
         event_t event_item;
         while (event_queue_pop(&event_item))
