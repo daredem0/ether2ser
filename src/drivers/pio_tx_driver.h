@@ -39,4 +39,7 @@ typedef enum{
 void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate);
 bool tx_put(uint8_t data);
 
+void rx_clock_init(PIO pio, uint pio_sm);
+bool rx_get(uint8_t *data);
+
 #endif /* PIO_TX_DRIVER_H */

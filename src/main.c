@@ -49,6 +49,7 @@
 
 #define MAIN_LOOP_SLEEP_MS 1
 
+
 int main(void)
 {
     UDP_CONFIG_T local_config = {
@@ -76,19 +77,22 @@ int main(void)
     w5500_debug_status();
 
     tx_clock_init(pio0, 0, V24_BAUD_4800);
+    rx_clock_init(pio0, 1);
     baudrate_estimator_init(V24_RXC);
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
     printf("\r\nType 'help' in USB serial.\r\n> ");
 
     event_queue_init();
-
+    uint8_t rx = 0;
 
     while (true)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
         tx_put(0xAA);
+        rx_get(&rx);
+        printf("Wrote: %02X, Read: %02X\r\n", 0xAA, rx);
 
         event_t event_item;
         while (event_queue_pop(&event_item))
@@ -109,6 +113,6 @@ int main(void)
                 break;
             }
         }
-        sleep_ms(MAIN_LOOP_SLEEP_MS);
+        sleep_ms(MAIN_LOOP_SLEEP_MS*50);
     }
 }

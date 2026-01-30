@@ -120,6 +120,7 @@ if(NOT BUILD_TESTS)
     pico_generate_pio_header(ether2serial
         ${CMAKE_CURRENT_LIST_DIR}/pio/tx_clock.pio
         ${CMAKE_CURRENT_LIST_DIR}/pio/tck_txd.pio
+        ${CMAKE_CURRENT_LIST_DIR}/pio/rck_rxd.pio
     )
 
     configure_pico_target(ether2serial)

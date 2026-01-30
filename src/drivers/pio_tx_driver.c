@@ -25,9 +25,45 @@
 
 // Generated headers
 #include "tck_txd.pio.h"
+#include "rck_rxd.pio.h"
 
 static float baud_to_clockdiv(V24_BAUDRATE_T baudrate){
     return 125000000.0f / (2.0f * (float)baudrate);
+}
+
+bool rx_get(uint8_t *data){
+    if(pio0 == NULL || pio_sm_is_rx_fifo_empty(pio0, 1)){
+        return false;
+    }
+    *data = pio_sm_get(pio0, 1);
+    return true;
+}
+
+void rx_clock_init(PIO pio, uint pio_sm) {
+
+    printf("RXC: init pio%u sm%u pin%u\r\n",
+           (unsigned)pio_get_index(pio),
+           (unsigned)pio_sm,
+           (unsigned)V24_RXC);
+
+    // Load PIO program
+    uint offset = pio_add_program(pio, &rck_rxd_program);
+    printf("RXC: program offset=%u\r\n", (unsigned)offset);
+
+    // Route GPIO to PIO
+    pio_gpio_init(pio, V24_RXD);
+    pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_RXD, 1, false);
+    pio_gpio_init(pio, V24_RXC);
+    pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_RXC, 1, false);
+
+    // Configure state machine
+    pio_sm_config config = rck_rxd_program_get_default_config(offset);
+    sm_config_set_jmp_pin(&config, V24_RXC);
+    sm_config_set_in_pins(&config, V24_RXD);
+    sm_config_set_in_shift(&config, true, true, 8);
+    pio_sm_init(pio, pio_sm, offset, &config);
+    pio_sm_set_enabled(pio, pio_sm, true);
+    printf("RXC: enabled\r\n");
 }
 
 bool tx_put(uint8_t data){

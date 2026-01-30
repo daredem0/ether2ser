@@ -1,0 +1,14 @@
+.program rck_rxd
+; Sample bits by using a provided clock
+
+
+.wrap_target
+
+
+wait_high:  jmp pin, got_high    ; Rising edge detected -> wait for falling edge
+            jmp wait_high        ; still LOW, keep waiting
+
+got_high:   jmp pin, got_high    ; still HIGH? keep waiting
+            in pins, 1           ; Falling edge detected -> read bit
+
+.wrap
