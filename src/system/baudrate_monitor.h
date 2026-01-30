@@ -1,4 +1,13 @@
-
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/baudrate_monitor.h
+ * Purpose: RXC baudrate estimator interface.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef BAUDRATE_MONITOR_H
 #define BAUDRATE_MONITOR_H

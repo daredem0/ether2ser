@@ -1,5 +1,13 @@
-
-
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/platform/pinmap.h
+ * Purpose: Board-level pin assignments for V.24 signals.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef PINMAP_H
 #define PINMAP_H

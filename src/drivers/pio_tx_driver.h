@@ -1,5 +1,16 @@
 
 
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/drivers/pio_tx_driver.h
+ * Purpose: PIO TX clock driver API and baudrate definitions.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
+
 #ifndef PIO_TX_DRIVER_H
 #define PIO_TX_DRIVER_H
 // Related headers
