@@ -37,7 +37,10 @@
 #include "system/cli_commands.h"
 #include "system/event_queue.h"
 #include "system/cli_usb_cdc.h"
+#include "system/baudrate_monitor.h"
 #include "drivers/w5500_driver.h"
+#include "drivers/pio_tx_driver.h"
+#include "platform/pinmap.h"
 
 // Generated headers
 
@@ -72,6 +75,9 @@ int main(void)
     memcpy(destination_config.ip_address, net_config.broadcast_address, 4);
     w5500_debug_status();
 
+    tx_clock_init(pio0, 0, V24_BAUD_4800);
+    baudrate_estimator_init(V24_RXC);
+
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
     printf("\r\nType 'help' in USB serial.\r\n> ");
 
@@ -82,6 +88,7 @@ int main(void)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
+        baudrate_estimator_poll(V24_RXC);
 
         event_t event_item;
         while (event_queue_pop(&event_item))

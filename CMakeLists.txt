@@ -6,6 +6,7 @@ set(SOURCES
     src/system/event_queue.c
     src/system/cli_usb_cdc.c
     src/system/cli_commands.c
+    src/system/baudrate_monitor.c
     src/drivers/w5500_driver.c
     src/drivers/pio_tx_driver.c
     src/protocol/hdlc_common.c
