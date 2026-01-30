@@ -119,6 +119,7 @@ if(NOT BUILD_TESTS)
     # Generate C header from the PIO program(s)
     pico_generate_pio_header(ether2serial
         ${CMAKE_CURRENT_LIST_DIR}/pio/tx_clock.pio
+        ${CMAKE_CURRENT_LIST_DIR}/pio/tck_txd.pio
     )
 
     configure_pico_target(ether2serial)

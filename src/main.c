@@ -88,6 +88,7 @@ int main(void)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
+        tx_put(0xAA);
 
         event_t event_item;
         while (event_queue_pop(&event_item))

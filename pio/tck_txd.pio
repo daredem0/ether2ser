@@ -1,0 +1,9 @@
+.program tck_txd
+; Generate a tx clock and write out bits
+
+.side_set 1
+
+.wrap_target
+out pins, 1 side 1
+nop side 0
+.wrap
