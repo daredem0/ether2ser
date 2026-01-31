@@ -35,7 +35,7 @@ bool rx_get(uint8_t *data){
     if(pio0 == NULL || pio_sm_is_rx_fifo_empty(pio0, 1)){
         return false;
     }
-    *data = pio_sm_get(pio0, 1);
+    *data = (pio_sm_get(pio0, 1) >> 24);
     return true;
 }
 

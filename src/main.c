@@ -90,9 +90,10 @@ int main(void)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
-        tx_put(0xAA);
-        rx_get(&rx);
-        printf("Wrote: %02X, Read: %02X\r\n", 0xAA, rx);
+        tx_put(0x7E);
+        if (rx_get(&rx)){
+            printf("Wrote: %02X, Read: %02X\r\n", 0x7E, rx);
+        }
 
         event_t event_item;
         while (event_queue_pop(&event_item))
