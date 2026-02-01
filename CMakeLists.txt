@@ -212,10 +212,12 @@ else()
         tests/test_hdlc_encoder.c
         tests/test_hdlc_decoder.c
         tests/test_command_parser.c
+        tests/test_event_queue.c
         src/protocol/hdlc_common.c
         src/protocol/hdlc_encoder.c
         src/protocol/hdlc_decoder.c
         src/system/cli_parser.c
+        src/system/event_queue.c
     )
 
     target_include_directories(unit_tests PRIVATE

@@ -58,10 +58,12 @@ extern void test_cli_parse_set_args_invalid_value_lower_bound(void);
 extern void test_cli_parse_set_args_extra_space_at_end(void);
 extern void test_cli_parse_set_args_extra_space_between_pin_and_args(void);
 
-
-
-
 // Event Queue declarations
+extern void test_event_queue_empty_after_init(void);
+extern void test_event_queue_push_pop_single(void);
+extern void test_event_queue_full_when_capacity_reached(void);
+extern void test_event_queue_pop_empty_fails(void);
+extern void test_event_queue_wraparound_preserves_order(void);
 
 void setUp(void) {
     // set stuff up here
@@ -129,5 +131,12 @@ int main(void) {
     RUN_TEST(test_cli_parse_set_args_invalid_value_lower_bound);
     RUN_TEST(test_cli_parse_set_args_extra_space_at_end);
     RUN_TEST(test_cli_parse_set_args_extra_space_between_pin_and_args);
+
+    // Event Queue Tests
+    RUN_TEST(test_event_queue_empty_after_init);
+    RUN_TEST(test_event_queue_push_pop_single);
+    RUN_TEST(test_event_queue_full_when_capacity_reached);
+    RUN_TEST(test_event_queue_pop_empty_fails);
+    RUN_TEST(test_event_queue_wraparound_preserves_order);
     return UNITY_END();
 }
