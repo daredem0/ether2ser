@@ -64,6 +64,34 @@ int main(void)
     };
 
     stdio_init_all();
+
+    // Initialize GPIOs
+    gpio_pull_down(V24_DCD);
+    gpio_pull_down(V24_DSR);
+    gpio_pull_down(V24_CTS);
+    gpio_pull_down(V24_RXD);
+    gpio_pull_down(V24_RTS);
+    gpio_pull_down(V24_TXD);
+    gpio_pull_down(V24_DTR);
+    gpio_pull_down(V24_TXC_DTE);
+    gpio_pull_down(V24_RXC);
+    gpio_pull_down(V24_TXC_DCE);
+
+    V24_POLARITIES_T v24_polarities = {
+        .tx_polarities = {
+            .txd_inverted = false,
+            .txc_inverted = false,
+            .cts_inverted = true,
+            .rts_inverted = false,
+            .dtr_inverted = false,
+        },
+        .rx_polarities = {
+            .rxd_inverted = false,
+            .rxc_inverted = false,
+            .dcd_inverted = false,
+        }
+    };
+
     // Give the USB CDC a moment to enumerate (harmless even if not using USB)
     sleep_ms(USB_ENUMERATION_DELAY_MS);
     w5500_driver_init();
@@ -76,8 +104,8 @@ int main(void)
     memcpy(destination_config.ip_address, net_config.broadcast_address, 4);
     w5500_debug_status();
 
-    tx_clock_init(pio0, 0, V24_BAUD_4800);
-    rx_clock_init(pio0, 1);
+    tx_clock_init(pio0, 0, V24_BAUD_4800, &v24_polarities.tx_polarities);
+    rx_clock_init(pio0, 1, &v24_polarities.rx_polarities);
     baudrate_estimator_init(V24_RXC);
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
@@ -90,10 +118,10 @@ int main(void)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
-        // tx_put(0x7E);
-        // if (rx_get(&rx)){
-        //     printf("Wrote: %02X, Read: %02X\r\n", 0x7E, rx);
-        // }
+        tx_put(0x7E);
+        if (rx_get(&rx)){
+            printf("Wrote: %02X, Read: %02X\r\n", 0x7E, rx);
+        }
 
         event_t event_item;
         while (event_queue_pop(&event_item))

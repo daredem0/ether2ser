@@ -28,7 +28,7 @@
 #include "rck_rxd.pio.h"
 
 static float baud_to_clockdiv(V24_BAUDRATE_T baudrate){
-    return 125000000.0f / (2.0f * (float)baudrate);
+    return 125000000.0f / (3.0f * (float)baudrate);
 }
 
 bool rx_get(uint8_t *data){
@@ -39,7 +39,7 @@ bool rx_get(uint8_t *data){
     return true;
 }
 
-void rx_clock_init(PIO pio, uint pio_sm) {
+void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T *polarities) {
 
     printf("RXC: init pio%u sm%u pin%u\r\n",
            (unsigned)pio_get_index(pio),
@@ -55,6 +55,14 @@ void rx_clock_init(PIO pio, uint pio_sm) {
     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_RXD, 1, false);
     pio_gpio_init(pio, V24_RXC);
     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_RXC, 1, false);
+    if( polarities != NULL ){
+        if( polarities->rxc_inverted ){
+            gpio_set_inover(V24_RXC, GPIO_OVERRIDE_INVERT);
+        }
+        if( polarities->rxd_inverted ){
+            gpio_set_inover(V24_RXD, GPIO_OVERRIDE_INVERT);
+        }
+    }
 
     // Configure state machine
     pio_sm_config config = rck_rxd_program_get_default_config(offset);
@@ -74,7 +82,7 @@ bool tx_put(uint8_t data){
     return true;
 }
 
-void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate) {
+void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T *polarities) {
     float clkdiv = baud_to_clockdiv(baudrate);
 
     printf("TXC: init pio%u sm%u pin%u baud=%u clkdiv=%.6f\r\n",
@@ -93,11 +101,25 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate) {
     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_TXC_DTE, 1, true);
     pio_gpio_init(pio, V24_TXD);
     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_TXD, 1, true);
+    pio_gpio_init(pio, V24_CTS);
+    pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_CTS, 1, false);
+    if( polarities != NULL ){
+        if( polarities->txc_inverted ){
+            gpio_set_outover(V24_TXC_DTE, GPIO_OVERRIDE_INVERT);
+        }
+        if( polarities->txd_inverted ){
+            gpio_set_outover(V24_TXD, GPIO_OVERRIDE_INVERT);
+        }
+        if( polarities->cts_inverted ){
+            gpio_set_inover(V24_CTS, GPIO_OVERRIDE_INVERT);
+        }
+    }
 
     // Configure state machine
     pio_sm_config config = tck_txd_program_get_default_config(offset);
     sm_config_set_sideset_pins(&config, V24_TXC_DTE);
     sm_config_set_out_pins(&config, V24_TXD, 1);
+    sm_config_set_jmp_pin(&config, V24_CTS);
     sm_config_set_out_shift(&config, true, true, 8);
     sm_config_set_clkdiv(&config, clkdiv);
     pio_sm_init(pio, pio_sm, offset, &config);

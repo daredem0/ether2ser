@@ -25,6 +25,26 @@
 
 // Generated headers
 
+
+typedef struct{
+    bool txd_inverted;
+    bool txc_inverted;
+    bool cts_inverted;
+    bool rts_inverted;
+    bool dtr_inverted;
+} V24_TX_POLARITIES_T;
+
+typedef struct{
+    bool rxd_inverted;
+    bool rxc_inverted;
+    bool dcd_inverted;
+} V24_RX_POLARITIES_T;
+
+typedef struct{
+    V24_TX_POLARITIES_T tx_polarities;
+    V24_RX_POLARITIES_T rx_polarities;
+} V24_POLARITIES_T;
+
 typedef enum{
     V24_BAUD_1200 = 1200,
     V24_BAUD_2400 = 2400,
@@ -36,10 +56,10 @@ typedef enum{
     V24_BAUD_115200 = 115200
 } V24_BAUDRATE_T;
 
-void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate);
+void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T *polarities) ;
 bool tx_put(uint8_t data);
 
-void rx_clock_init(PIO pio, uint pio_sm);
+void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T *polarities);
 bool rx_get(uint8_t *data);
 
 #endif /* PIO_TX_RX_DRIVER_H */
