@@ -31,6 +31,10 @@
 
 // Generated headers
 
+#define MAX_CMD_BUFFER_LEN  16
+#define MAX_PIN_NAME_LEN    16
+#define MAX_ARG_BUFFER_LEN  64
+
 // Command handler type
 typedef void (*cmd_handler_t)(const char *args);
 
@@ -117,7 +121,7 @@ static void cmd_net(const char *args)
 
 static void cmd_set(const char *args)
 {
-    char pin_name[16];
+    char pin_name[MAX_PIN_NAME_LEN];
     int value;
     const pin_info_t *pin = NULL;
     e2s_error_t parser_result = parse_set_args(args, pin_name, &value, &pin);
@@ -150,7 +154,7 @@ static void cmd_set(const char *args)
 
 static void cmd_get(const char *args)
 {
-    char pin_name[16];
+    char pin_name[MAX_PIN_NAME_LEN];
     const pin_info_t *pin = NULL;
 
     e2s_error_t parser_result = parse_get_args(args, pin_name, &pin);
@@ -191,7 +195,7 @@ static void cmd_get(const char *args)
 
 static void cmd_pininfo(const char *args)
 {
-    char pin_name[16];
+    char pin_name[MAX_PIN_NAME_LEN];
 
     if (sscanf(args, "%15s", pin_name) != 1)
     {
@@ -219,8 +223,9 @@ static void cmd_pininfo(const char *args)
 void handle_cli_line(const char *line)
 {
 
-    char cmd[16];
-    char args[64];
+    char cmd[MAX_CMD_BUFFER_LEN];
+    cmd[0] = '\0';
+    char args[MAX_ARG_BUFFER_LEN];
     if (cli_parse(line, cmd, args) == E2S_OK){
         // Look up command
         for (size_t i = 0; i < NUM_COMMANDS; i++)
@@ -231,8 +236,6 @@ void handle_cli_line(const char *line)
                 return;
             }
         }
-    }
-    else{
         printf("unknown: '%s' (try 'help')\r\n", cmd);
     }
 }
