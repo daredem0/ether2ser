@@ -74,7 +74,27 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T *polarities) {
     printf("RXC: enabled\r\n");
 }
 
+static bool rts_set = false;
+
+bool tx_poll(){
+    if (pio0->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + 0))) {
+        // RTS deasserted, not ready to send
+        gpio_put(V24_RTS, 0);
+        rts_set = false;
+        pio0->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + 0));
+        return false;
+    }
+    return true;
+}
+
 bool tx_put(uint8_t data){
+    if (!rts_set) {
+        // Indicate ready to send by setting RTS
+        pio0->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + 0));
+        gpio_set_dir(V24_RTS, GPIO_OUT);
+        gpio_put(V24_RTS, 1);
+        rts_set = true;
+    }
     if(pio0 == NULL || pio_sm_is_tx_fifo_full(pio0, 0)){
         return false;
     }

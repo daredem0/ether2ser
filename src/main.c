@@ -41,6 +41,8 @@
 #include "drivers/w5500_driver.h"
 #include "drivers/pio_tx_rx_driver.h"
 #include "platform/pinmap.h"
+#include "protocol/hdlc_common.h"
+#include "drivers/tx_queue.h"
 
 // Generated headers
 
@@ -62,6 +64,12 @@ int main(void)
         .length = RX_BUF_SIZE,
         .payload = (uint8_t *)malloc(RX_BUF_SIZE),
     };
+
+    TX_QUEUE_T tx_queue;
+    uint8_t tx_queue_buffer_data[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)];
+    Ringbuffer tx_queue_buffer;
+    RbInit(&tx_queue_buffer, tx_queue_buffer_data, TX_FRAME_QUEUE_SIZE, sizeof(TX_QUEUE_ENTRY_T));
+    tx_queue_init(&tx_queue, &tx_queue_buffer);
 
     stdio_init_all();
 
@@ -114,13 +122,20 @@ int main(void)
     event_queue_init();
     uint8_t rx = 0;
 
+     // Indicate DTE is present
+    gpio_set_dir(V24_DTR, GPIO_OUT);
+    gpio_put(V24_DTR, 1);
+
     while (true)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
-        tx_put(0x7E);
+        tx_poll();
+        poll_queue_stats(&tx_queue);
+        tx_queue_drain(&tx_queue, 4);
+        // tx_put(0x7E);
         if (rx_get(&rx)){
-            printf("Wrote: %02X, Read: %02X\r\n", 0x7E, rx);
+            printf("Read: %02X\r\n", rx);
         }
 
         event_t event_item;
@@ -133,7 +148,8 @@ int main(void)
                 printf("> ");
                 break;
             case EV_UDP_RX:
-                w5500_udp_tx(&destination_config, &rx_frame_buffer);
+                printf("tx_queue_enqueue_udp_frame: %d\r\n", tx_queue_enqueue_udp_frame(&tx_queue, &rx_frame_buffer));
+                // w5500_udp_tx(&destination_config, &rx_frame_buffer);
                 memset(rx_frame_buffer.payload, 0, rx_frame_buffer.length);
                 rx_frame_buffer.length = 0;
                 printf("> ");
@@ -142,6 +158,6 @@ int main(void)
                 break;
             }
         }
-        sleep_ms(MAIN_LOOP_SLEEP_MS*50);
+        sleep_ms(MAIN_LOOP_SLEEP_MS);
     }
 }

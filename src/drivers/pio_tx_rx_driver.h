@@ -56,7 +56,8 @@ typedef enum{
     V24_BAUD_115200 = 115200
 } V24_BAUDRATE_T;
 
-void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T *polarities) ;
+void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T *polarities);
+bool tx_poll(void);
 bool tx_put(uint8_t data);
 
 void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T *polarities);

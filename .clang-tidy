@@ -11,7 +11,8 @@ Checks: >
   readability-identifier-naming,
   misc-unused-parameters,
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
-  -bugprone-easily-swappable-parameters
+  -bugprone-easily-swappable-parameter,
+  -clang-analyzer-core.FixedAddressDereference
 
 CheckOptions:
   # --- Naming conventions ---

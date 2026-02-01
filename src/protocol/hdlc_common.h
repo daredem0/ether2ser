@@ -37,4 +37,5 @@ typedef struct{
 } HDLC_FRAME_T;
 
 uint16_t hdlc_crc16(const uint8_t* payload, size_t num_bytes);
+
 #endif /* HDLC_COMMON_H */

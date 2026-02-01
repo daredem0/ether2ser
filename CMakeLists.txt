@@ -7,9 +7,12 @@ set(SOURCES
     src/system/cli_usb_cdc.c
     src/system/cli_commands.c
     src/system/cli_parser.c
+    src/system/ringbuffer.c
+    src/system/ringbuffer.c
     src/system/baudrate_monitor.c
     src/drivers/w5500_driver.c
     src/drivers/pio_tx_rx_driver.c
+    src/drivers/tx_queue.c
     src/protocol/hdlc_common.c
     src/protocol/hdlc_encoder.c
     src/protocol/hdlc_decoder.c
