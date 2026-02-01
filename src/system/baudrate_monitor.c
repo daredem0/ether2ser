@@ -28,21 +28,30 @@
 
 // Generated headers
 
-// #define US_PER_MS 1000
-// #define MS_PER_SECOND 1000
-// #define US_PER_SECOND (US_PER_MS * MS_PER_SECOND)
-// #define SECONDS_PER_WINDOW 5
-// #define US_WINDOW (SECONDS_PER_WINDOW * US_PER_SECOND)
 #define PIN_COUNT 25
+// Mark estimate stale if no edges for this long (sporadic clocks).
+#define BAUD_STALE_US 50000U
+// Short sampling period to quickly react to bursts.
+#define BAUD_TIMER_MS 20
+// EMA smoothing for burst-to-burst stability.
+#define BAUD_EMA_ALPHA 0.2f
 static volatile uint32_t edge_count[PIN_COUNT] = {0};
 static repeating_timer_t baud_timer;
 static volatile bool baud_ready[PIN_COUNT] = {false};
 static volatile float baud_hz[PIN_COUNT] = {0.0f};
-// static absolute_time_t window_start[PIN_COUNT] = {0};
+// First/last edge timestamps within the current sample window.
+static volatile uint64_t first_edge_time_us[PIN_COUNT] = {0};
+static volatile uint64_t last_edge_time_us[PIN_COUNT] = {0};
 
 static void rxc_edge_isr(uint gpio, uint32_t events){
     // (void)gpio;
     (void)events;
+    // Record the first edge in the current window, then update last edge time.
+    uint64_t now_us = time_us_64();
+    if (edge_count[gpio] == 0){
+        first_edge_time_us[gpio] = now_us;
+    }
+    last_edge_time_us[gpio] = now_us;
     edge_count[gpio]++;
 }
 
@@ -54,11 +63,33 @@ float baudrate_estimator_get_current_estimation(V24_PIN_T pin){
 static bool baud_timer_cb(repeating_timer_t *t){
     (void)t;
 
+    uint64_t now_us = time_us_64();
     uint32_t edges = __atomic_exchange_n(
         &edge_count[V24_RXC], 0, __ATOMIC_RELAXED);
 
-    baud_hz[V24_RXC] = ((float)edges) / 5.0f;
-    baud_ready[V24_RXC] = true;
+    if (edges > 1){
+        // Use first/last edge timestamps to avoid timer jitter skewing Hz.
+        uint64_t first_us = first_edge_time_us[V24_RXC];
+        uint64_t last_us = last_edge_time_us[V24_RXC];
+        if (last_us > first_us){
+            uint64_t elapsed_us = last_us - first_us;
+            float inst_hz = ((float)(edges - 1) * 1000000.0f) / (float)elapsed_us;
+            if (baud_hz[V24_RXC] <= 0.0f){
+                baud_hz[V24_RXC] = inst_hz;
+            } else {
+                // Smooth bursts with a simple EMA.
+                baud_hz[V24_RXC] = (BAUD_EMA_ALPHA * inst_hz) +
+                                   ((1.0f - BAUD_EMA_ALPHA) * baud_hz[V24_RXC]);
+            }
+            baud_ready[V24_RXC] = true;
+        }
+    } else {
+        // If no edges recently, mark estimate as stale without forcing zero.
+        if (now_us - last_edge_time_us[V24_RXC] > BAUD_STALE_US){
+            baud_ready[V24_RXC] = false;
+        }
+    }
+
     return true;
 }
 
@@ -70,18 +101,6 @@ void baudrate_estimator_init(V24_PIN_T pin){
     gpio_set_irq_enabled_with_callback(
         pin, GPIO_IRQ_EDGE_RISE,
         true, &rxc_edge_isr);
-    add_repeating_timer_ms(5000, baud_timer_cb, NULL, &baud_timer);
-
-    // window_start[pin] = get_absolute_time();
+    add_repeating_timer_ms(BAUD_TIMER_MS, baud_timer_cb, NULL, &baud_timer);
 
 }
-
-// void baudrate_estimator_poll(V24_PIN_T pin){
-//     absolute_time_t now = get_absolute_time();
-//     if(absolute_time_diff_us(window_start[pin], now) > (int64_t)US_WINDOW){
-//         uint32_t edges = __atomic_exchange_n(&edge_count[pin], 0, __ATOMIC_RELAXED);
-//         window_start[pin] = delayed_by_us(window_start[pin], (int64_t)US_WINDOW);
-//         float hz = ((float)edges * 0.5f) / SECONDS_PER_WINDOW;
-//         printf("Baudrate approximated: %f Hz\r\n", hz);
-//     }
-// }
