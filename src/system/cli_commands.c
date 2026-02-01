@@ -26,29 +26,10 @@
 // Project Headers
 #include "board_pins.h"
 #include "baudrate_monitor.h"
+#include "cli_parser.h"
+#include "error.h"
 
 // Generated headers
-
-// Pin lookup table
-typedef struct {
-    const char *name;
-    uint gpio_num;
-    bool is_output;
-} pin_info_t;
-
-static const pin_info_t pin_table[] = {
-    {"txd", PIN_TXD, true},
-    {"rxd", PIN_RXD, false},
-    {"rts", PIN_RTS, true},
-    {"cts", PIN_CTS, false},
-    {"dtr", PIN_DTR, true},
-    {"dsr", PIN_DSR, false},
-    {"dcd", PIN_DCD, false},
-    {"tx_active", PIN_TX_ACTIVE, true},
-    {"led", PIN_STATUS_LED, true}
-};
-
-#define NUM_PINS (sizeof(pin_table) / sizeof(pin_table[0]))
 
 // Command handler type
 typedef void (*cmd_handler_t)(const char *args);
@@ -59,29 +40,62 @@ typedef struct {
     const char *help;
 } command_t;
 
-// Helper function to find pin by name
-static const pin_info_t* find_pin(const char *name)
+static void cmd_help(const char *args);
+static void cmd_status(const char *args);
+static void cmd_net(const char *args);
+static void cmd_set(const char *args);
+static void cmd_get(const char *args);
+static void cmd_pininfo(const char *args);
+
+// Command table
+static const command_t commands[] = {
+    {"help", cmd_help, "Show available commands"},
+    {"status", cmd_status, "Show system status"},
+    {"net", cmd_net, "Show network info"},
+    {"set", cmd_set, "Set pin output: set <pin> <0|1>"},
+    {"get", cmd_get, "Get pin state: get <pin>"},
+    {"pininfo", cmd_pininfo, "Show pin details: pininfo <pin>"}
+};
+const char *get_command_name(int index)
 {
-    for (size_t i = 0; i < NUM_PINS; i++)
-    {
-        if (strcmp(name, pin_table[i].name) == 0)
-        {
-            return &pin_table[i];
-        }
-    }
-    return NULL;
+    return commands[index].name;
 }
+
+#define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
+
 
 // Command handlers
 static void cmd_help(const char *args)
 {
-    printf("Commands: help, status, net, set <pin> <0|1>, get <pin>\r\n");
-    printf("Available pins: ");
+    (void)args;
+
+    size_t max_cmd = 0;
+    for (size_t i = 0; i < NUM_COMMANDS; i++)
+    {
+        size_t len = strlen(commands[i].name);
+        if (len > max_cmd) max_cmd = len;
+    }
+
+    printf("\r\nCommands:\r\n");
+    for (size_t i = 0; i < NUM_COMMANDS; i++)
+    {
+        printf("  %-*s  %s\r\n",
+               (int)max_cmd,
+               commands[i].name,
+               commands[i].help);
+    }
+
+    printf("\r\nPins:\r\n");
+ const pin_info_t *pin_table = get_pin_table();
     for (size_t i = 0; i < NUM_PINS; i++)
     {
-        printf("%s%s", pin_table[i].name, (i < NUM_PINS - 1) ? ", " : "\r\n");
+        printf("  %-10s  %s\r\n",
+               pin_table[i].name,
+               pin_table[i].is_output ? "OUT" : "IN");
     }
+    printf("\r\n");
 }
+
 
 static void cmd_status(const char *args)
 {
@@ -105,25 +119,27 @@ static void cmd_set(const char *args)
 {
     char pin_name[16];
     int value;
+    const pin_info_t *pin = NULL;
+    e2s_error_t parser_result = parse_set_args(args, pin_name, &value, &pin);
 
-    if (sscanf(args, "%15s %d", pin_name, &value) != 2 || (value != 0 && value != 1))
-    {
-        printf("usage: set <pin> <0|1>\r\n");
-        return;
+    switch(parser_result){
+        case E2S_ERR_CLI_USAGE_SET:
+            printf("usage: set <pin> <0|1>\r\n");
+            return;
+        case E2S_ERR_CLI_UNKNOWN_PIN:
+            printf("unknown pin: '%s'\r\n", pin_name);
+            return;
+        case E2S_ERR_CLI_PIN_INPUT_ONLY:
+            printf("pin '%s' is input-only\r\n", pin_name);
+            return;
+        case E2S_OK:
+            break;
+        default:
+            // Unreachable
+            return;
     }
 
-    const pin_info_t *pin = find_pin(pin_name);
-    if (!pin)
-    {
-        printf("unknown pin: '%s'\r\n", pin_name);
-        return;
-    }
-
-    if (!pin->is_output)
-    {
-        printf("pin '%s' is input-only\r\n", pin_name);
-        return;
-    }
+    if (pin == NULL) return;
 
     gpio_init(pin->gpio_num);
     gpio_set_dir(pin->gpio_num, GPIO_OUT);
@@ -135,19 +151,25 @@ static void cmd_set(const char *args)
 static void cmd_get(const char *args)
 {
     char pin_name[16];
+    const pin_info_t *pin = NULL;
 
-    if (sscanf(args, "%15s", pin_name) != 1)
-    {
-        printf("usage: get <pin>\r\n");
-        return;
+    e2s_error_t parser_result = parse_get_args(args, pin_name, &pin);
+
+    switch(parser_result){
+        case E2S_ERR_CLI_USAGE_GET:
+            printf("usage: get <pin>\r\n");
+            return;
+        case E2S_ERR_CLI_UNKNOWN_PIN:
+            printf("unknown pin: '%s'\r\n", pin_name);
+            return;
+        case E2S_OK:
+            break;
+        default:
+            // Unreachable
+            return;
     }
 
-    const pin_info_t *pin = find_pin(pin_name);
-    if (!pin)
-    {
-        printf("unknown pin: '%s'\r\n", pin_name);
-        return;
-    }
+    if(pin == NULL) return;
 
     // Only initialize if not already a GPIO function
     if (gpio_get_function(pin->gpio_num) != GPIO_FUNC_SIO)
@@ -194,47 +216,23 @@ static void cmd_pininfo(const char *args)
     printf("  Function: %d\r\n", gpio_get_function(gpio_num));
 }
 
-// Command table
-static const command_t commands[] = {
-    {"help", cmd_help, "Show available commands"},
-    {"status", cmd_status, "Show system status"},
-    {"net", cmd_net, "Show network info"},
-    {"set", cmd_set, "Set pin output: set <pin> <0|1>"},
-    {"get", cmd_get, "Get pin state: get <pin>"},
-    {"pininfo", cmd_pininfo, "Show pin details: pininfo <pin>"}
-};
-
-#define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
-
 void handle_cli_line(const char *line)
 {
-    if (line[0] == '\0') return;
 
     char cmd[16];
-    const char *args = "";
-
-    // Parse command and arguments
-    int n = sscanf(line, "%15s", cmd);
-    if (n == 1)
-    {
-        // Find start of arguments
-        const char *space = strchr(line, ' ');
-        if (space)
+    char args[64];
+    if (cli_parse(line, cmd, args) == E2S_OK){
+        // Look up command
+        for (size_t i = 0; i < NUM_COMMANDS; i++)
         {
-            args = space + 1;
-            while (*args == ' ') args++; // Skip leading spaces
+            if (strcmp(cmd, commands[i].name) == 0)
+            {
+                commands[i].handler(args);
+                return;
+            }
         }
     }
-
-    // Look up command
-    for (size_t i = 0; i < NUM_COMMANDS; i++)
-    {
-        if (strcmp(cmd, commands[i].name) == 0)
-        {
-            commands[i].handler(args);
-            return;
-        }
+    else{
+        printf("unknown: '%s' (try 'help')\r\n", cmd);
     }
-
-    printf("unknown: '%s' (try 'help')\r\n", cmd);
 }

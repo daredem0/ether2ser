@@ -23,6 +23,8 @@
 #define V24_TXD     14
 // #define V24_TXD     25 // for testing led pin
 #define V24_DTR     15
+#define V24_TX_ACTIVE 25
+#define V24_STATUS_LED 25
 
 typedef enum{
     V24_TXC_DCE_T = V24_TXC_DCE,
@@ -34,7 +36,9 @@ typedef enum{
     V24_RXD_T     = V24_RXD,
     V24_RTS_T     = V24_RTS,
     V24_TXD_T     = V24_TXD,
-    V24_DTR_T     = V24_DTR
+    V24_DTR_T     = V24_DTR,
+    V24_TX_ACTIVE_T = V24_TX_ACTIVE,
+    V24_STATUS_LED_T = V24_STATUS_LED
 } V24_PIN_T;
 
 

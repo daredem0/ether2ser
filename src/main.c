@@ -39,7 +39,7 @@
 #include "system/cli_usb_cdc.h"
 #include "system/baudrate_monitor.h"
 #include "drivers/w5500_driver.h"
-#include "drivers/pio_tx_driver.h"
+#include "drivers/pio_tx_rx_driver.h"
 #include "platform/pinmap.h"
 
 // Generated headers
@@ -90,10 +90,10 @@ int main(void)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
-        tx_put(0x7E);
-        if (rx_get(&rx)){
-            printf("Wrote: %02X, Read: %02X\r\n", 0x7E, rx);
-        }
+        // tx_put(0x7E);
+        // if (rx_get(&rx)){
+        //     printf("Wrote: %02X, Read: %02X\r\n", 0x7E, rx);
+        // }
 
         event_t event_item;
         while (event_queue_pop(&event_item))

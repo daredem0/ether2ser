@@ -6,9 +6,10 @@ set(SOURCES
     src/system/event_queue.c
     src/system/cli_usb_cdc.c
     src/system/cli_commands.c
+    src/system/cli_parser.c
     src/system/baudrate_monitor.c
     src/drivers/w5500_driver.c
-    src/drivers/pio_tx_driver.c
+    src/drivers/pio_tx_rx_driver.c
     src/protocol/hdlc_common.c
     src/protocol/hdlc_encoder.c
     src/protocol/hdlc_decoder.c
@@ -210,9 +211,11 @@ else()
         tests/test_runner.c
         tests/test_hdlc_encoder.c
         tests/test_hdlc_decoder.c
+        tests/test_command_parser.c
         src/protocol/hdlc_common.c
         src/protocol/hdlc_encoder.c
         src/protocol/hdlc_decoder.c
+        src/system/cli_parser.c
     )
 
     target_include_directories(unit_tests PRIVATE

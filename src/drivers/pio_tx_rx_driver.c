@@ -10,7 +10,7 @@
  */
 
 // Related headers
-#include "pio_tx_driver.h"
+#include "pio_tx_rx_driver.h"
 
 // Standard library headers
 #include <stdio.h>
