@@ -16,6 +16,7 @@ set(SOURCES
     src/protocol/hdlc_common.c
     src/protocol/hdlc_encoder.c
     src/protocol/hdlc_decoder.c
+    src/protocol/hdlc_sync.c
 )
 
 if(NOT BUILD_TESTS)

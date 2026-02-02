@@ -44,6 +44,7 @@
 #include "protocol/hdlc_common.h"
 #include "drivers/tx_queue.h"
 #include "system/common.h"
+#include "protocol/hdlc_sync.h"
 
 // Generated headers
 
@@ -72,6 +73,17 @@ int main(void)
     RbInit(&tx_queue_buffer, tx_queue_buffer_data, TX_FRAME_QUEUE_SIZE, sizeof(TX_QUEUE_ENTRY_T));
     tx_queue_init(&tx_queue, &tx_queue_buffer);
 
+
+    HDLC_SYNC_ACCUMULATOR_T accumulator;
+    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+    uint8_t reconstructed_frame_buffer[2048];
+    HDLC_FRAME_T reconstructed_frame = {
+        .payload = reconstructed_frame_buffer,
+        .length = 0,
+        .capacity = sizeof(reconstructed_frame_buffer)
+    };
+
+    //
     stdio_init_all();
 
     // Initialize GPIOs
@@ -150,12 +162,27 @@ int main(void)
         tx_queue_drain(&tx_queue, 4);
         if(tx_queue_is_empty(&tx_queue)){
             tx_poll();
-            // printf("TX FIFO is empty\r\n");
-            // gpio_put(V24_RTS, 0);
         }
-        // tx_put(0x7E);
         if (rx_get(&rx)){
-            printf("Read: %02X\r\n", rx);
+            // printf("Read: %02X\r\n", rx);
+            hdlc_sync_acc_process_byte(&accumulator, rx);
+        }
+        if (hdlc_sync_acc_poll(&accumulator, &reconstructed_frame) == E2S_ERR_HDLC_ACC_FRAME_READY){
+            printf("Frame: ");
+            for(size_t i = 0; i < reconstructed_frame.length; i++){
+                printf("%02X ", reconstructed_frame.payload[i]);
+                if (i % 16 == 15){
+                    printf("\r\n");
+                }
+            }
+            printf("\r\n");
+            printf("Length: %zu\r\n", reconstructed_frame.length);
+            memset(reconstructed_frame.payload, 0, reconstructed_frame.length);
+            hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+        }else{
+            // Reset state if end wasnt found. We need to hunt again
+            accumulator.state = HDLC_SYNC_STATE_HUNTING;
+            reconstructed_frame.length = 0;
         }
 
         event_t event_item;

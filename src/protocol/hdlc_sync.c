@@ -37,7 +37,11 @@ bool hdlc_sync_acc_process_byte(HDLC_SYNC_ACCUMULATOR_T *accumulator, uint8_t by
 
 
 e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T *accumulator, HDLC_FRAME_T *out_frame){
+    if (accumulator->position <= 2* sizeof(accumulator->sync_accumulator)){
+        return E2S_OK;
+    }
     size_t out_frame_position = 0;
+    uint8_t aligned;
     for(size_t i = 0; i < accumulator->position; i++){
         switch(accumulator->state){
             case HDLC_SYNC_STATE_HUNTING:
@@ -52,14 +56,14 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T *accumulator, HDLC_FRAME_
 
                     // if ((( accumulator->sync_accumulator << bit_pos) & 0xFF) == accumulator->sync_byte){
                     if ((((accumulator->sync_accumulator << bit_pos) >> 8) & 0xFF) == accumulator->sync_byte){
-                        // printf("SYNCED\n");
+                        // printf("START SYNCING\n");
                         // printf("Bit %d: ", bit_pos);
                         // printf("%02X ", ((accumulator->sync_accumulator << bit_pos) >> 8) & 0xFF);
                         // printf("\n");
                         // printf("Sync Accumulator: %02X\n", accumulator->sync_accumulator);
 
 
-                        accumulator->state = HDLC_SYNC_STATE_SYNCED;
+                        accumulator->state = HDLC_SYNC_STATE_SYNCING;
                         accumulator->bit_offset = bit_pos;
                         for (size_t j = 0; j < sizeof(accumulator->sync_accumulator); j++){
                             out_frame->payload[out_frame_position] = (accumulator->buffer[i-1+j] << accumulator->bit_offset) | (accumulator->buffer[i+j] >> (8 - accumulator->bit_offset));
@@ -72,8 +76,9 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T *accumulator, HDLC_FRAME_
                 }
                 // printf("\n");
                 break;
-            case HDLC_SYNC_STATE_SYNCED:
-                uint8_t aligned;
+            case HDLC_SYNC_STATE_SYNCING:
+                // printf("SYNCING\n");
+                aligned;
                 if (accumulator->bit_offset == 0){
                     aligned = accumulator->buffer[i];
                 }
@@ -84,7 +89,22 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T *accumulator, HDLC_FRAME_
                 // printf("Writing output byte: %02X\n", out_frame->payload[out_frame_position]);
                 ++(out_frame->length);
                 ++out_frame_position;
+                accumulator->state = HDLC_SYNC_STATE_SYNCED;
+                break;
+            case HDLC_SYNC_STATE_SYNCED:
+                aligned;
+                if (accumulator->bit_offset == 0){
+                    aligned = accumulator->buffer[i];
+                }
+                else{
+                    aligned = (accumulator->buffer[i] << accumulator->bit_offset) | (accumulator->buffer[i+1] >> (8 - accumulator->bit_offset));
+                }
+                out_frame->payload[out_frame_position] = aligned;
+                ++(out_frame->length);
+                ++out_frame_position;
                 if (aligned == accumulator->sync_byte) {
+                    // printf("Writing output byte: %02X\n", out_frame->payload[out_frame_position]);
+                    printf("FRAME READY\n");
                     return E2S_ERR_HDLC_ACC_FRAME_READY;
                 }
                 break;
@@ -93,6 +113,6 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T *accumulator, HDLC_FRAME_
         }
     }
 
-    return E2S_ERR_HDLC_ACC_FRAME_READY;
+    return E2S_OK;
 }
 
