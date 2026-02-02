@@ -43,6 +43,7 @@
 #include "platform/pinmap.h"
 #include "protocol/hdlc_common.h"
 #include "drivers/tx_queue.h"
+#include "system/common.h"
 
 // Generated headers
 
@@ -74,16 +75,31 @@ int main(void)
     stdio_init_all();
 
     // Initialize GPIOs
-    gpio_pull_down(V24_DCD);
-    gpio_pull_down(V24_DSR);
-    gpio_pull_down(V24_CTS);
-    gpio_pull_down(V24_RXD);
-    gpio_pull_down(V24_RTS);
-    gpio_pull_down(V24_TXD);
-    gpio_pull_down(V24_DTR);
-    gpio_pull_down(V24_TXC_DTE);
-    gpio_pull_down(V24_RXC);
-    gpio_pull_down(V24_TXC_DCE);
+    V24_PIN_T inputs[] = {
+        V24_DCD,
+        V24_DSR,
+        V24_CTS,
+        V24_RXD,
+        V24_RXC
+    };
+    for(size_t i = 0; i < ARRAY_LEN(inputs); i++) {
+        gpio_init(inputs[i]);
+        gpio_set_dir(inputs[i], GPIO_IN);
+        gpio_pull_down(inputs[i]);
+    }
+
+    V24_PIN_T outputs[] = {
+        V24_RTS,
+        V24_TXD,
+        V24_DTR,
+        V24_TXC_DTE,
+        V24_TXC_DCE
+    };
+
+    for(size_t i = 0; i < ARRAY_LEN(outputs); i++) {
+        gpio_init(outputs[i]);
+        gpio_set_dir(outputs[i], GPIO_OUT);
+    }
 
     V24_POLARITIES_T v24_polarities = {
         .tx_polarities = {
@@ -130,9 +146,13 @@ int main(void)
     {
         cli_poll();
         w5500_poll_rx(&sender_config, &rx_frame_buffer);
-        tx_poll();
         poll_queue_stats(&tx_queue);
         tx_queue_drain(&tx_queue, 4);
+        if(tx_queue_is_empty(&tx_queue)){
+            tx_poll();
+            // printf("TX FIFO is empty\r\n");
+            // gpio_put(V24_RTS, 0);
+        }
         // tx_put(0x7E);
         if (rx_get(&rx)){
             printf("Read: %02X\r\n", rx);
@@ -150,6 +170,10 @@ int main(void)
             case EV_UDP_RX:
                 printf("tx_queue_enqueue_udp_frame: %d\r\n", tx_queue_enqueue_udp_frame(&tx_queue, &rx_frame_buffer));
                 // w5500_udp_tx(&destination_config, &rx_frame_buffer);
+                // printf("Setting RTS\r\n");
+                // gpio_put(V24_RTS, 1);
+                // printf("SLeeping\r\n");
+                // sleep_ms(5000);
                 memset(rx_frame_buffer.payload, 0, rx_frame_buffer.length);
                 rx_frame_buffer.length = 0;
                 printf("> ");
@@ -158,6 +182,6 @@ int main(void)
                 break;
             }
         }
-        sleep_ms(MAIN_LOOP_SLEEP_MS);
+        // sleep_ms(MAIN_LOOP_SLEEP_MS);
     }
 }

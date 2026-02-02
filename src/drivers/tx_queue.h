@@ -30,6 +30,7 @@ typedef struct {
 } TX_QUEUE_ENTRY_T;
 
 e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T *queue, UDP_FRAME_T *frame);
+bool tx_queue_is_empty(TX_QUEUE_T *queue);
 e2s_error_t tx_queue_drain(TX_QUEUE_T *queue, size_t bytes_to_drain);
 e2s_error_t poll_queue_stats(TX_QUEUE_T *queue);
 e2s_error_t tx_queue_init(TX_QUEUE_T *queue, Ringbuffer *buffer);

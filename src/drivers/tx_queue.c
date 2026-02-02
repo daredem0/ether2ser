@@ -87,8 +87,12 @@ static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_ENTRY_T *entry, size_t bytes_to
     return E2S_OK;
 }
 
+bool tx_queue_is_empty(TX_QUEUE_T *queue){
+    return queue->queue_buffer->count == 0;
+}
+
 e2s_error_t tx_queue_drain(TX_QUEUE_T *queue, size_t bytes_to_drain){
-    if (!queue || queue->queue_buffer->count == 0){
+    if (!queue){
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
     }
     if(pio_sm_is_tx_fifo_full(pio0, 0)){
