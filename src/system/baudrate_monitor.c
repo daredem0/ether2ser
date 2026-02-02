@@ -22,6 +22,7 @@
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 #include "hardware/gpio.h"
+#include "hardware/sync.h"
 
 // Project Headers
 #include "platform/pinmap.h"
@@ -69,8 +70,10 @@ static bool baud_timer_cb(repeating_timer_t *t){
 
     if (edges > 1){
         // Use first/last edge timestamps to avoid timer jitter skewing Hz.
+        uint32_t save = save_and_disable_interrupts();
         uint64_t first_us = first_edge_time_us[V24_RXC];
         uint64_t last_us = last_edge_time_us[V24_RXC];
+        restore_interrupts(save);
         if (last_us > first_us){
             uint64_t elapsed_us = last_us - first_us;
             float inst_hz = ((float)(edges - 1) * 1000000.0f) / (float)elapsed_us;

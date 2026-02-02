@@ -5,6 +5,7 @@
 
 typedef enum {
     E2S_OK = 0,
+    E2S_ERR_GENERIC_ERROR,
 
     /* CLI parsing/commands */
     E2S_ERR_CLI_EMPTY_LINE,
@@ -39,6 +40,9 @@ typedef enum {
     E2S_ERR_HDLC_DECODE_PAYLOAD_TOO_LONG,
     E2S_ERR_HDLC_DECODE_PAYLOAD_TOO_SHORT,
     E2S_ERR_HDLC_DECODE_CRC_MISMATCH,
+
+    /* Frame Acccumulator */
+    E2S_ERR_HDLC_ACC_FRAME_READY,
 
     /* W5500 */
     E2S_ERR_W5500_INIT_FAILED,

@@ -65,6 +65,11 @@ extern void test_event_queue_full_when_capacity_reached(void);
 extern void test_event_queue_pop_empty_fails(void);
 extern void test_event_queue_wraparound_preserves_order(void);
 
+// Frame Accumulator declarations
+extern void test_byte_aligned_hdlc_frame(void);
+extern void test_one_bit_shifted_hdlc_frame(void);
+extern void test_multiple_bits_shifted_hdlc_frame(void);
+
 void setUp(void) {
     // set stuff up here
 }
@@ -138,5 +143,10 @@ int main(void) {
     RUN_TEST(test_event_queue_full_when_capacity_reached);
     RUN_TEST(test_event_queue_pop_empty_fails);
     RUN_TEST(test_event_queue_wraparound_preserves_order);
+
+    // Frame Accumulator Tests
+    RUN_TEST(test_byte_aligned_hdlc_frame);
+    RUN_TEST(test_one_bit_shifted_hdlc_frame);
+    RUN_TEST(test_multiple_bits_shifted_hdlc_frame);
     return UNITY_END();
 }

@@ -216,9 +216,11 @@ else()
         tests/test_hdlc_decoder.c
         tests/test_command_parser.c
         tests/test_event_queue.c
+        tests/test_byte_alignment.c
         src/protocol/hdlc_common.c
         src/protocol/hdlc_encoder.c
         src/protocol/hdlc_decoder.c
+        src/protocol/hdlc_sync.c
         src/system/cli_parser.c
         src/system/event_queue.c
     )

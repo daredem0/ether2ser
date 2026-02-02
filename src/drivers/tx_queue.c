@@ -40,14 +40,15 @@ e2s_error_t tx_queue_init(TX_QUEUE_T *queue, Ringbuffer *buffer){
 }
 
 e2s_error_t poll_queue_stats(TX_QUEUE_T *queue){
-    if (!queue->queue_touched) return E2S_OK;
     if (!queue) {
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
     }
-    printf("TX Queue Stats: %zu / %zu frames used\r\n",
-           queue->queue_buffer->count,
-           queue->queue_buffer->capacity);
-    queue->queue_touched = false;
+    if (queue->queue_touched){
+        printf("TX Queue Stats: %zu / %zu frames used\r\n",
+            queue->queue_buffer->count,
+            queue->queue_buffer->capacity);
+        queue->queue_touched = false;
+    }
     return E2S_OK;
 }
 static inline TX_QUEUE_ENTRY_T tx_queue_entry_init(void) {
@@ -93,7 +94,7 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T *queue, size_t bytes_to_drain){
     if(pio_sm_is_tx_fifo_full(pio0, 0)){
         return E2S_OK; // TX FIFO is full, cannot drain now
     }
-    static TX_QUEUE_ENTRY_T current_entry;
+    static TX_QUEUE_ENTRY_T current_entry = {0};
     if(current_entry.offset == 0 || current_entry.offset >= current_entry.frame.length){
         if (RbPopFront(queue->queue_buffer, &current_entry) < 0){
             return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
