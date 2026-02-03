@@ -12,6 +12,14 @@
 #ifndef PINMAP_H
 #define PINMAP_H
 
+// Related headers
+
+// Standard library headers
+
+// Project Headers
+
+// Generated headers
+
 #define V24_TXC_DCE 0
 #define V24_RXC     4
 #define V24_TXC_DTE 5

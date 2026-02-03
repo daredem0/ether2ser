@@ -1,3 +1,13 @@
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/protocol/hdlc_sync.c
+ * Purpose: HDLC sync accumulator implementation.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 // Related headers
 #include "hdlc_sync.h"
@@ -7,11 +17,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-// Library Headers
-
 // Project Headers
-#include "system/error.h"
 #include "hdlc_common.h"
+#include "system/error.h"
 
 // Generated headers
 
@@ -37,7 +45,7 @@ bool hdlc_sync_acc_process_byte(HDLC_SYNC_ACCUMULATOR_T *accumulator, uint8_t by
 
 
 e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T *accumulator, HDLC_FRAME_T *out_frame){
-    if (accumulator->position <= 2* sizeof(accumulator->sync_accumulator)){
+    if (accumulator->position < 2* sizeof(accumulator->sync_accumulator)){
         return E2S_OK;
     }
     size_t out_frame_position = 0;
@@ -115,4 +123,3 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T *accumulator, HDLC_FRAME_
 
     return E2S_OK;
 }
-

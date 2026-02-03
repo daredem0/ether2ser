@@ -1,7 +1,24 @@
-
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/error.h
+ * Purpose: Common error codes for ether2ser.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef ERROR_H
 #define ERROR_H
+
+// Related headers
+
+// Standard library headers
+
+// Project Headers
+
+// Generated headers
 
 typedef enum {
     E2S_OK = 0,

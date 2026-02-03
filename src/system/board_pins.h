@@ -12,6 +12,14 @@
 #ifndef BOARD_PINS_H
 #define BOARD_PINS_H
 
+// Related headers
+
+// Standard library headers
+
+// Project Headers
+
+// Generated headers
+
 // V.24/RS-232 interface pins (adjust these to match your actual wiring)
 #define PIN_TXD         0   // Serial data output to MAX3243
 #define PIN_RXD         1   // Serial data input from MAX3243

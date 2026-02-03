@@ -1,14 +1,22 @@
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/cli_parser.c
+ * Purpose: CLI line parsing and pin lookup.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 // Related headers
 #include "cli_parser.h"
 
 // Standard library headers
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdbool.h>
 #include <string.h>
-
-// Library Headers
 
 // Project Headers
 #include "error.h"

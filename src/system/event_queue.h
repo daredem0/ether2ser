@@ -18,8 +18,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// Library Headers
-
 // Project Headers
 
 // Generated headers

@@ -13,6 +13,14 @@
 #ifndef CLI_COMMANDS_H
 #define CLI_COMMANDS_H
 
+// Related headers
+
+// Standard library headers
+
+// Project Headers
+
+// Generated headers
+
 void handle_cli_line(const char *line);
 const char *get_command_name(int index);
 

@@ -1,12 +1,28 @@
 
-
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/protocol/hdlc_sync.h
+ * Purpose: HDLC sync accumulator interface and constants.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef HDLC_SYNC_H
 #define HDLC_SYNC_H
 
+// Related headers
+
+// Standard library headers
+#include <stdbool.h>
+
+// Project Headers
 #include "hdlc_common.h"
 #include "system/error.h"
-#include <stdbool.h>
+
+// Generated headers
 
 #define RX_HDLC_SYNC_MAX_BUFFER_SIZE 2048
 #define HDLC_SYNC_DEFAULT_SYNC_BYTE HDLC_FLAG_BYTE

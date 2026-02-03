@@ -17,8 +17,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-// Library Headers
-
 // Project Headers
 #include "hdlc_common.h"
 

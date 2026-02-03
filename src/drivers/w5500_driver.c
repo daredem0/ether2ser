@@ -12,30 +12,27 @@
 // Related headers
 #include "w5500_driver.h"
 
-
 // Standard library headers
-#include <stdio.h>
-#include <stdint.h>
 #include <inttypes.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
-// Library Headers
-#include "pico/stdlib.h"
+// Project Headers
+#include "hardware/gpio.h"
 #include "pico/stdio.h"
+#include "pico/stdlib.h"
 #include "pico/time.h"
 #include "pico/types.h"
-#include "hardware/gpio.h"
-#include "wizchip_conf.h"
-#include "w5500.h"
 #include "socket.h"
-#include "wizchip_spi.h"
-#include "wizchip_qspi_pio.h"
 #include "system/common.h"
-
-// Project Headers
 #include "system/event_queue.h"
+#include "w5500.h"
+#include "wizchip_conf.h"
+#include "wizchip_qspi_pio.h"
+#include "wizchip_spi.h"
 
-// Generated headers.h"
+// Generated headers
 
 // Default network configuration
 

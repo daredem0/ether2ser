@@ -13,19 +13,17 @@
 #include "cli_usb_cdc.h"
 
 // Standard library headers
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
-// Library Headers
-#include "pico/stdio.h"
+// Project Headers
+#include "cli_commands.h"
 #include "pico/error.h"
+#include "pico/stdio.h"
+#include "system/event_queue.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
-#include "system/event_queue.h"
-#include "cli_commands.h"
-
-// Project Headers
 
 // Generated headers
 

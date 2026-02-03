@@ -18,8 +18,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Library Headers
-
 // Project Headers
 
 // Generated headers

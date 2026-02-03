@@ -13,21 +13,19 @@
 #include "cli_commands.h"
 
 // Standard library headers
-#include <stdio.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
-// Library Headers
+// Project Headers
+#include "baudrate_monitor.h"
+#include "board_pins.h"
+#include "cli_parser.h"
+#include "error.h"
 #include "hardware/gpio.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
-
-// Project Headers
-#include "board_pins.h"
-#include "baudrate_monitor.h"
-#include "cli_parser.h"
-#include "error.h"
 
 // Generated headers
 

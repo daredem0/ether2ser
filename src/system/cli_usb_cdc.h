@@ -12,6 +12,14 @@
 #ifndef SYSTEM_CLI_USB_CDC_H
 #define SYSTEM_CLI_USB_CDC_H
 
+// Related headers
+
+// Standard library headers
+
+// Project Headers
+
+// Generated headers
+
 /**
  * @brief Poll USB CDC for CLI input, echo, and emit line events.
  */

@@ -1,9 +1,27 @@
 
-
-
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/common.h
+ * Purpose: Shared helpers and logging macros.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef COMMON_H
 #define COMMON_H
+
+// Related headers
+
+// Standard library headers
+#include <stddef.h>
+#include <stdio.h>
+
+// Project Headers
+
+// Generated headers
 
 #define ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
 

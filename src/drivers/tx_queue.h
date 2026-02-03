@@ -1,13 +1,29 @@
-
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/drivers/tx_queue.h
+ * Purpose: TX queue API for buffered HDLC frames.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef TX_QUEUE_H
 #define TX_QUEUE_H
 
-#include "drivers/w5500_driver.h"
-#include "system/ringbuffer.h"
-#include "system/error.h"
-#include "protocol/hdlc_common.h"
+// Related headers
+
+// Standard library headers
 #include <stdbool.h>
+
+// Project Headers
+#include "drivers/w5500_driver.h"
+#include "protocol/hdlc_common.h"
+#include "system/error.h"
+#include "system/ringbuffer.h"
+
+// Generated headers
 
 #define TX_FRAME_QUEUE_SIZE 4
 

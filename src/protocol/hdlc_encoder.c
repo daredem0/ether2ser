@@ -18,8 +18,6 @@
 #include <stdio.h>
 #include <string.h>
 
-// Library Headers
-
 // Project Headers
 #include "hdlc_common.h"
 

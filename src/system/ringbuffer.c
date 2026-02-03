@@ -1,23 +1,27 @@
-
-
-
-
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/ringbuffer.c
+ * Purpose: Generic ring buffer implementation.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 // Related headers
 #include "ringbuffer.h"
 
 // Standard library headers
-#include <stdio.h>
-#include <stdint.h>
 #include <inttypes.h>
-#include <string.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-// Library Headers
-#include "pico/stdio.h"
-#include "pico/time.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
+// Project Headers
+
+// Generated headers
 
 // Project Headers
 #include "system/cli_commands.h"

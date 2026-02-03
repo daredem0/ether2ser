@@ -16,10 +16,10 @@
 
 // Standard library headers
 
-// Library Headers
-
 // Project Headers
 #include "platform/pinmap.h"
+
+// Generated headers
 
 #define BAUDRATE_MONITOR_PIN V24_RXC
 

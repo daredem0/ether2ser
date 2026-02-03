@@ -13,11 +13,9 @@
 
 // Standard library headers
 
-// Library Headers
-#include "pico/types.h"
-#include "hardware/pio.h"
-
 // Project Headers
+#include "hardware/pio.h"
+#include "pico/types.h"
 
 // Generated headers
 #include "led_blink.pio.h"

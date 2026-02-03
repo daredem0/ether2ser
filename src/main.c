@@ -27,25 +27,23 @@
 #include <string.h>
 #include <stdlib.h>
 
-// Library Headers
+// Project Headers
+#include "drivers/pio_tx_rx_driver.h"
+#include "drivers/tx_queue.h"
+#include "drivers/w5500_driver.h"
 #include "pico/stdio.h"
 #include "pico/time.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
-
-// Project Headers
-#include "system/cli_commands.h"
-#include "system/event_queue.h"
-#include "system/cli_usb_cdc.h"
-#include "system/baudrate_monitor.h"
-#include "drivers/w5500_driver.h"
-#include "drivers/pio_tx_rx_driver.h"
 #include "platform/pinmap.h"
 #include "protocol/hdlc_common.h"
-#include "drivers/tx_queue.h"
-#include "system/common.h"
-#include "protocol/hdlc_sync.h"
 #include "protocol/hdlc_decoder.h"
+#include "protocol/hdlc_sync.h"
+#include "system/baudrate_monitor.h"
+#include "system/cli_commands.h"
+#include "system/cli_usb_cdc.h"
+#include "system/common.h"
+#include "system/event_queue.h"
+#include "wizchip_conf.h"
+#include "wizchip_qspi_pio.h"
 
 // Generated headers
 
@@ -115,7 +113,8 @@ int main(void)
     w5500_debug_status();
 
     // Initialize PIO
-    tx_clock_init(pio0, 0, V24_BAUD_4800, &v24_polarities.tx_polarities);
+    // Currently anything faster than 38400 is not supported
+    tx_clock_init(pio0, 0, V24_BAUD_9600, &v24_polarities.tx_polarities);
     rx_clock_init(pio0, 1, &v24_polarities.rx_polarities);
     baudrate_estimator_init(V24_RXC);
 
@@ -199,6 +198,6 @@ int main(void)
                 break;
             }
         }
-        sleep_ms(MAIN_LOOP_SLEEP_MS);
+        // sleep_ms(MAIN_LOOP_SLEEP_MS);
     }
 }

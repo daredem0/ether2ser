@@ -1,8 +1,8 @@
 /*
  * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
  *
- * File:    src/drivers/pio_tx_driver.c
- * Purpose: PIO TX clock driver implementation.
+ * File:    src/drivers/pio_tx_rx_driver.c
+ * Purpose: PIO TX/RX clock driver implementation.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -16,11 +16,9 @@
 #include <stdio.h>
 #include <stdint.h>
 
-// Library Headers
-#include "pico/types.h"
-#include "hardware/pio.h"
-
 // Project Headers
+#include "hardware/pio.h"
+#include "pico/types.h"
 #include "platform/pinmap.h"
 
 // Generated headers

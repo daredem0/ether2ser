@@ -16,8 +16,6 @@
 #include <stdint.h>
 #include <string.h>
 
-// Library Headers
-
 // Project Headers
 
 // Generated headers

@@ -13,19 +13,17 @@
 #include "baudrate_monitor.h"
 
 // Standard library headers
-#include <stdio.h>
-#include <stdint.h>
 #include <inttypes.h>
-
-// Library Headers
-#include "pico/time.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
-#include "hardware/gpio.h"
-#include "hardware/sync.h"
+#include <stdint.h>
+#include <stdio.h>
 
 // Project Headers
+#include "hardware/gpio.h"
+#include "hardware/sync.h"
+#include "pico/time.h"
 #include "platform/pinmap.h"
+#include "wizchip_conf.h"
+#include "wizchip_qspi_pio.h"
 
 // Generated headers
 

@@ -16,13 +16,13 @@
 // Related headers
 
 // Standard library headers
-
-// Library Headers
-#include "pico/types.h"
-#include "hardware/pio.h"
-#include "drivers/gpio_driver.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 // Project Headers
+#include "drivers/gpio_driver.h"
+#include "hardware/pio.h"
+#include "pico/types.h"
 
 // Generated headers
 
@@ -33,6 +33,7 @@ typedef enum{
     V24_BAUD_2400 = 2400,
     V24_BAUD_4800 = 4800,
     V24_BAUD_9600 = 9600,
+    V24_BAUD_16000 = 16000,
     V24_BAUD_19200 = 19200,
     V24_BAUD_38400 = 38400,
     V24_BAUD_57600 = 57600,

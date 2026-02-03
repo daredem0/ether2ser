@@ -1,35 +1,41 @@
-
-
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/drivers/gpio_driver.c
+ * Purpose: GPIO initialization and V.24 polarity defaults.
+ *
+ * SPDX-License-Identifier: MIT
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 // Related headers
 #include "gpio_driver.h"
 
 // Standard library headers
-#include <stdio.h>
-#include <stdint.h>
 #include <inttypes.h>
-#include <string.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
-
-// Library Headers
-#include "pico/stdio.h"
-#include "pico/time.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
+#include <string.h>
 
 // Project Headers
-#include "system/cli_commands.h"
-#include "system/event_queue.h"
-#include "system/cli_usb_cdc.h"
-#include "system/baudrate_monitor.h"
-#include "drivers/w5500_driver.h"
 #include "drivers/pio_tx_rx_driver.h"
+#include "drivers/tx_queue.h"
+#include "drivers/w5500_driver.h"
+#include "pico/stdio.h"
+#include "pico/time.h"
 #include "platform/pinmap.h"
 #include "protocol/hdlc_common.h"
-#include "drivers/tx_queue.h"
-#include "system/common.h"
-#include "protocol/hdlc_sync.h"
 #include "protocol/hdlc_decoder.h"
+#include "protocol/hdlc_sync.h"
+#include "system/baudrate_monitor.h"
+#include "system/cli_commands.h"
+#include "system/cli_usb_cdc.h"
+#include "system/common.h"
+#include "system/event_queue.h"
+#include "wizchip_conf.h"
+#include "wizchip_qspi_pio.h"
 
 // Generated headers
 
