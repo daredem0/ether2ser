@@ -17,6 +17,7 @@
 #include <stdio.h>
 
 // Project Headers
+#include "drivers/gpio_driver.h"
 #include "hardware/pio.h"
 #include "pico/types.h"
 #include "platform/pinmap.h"
@@ -28,6 +29,12 @@
 static float baud_to_clockdiv(V24_BAUDRATE_T baudrate)
 {
     return 125000000.0f / (3.0f * (float)baudrate);
+}
+
+void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
+{
+    config->polarities = init_polarities();
+    config->baudrate   = baudrate;
 }
 
 bool rx_get(uint8_t* data)

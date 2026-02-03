@@ -29,7 +29,8 @@ typedef enum
     EV_CLI_LINE,
     EV_UDP_RX,
     EV_UDP_TX,
-    EV_HDLC_DECODE
+    EV_HDLC_DECODE,
+    EV_SAVE_CONFIG
 } event_type_t;
 
 typedef struct

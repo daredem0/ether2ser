@@ -39,11 +39,19 @@ typedef enum
     V24_BAUD_115200 = 115200
 } V24_BAUDRATE_T;
 
+typedef struct
+{
+    V24_BAUDRATE_T   baudrate;
+    V24_POLARITIES_T polarities;
+} V24_CONFIG_T;
+
 void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities);
 bool tx_poll(void);
 bool tx_put(uint8_t data);
 
 void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities);
 bool rx_get(uint8_t* data);
+
+void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate);
 
 #endif /* PIO_TX_RX_DRIVER_H */

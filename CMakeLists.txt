@@ -11,6 +11,7 @@ set(SOURCES
     src/system/ringbuffer.c
     src/system/log.c
     src/system/baudrate_monitor.c
+    src/system/persistent_config.c
     src/drivers/w5500_driver.c
     src/drivers/pio_tx_rx_driver.c
     src/drivers/tx_queue.c

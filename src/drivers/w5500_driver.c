@@ -134,6 +134,16 @@ void w5500_open_udp_socket(UDP_CONFIG_T* config)
     LOG_DEBUG("W5500: Socket opened successfully in non blocking mode\r\n");
 }
 
+void w5500_set_network(NETWORK_CONFIG_T* config)
+{
+    ipv4_calc_broadcast_u8(config->net_info.ip, config->net_info.sn, config->broadcast_address);
+    LOG_DEBUG("Derived broadcast address %u.%u.%u.%u\r\n", config->broadcast_address[0],
+              config->broadcast_address[1], config->broadcast_address[2],
+              config->broadcast_address[3]);
+    network_initialize(config->net_info);
+    print_network_information(config->net_info);
+}
+
 void w5500_set_network_defaults(NETWORK_CONFIG_T* config)
 {
 
@@ -144,12 +154,8 @@ void w5500_set_network_defaults(NETWORK_CONFIG_T* config)
                                      .gw   = DEFAULT_GATEWAY_ADDR,
                                      .dns  = DEFAULT_DNS_ADDR,
                                      .dhcp = NETINFO_STATIC};
-    ipv4_calc_broadcast_u8(config->net_info.ip, config->net_info.sn, config->broadcast_address);
-    LOG_DEBUG("Derived broadcast address %u.%u.%u.%u\r\n", config->broadcast_address[0],
-              config->broadcast_address[1], config->broadcast_address[2],
-              config->broadcast_address[3]);
-    network_initialize(config->net_info);
-    print_network_information(config->net_info);
+
+    w5500_set_network(config);
 }
 
 void w5500_driver_init(void)

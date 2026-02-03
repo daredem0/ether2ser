@@ -18,15 +18,18 @@
 #include <stdio.h>
 #include <string.h>
 
+// Library Headers
+#include "hardware/gpio.h"
+#include "wizchip_conf.h"
+#include "wizchip_qspi_pio.h"
+
 // Project Headers
 #include "baudrate_monitor.h"
 #include "board_pins.h"
 #include "cli_parser.h"
 #include "error.h"
-#include "hardware/gpio.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
-
+#include "event_queue.h"
+#include "persistent_config.h"
 // Generated headers
 
 #define MAX_CMD_BUFFER_LEN 16
@@ -49,10 +52,12 @@ static void cmd_net(const char* args);
 static void cmd_set(const char* args);
 static void cmd_get(const char* args);
 static void cmd_pininfo(const char* args);
+static void cmd_save(const char* args);
 
 // Command table
 static const command_t commands[] = {{"help", cmd_help, "Show available commands"},
                                      {"status", cmd_status, "Show system status"},
+                                     {"save", cmd_save, "Save configuration"},
                                      {"net", cmd_net, "Show network info"},
                                      {"set", cmd_set, "Set pin output: set <pin> <0|1>"},
                                      {"get", cmd_get, "Get pin state: get <pin>"},
@@ -63,6 +68,13 @@ const char*            get_command_name(int index)
 }
 
 #define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
+
+static void cmd_save(const char* args)
+{
+    (void)args;
+    event_t save_event = {.type = EV_SAVE_CONFIG, .data = NULL, .data_len = 0};
+    event_queue_push(&save_event);
+}
 
 // Command handlers
 static void cmd_help(const char* args)
