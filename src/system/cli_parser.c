@@ -31,25 +31,47 @@ static const pin_info_t pin_table[] = {
     {"dcd", V24_DCD, false},      {"tx_active", V24_TX_ACTIVE, true},
     {"led", V24_STATUS_LED, true}};
 
-const pin_info_t* get_pin_table(void)
+// cli_parser.c
+static bool prefix_to_mask(uint8_t prefix, uint8_t mask[4])
 {
-    return pin_table;
-}
-
-// Helper function to find pin by name
-const pin_info_t* find_pin(const char* name)
-{
-    for (size_t i = 0; i < NUM_PINS; i++)
+    if (prefix > 32)
     {
-        if (strcmp(name, pin_table[i].name) == 0)
-        {
-            return &pin_table[i];
-        }
+        return false;
     }
-    return NULL;
+    uint32_t m = prefix == 0 ? 0 : 0xFFFFFFFFu << (32 - prefix);
+    mask[0]    = (m >> 24) & 0xFF;
+    mask[1]    = (m >> 16) & 0xFF;
+    mask[2]    = (m >> 8) & 0xFF;
+    mask[3]    = (m >> 0) & 0xFF;
+    return true;
 }
 
-e2s_error_t parse_set_args(const char* args, char* pin_name, int* value, const pin_info_t** pin)
+e2s_error_t parse_set_ip_args(const char* args, uint8_t ip[4], uint8_t mask[4])
+{
+    unsigned a, b, c, d, prefix;
+    if (sscanf(args, "%u.%u.%u.%u/%u", &a, &b, &c, &d, &prefix) != 5 &&
+        sscanf(args, "ip %u.%u.%u.%u/%u", &a, &b, &c, &d, &prefix) != 5)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+    if (a > 255 || b > 255 || c > 255 || d > 255)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+    if (!prefix_to_mask((uint8_t)prefix, mask))
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+
+    ip[0] = a;
+    ip[1] = b;
+    ip[2] = c;
+    ip[3] = d;
+    return E2S_OK;
+}
+
+e2s_error_t parse_set_gpio_args(const char* args, char* pin_name, int* value,
+                                const pin_info_t** pin)
 {
     if (sscanf(args, "%15s %d", pin_name, value) != 2 || (*value != 0 && *value != 1))
     {
@@ -67,6 +89,33 @@ e2s_error_t parse_set_args(const char* args, char* pin_name, int* value, const p
         return E2S_ERR_CLI_PIN_INPUT_ONLY;
     }
     return E2S_OK;
+}
+
+e2s_error_t parse_set_net_ip_args(const char* args, uint8_t ip[4], uint8_t mask[4])
+{
+    if (strncmp(args, "net ", 4) != 0)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+    return parse_set_ip_args(args + 4, ip, mask);
+}
+
+const pin_info_t* get_pin_table(void)
+{
+    return pin_table;
+}
+
+// Helper function to find pin by name
+const pin_info_t* find_pin(const char* name)
+{
+    for (size_t i = 0; i < NUM_PINS; i++)
+    {
+        if (strcmp(name, pin_table[i].name) == 0)
+        {
+            return &pin_table[i];
+        }
+    }
+    return NULL;
 }
 
 e2s_error_t parse_get_args(const char* args, char* pin_name, const pin_info_t** pin)

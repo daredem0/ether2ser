@@ -33,10 +33,13 @@ typedef struct
 
 #define NUM_PINS (sizeof(pin_table) / sizeof(pin_table[0]))
 
-e2s_error_t cli_parse(const char* line, char* cmd, char* args);
-e2s_error_t parse_set_args(const char* args, char* pin_name, int* value, const pin_info_t** pin);
-e2s_error_t parse_get_args(const char* args, char* pin_name, const pin_info_t** pin);
+e2s_error_t       cli_parse(const char* line, char* cmd, char* args);
+e2s_error_t       parse_get_args(const char* args, char* pin_name, const pin_info_t** pin);
 const pin_info_t* find_pin(const char* name);
 const pin_info_t* get_pin_table(void);
+e2s_error_t       parse_set_ip_args(const char* args, uint8_t ip[4], uint8_t mask[4]);
+e2s_error_t       parse_set_gpio_args(const char* args, char* pin_name, int* value,
+                                      const pin_info_t** pin);
+e2s_error_t       parse_set_net_ip_args(const char* args, uint8_t ip[4], uint8_t mask[4]);
 
 #endif /* CLI_PARSER_H */

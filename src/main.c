@@ -228,6 +228,7 @@ int main(void)
                 break;
             case EV_SAVE_CONFIG:
                 LOG_INFO("Storing persistent config in flash.\r\n");
+                wizchip_getnetinfo(&(net_config.net_info));
                 persistent_config.log_level     = current_log_level;
                 persistent_config.v24_config    = v24_config;
                 persistent_config.net_config    = net_config;

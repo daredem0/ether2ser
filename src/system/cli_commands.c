@@ -53,21 +53,119 @@ static void cmd_set(const char* args);
 static void cmd_get(const char* args);
 static void cmd_pininfo(const char* args);
 static void cmd_save(const char* args);
+static void cmd_set_ip(const char* args);
 
 // Command table
-static const command_t commands[] = {{"help", cmd_help, "Show available commands"},
-                                     {"status", cmd_status, "Show system status"},
-                                     {"save", cmd_save, "Save configuration"},
-                                     {"net", cmd_net, "Show network info"},
-                                     {"set", cmd_set, "Set pin output: set <pin> <0|1>"},
-                                     {"get", cmd_get, "Get pin state: get <pin>"},
-                                     {"pininfo", cmd_pininfo, "Show pin details: pininfo <pin>"}};
-const char*            get_command_name(int index)
+static const command_t commands[] = {
+    {"help", cmd_help, "Show available commands"},
+    {"status", cmd_status, "Show system status"},
+    {"save", cmd_save, "Save configuration"},
+    {"net", cmd_net, "Show network info"},
+    {"set", cmd_set, "Set values: set gpio <pin> <0|1> | set net ip <addr>/<cidr>"},
+    {"get", cmd_get, "Get pin state: get <pin>"},
+    {"pininfo", cmd_pininfo, "Show pin details: pininfo <pin>"}};
+
+typedef void (*category_set_handler_t)(const char* args);
+typedef void (*category_get_handler_t)(const char* args);
+
+typedef struct
+{
+    const char*            name;
+    category_set_handler_t set_handler;
+    category_get_handler_t get_handler;
+} category_t;
+
+static void cat_gpio_set(const char* args);
+static void cat_gpio_get(const char* args);
+static void cat_net_set(const char* args);
+static void cat_net_get(const char* args);
+
+static const category_t categories[] = {
+    {"gpio", cat_gpio_set, cat_gpio_get},
+    {"net", cat_net_set, cat_net_get},
+};
+
+typedef void (*subcmd_set_handler_t)(const char* args);
+typedef void (*subcmd_get_handler_t)(const char* args);
+
+typedef struct
+{
+    const char*          name;
+    subcmd_set_handler_t set_handler;
+    subcmd_get_handler_t get_handler;
+} subcmd_t;
+
+static void subcmd_set_ip(const char* args);
+static void subcmd_get_ip(const char* args);
+
+static const subcmd_t subcmds[] = {
+    {"ip", subcmd_set_ip, subcmd_get_ip},
+};
+
+#define NUM_CATEGORIES ARRAY_LEN(categories)
+#define NUM_SUBCMDS ARRAY_LEN(subcmds)
+
+static void cmd_set(const char* args)
+{
+    for (size_t i = 0; i < NUM_CATEGORIES; i++)
+    {
+        size_t len = strlen(categories[i].name);
+        if (strncmp(args, categories[i].name, len) == 0 && args[len] == ' ')
+        {
+            categories[i].set_handler(args + len + 1);
+            return;
+        }
+    }
+    // print usage
+}
+
+static void cmd_get(const char* args)
+{
+    for (size_t i = 0; i < NUM_CATEGORIES; i++)
+    {
+        size_t len = strlen(categories[i].name);
+        if (strncmp(args, categories[i].name, len) == 0 && args[len] == ' ')
+        {
+            categories[i].get_handler(args + len + 1);
+            return;
+        }
+    }
+    // print usage
+}
+
+const char* get_command_name(int index)
 {
     return commands[index].name;
 }
 
 #define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
+
+static void subcmd_get_ip(const char* args)
+{
+    wiz_NetInfo net_info;
+    wizchip_getnetinfo(&net_info);
+    printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1], net_info.ip[2],
+           net_info.ip[3], net_info.sn[0], net_info.sn[1], net_info.sn[2], net_info.sn[3]);
+}
+
+static void subcmd_set_ip(const char* args)
+{
+    uint8_t ip[4], mask[4];
+    if (parse_set_ip_args(args, ip, mask) != E2S_OK)
+    {
+        printf("usage: set net ip 192.168.29.2/24\r\n");
+        return;
+    }
+
+    // Example: read, modify, write live config
+    wiz_NetInfo net_info;
+    wizchip_getnetinfo(&net_info);
+    memcpy(net_info.ip, ip, 4);
+    memcpy(net_info.sn, mask, 4);
+    wizchip_setnetinfo(&net_info);
+    printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u\r\n", ip[0], ip[1], ip[2], ip[3], mask[0], mask[1],
+           mask[2], mask[3]);
+}
 
 static void cmd_save(const char* args)
 {
@@ -121,17 +219,32 @@ static void cmd_net(const char* args)
            net_info.ip[3], net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
 }
 
-static void cmd_set(const char* args)
+static void cat_net_get(const char* args)
+{
+    LOG_DEBUG("get net: args='%s'\r\n", args);
+    for (size_t i = 0; i < NUM_SUBCMDS; i++)
+    {
+        size_t len = strlen(subcmds[i].name);
+        if (strncmp(args, subcmds[i].name, len) == 0 && args[len] == ' ')
+        {
+            subcmds[i].get_handler(args + len + 1);
+            return;
+        }
+    }
+}
+
+static void cat_gpio_set(const char* args)
 {
     char              pin_name[MAX_PIN_NAME_LEN];
     int               value;
     const pin_info_t* pin           = NULL;
-    e2s_error_t       parser_result = parse_set_args(args, pin_name, &value, &pin);
+    e2s_error_t       parser_result = parse_set_gpio_args(args, pin_name, &value, &pin);
 
     switch (parser_result)
     {
     case E2S_ERR_CLI_USAGE_SET:
-        printf("usage: set <pin> <0|1>\r\n");
+        printf("usage:\r\n");
+        printf("  set gpio <pin> <0|1>\r\n");
         return;
     case E2S_ERR_CLI_UNKNOWN_PIN:
         printf("unknown pin: '%s'\r\n", pin_name);
@@ -158,7 +271,44 @@ static void cmd_set(const char* args)
     printf("set %s (pin %u) = %d\r\n", pin_name, pin->gpio_num, value);
 }
 
-static void cmd_get(const char* args)
+static void cat_net_set(const char* args)
+{
+    LOG_DEBUG("net set: '%s'\r\n", args);
+    for (size_t i = 0; i < NUM_SUBCMDS; i++)
+    {
+        size_t len = strlen(subcmds[i].name);
+        if (strncmp(args, subcmds[i].name, len) == 0 && args[len] == ' ')
+        {
+            subcmds[i].set_handler(args + len + 1);
+            return;
+        }
+    }
+    // e2s_error_t parser_result = E2S_ERR_CLI_USAGE_SET;
+
+    // uint8_t ip[4];
+    // uint8_t mask[4];
+    // if (parse_set_ip_args(args, ip, mask) == E2S_OK)
+    // {
+    //     cmd_set_ip(args + 3);
+    //     return;
+    // }
+    // parser_result = E2S_ERR_CLI_USAGE_SET;
+
+    // switch (parser_result)
+    // {
+    // case E2S_ERR_CLI_USAGE_SET:
+    //     printf("usage:\r\n");
+    //     printf("  set net ip <addr>/<cidr>\r\n");
+    //     return;
+    // case E2S_OK:
+    //     break;
+    // default:
+    //     // Unreachable
+    //     return;
+    // }
+}
+
+static void cat_gpio_get(const char* args)
 {
     char              pin_name[MAX_PIN_NAME_LEN];
     const pin_info_t* pin = NULL;
