@@ -21,23 +21,23 @@
 // Generated headers
 
 // V.24/RS-232 interface pins (adjust these to match your actual wiring)
-#define PIN_TXD         0   // Serial data output to MAX3243
-#define PIN_RXD         1   // Serial data input from MAX3243
-#define PIN_RTS         2   // Request to Send output
-#define PIN_CTS         3   // Clear to Send input
-#define PIN_DTR         4   // Data Terminal Ready output
-#define PIN_DSR         5   // Data Set Ready input
-#define PIN_DCD         6   // Data Carrier Detect input
+#define PIN_TXD 0 // Serial data output to MAX3243
+#define PIN_RXD 1 // Serial data input from MAX3243
+#define PIN_RTS 2 // Request to Send output
+#define PIN_CTS 3 // Clear to Send input
+#define PIN_DTR 4 // Data Terminal Ready output
+#define PIN_DSR 5 // Data Set Ready input
+#define PIN_DCD 6 // Data Carrier Detect input
 
 // Serial clock pins
-#define PIN_TXC_EXT     15  // External transmit clock input (pin 15)
-#define PIN_RXC         17  // Receive clock input
-#define PIN_TXC_GEN     24  // Generated transmit clock output (pin 24)
+#define PIN_TXC_EXT 15 // External transmit clock input (pin 15)
+#define PIN_RXC 17     // Receive clock input
+#define PIN_TXC_GEN 24 // Generated transmit clock output (pin 24)
 
 // Control signals
-#define PIN_TX_ACTIVE   25  // TX active indicator output
+#define PIN_TX_ACTIVE 25 // TX active indicator output
 
 // Status LED (using onboard LED)
-#define PIN_STATUS_LED  PICO_DEFAULT_LED_PIN
+#define PIN_STATUS_LED PICO_DEFAULT_LED_PIN
 
 #endif // BOARD_PINS_H

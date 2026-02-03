@@ -20,7 +20,8 @@
 
 // Generated headers
 
-typedef enum {
+typedef enum
+{
     E2S_OK = 0,
     E2S_ERR_GENERIC_ERROR,
 

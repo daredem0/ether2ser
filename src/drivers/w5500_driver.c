@@ -40,70 +40,69 @@
 #define IP_SOCKET 0 // Socket number for IPRAW
 #define UDP_SOCKET 1
 
-
-static void ipv4_calc_broadcast_u8(const uint8_t ip[4],
-                            const uint8_t mask[4],
-                            uint8_t bcast[4])
+static void ipv4_calc_broadcast_u8(const uint8_t ip[4], const uint8_t mask[4], uint8_t bcast[4])
 {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 4; i++)
+    {
         bcast[i] = (uint8_t)((ip[i] & mask[i]) | (uint8_t)(~mask[i]));
     }
 }
 
+void w5500_debug_status(void)
+{
+    uint8_t phy_cfg = getPHYCFGR(); // PHY config register
+    LOG_DEBUG("PHY CFG: 0x%02X (Link %s)\r\n", phy_cfg, (phy_cfg & 0x01) ? "UP" : "DOWN");
 
-void w5500_debug_status(void) {
-    uint8_t phy_cfg = getPHYCFGR();  // PHY config register
-    LOG_DEBUG("PHY CFG: 0x%02X (Link %s)\r\n",
-           phy_cfg,
-           (phy_cfg & 0x01) ? "UP" : "DOWN");
-
-    uint8_t mode = getSn_MR(IP_SOCKET);  // Socket mode register
+    uint8_t mode   = getSn_MR(IP_SOCKET); // Socket mode register
     uint8_t status = getSn_SR(IP_SOCKET); // Socket status
     LOG_DEBUG("Socket Mode: 0x%02X, Status: 0x%02X\r\n", mode, status);
 }
 
-void w5500_udp_tx(UDP_CONFIG_T *send_config, UDP_FRAME_T *frame){
-    int32_t sent_len = sendto(UDP_SOCKET, frame->payload, (uint16_t)frame->length, send_config->ip_address, send_config->port);
-    LOG_DEBUG("TX %ld bytes to %u.%u.%u.%u:%u\r\n",
-        (long)frame->length, send_config->ip_address[0],
-        send_config->ip_address[1], send_config->ip_address[2],
-        send_config->ip_address[3], send_config->port);
+void w5500_udp_tx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame)
+{
+    int32_t sent_len = sendto(UDP_SOCKET, frame->payload, (uint16_t)frame->length,
+                              send_config->ip_address, send_config->port);
+    LOG_DEBUG("TX %ld bytes to %u.%u.%u.%u:%u\r\n", (long)frame->length, send_config->ip_address[0],
+              send_config->ip_address[1], send_config->ip_address[2], send_config->ip_address[3],
+              send_config->port);
     if (sent_len < 0)
     {
         LOG_DEBUG("sendto() error %ld\r\n", (long)sent_len);
     }
 }
 
-void w5500_poll_rx(UDP_CONFIG_T *send_config, UDP_FRAME_T *frame){
+void w5500_poll_rx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame)
+{
     // Clean up frame buffer first to ensure no data corruption
-    if(frame->length > 0){
+    if (frame->length > 0)
+    {
         memset(frame->payload, 0, frame->length);
         frame->length = 0;
     }
-    int32_t recv_len = recvfrom(UDP_SOCKET, frame->payload, RX_BUF_SIZE, send_config->ip_address, &(send_config->port));
-    if (recv_len > 0){
+    int32_t recv_len = recvfrom(UDP_SOCKET, frame->payload, RX_BUF_SIZE, send_config->ip_address,
+                                &(send_config->port));
+    if (recv_len > 0)
+    {
         frame->length = (size_t)recv_len;
-        LOG_DEBUG("RX %ld bytes from %u.%u.%u.%u:%u\r\n",
-            (long)recv_len, send_config->ip_address[0],
-            send_config->ip_address[1], send_config->ip_address[2],
-            send_config->ip_address[3], send_config->port);
+        LOG_DEBUG("RX %ld bytes from %u.%u.%u.%u:%u\r\n", (long)recv_len,
+                  send_config->ip_address[0], send_config->ip_address[1],
+                  send_config->ip_address[2], send_config->ip_address[3], send_config->port);
 
         // Print first 16 bytes as hex (or less if packet is smaller)
         LOG_DEBUG("Data: ");
         int print_len = (recv_len < 16) ? recv_len : 16;
-        for (int i = 0; i < print_len; i++) {
+        for (int i = 0; i < print_len; i++)
+        {
             LOG_DEBUG("%02X ", frame->payload[i]);
         }
         LOG_DEBUG("\r\n");
-        event_t udp_event = {
-                .type = EV_UDP_RX,
-                .data = NULL
-            };
+        event_t udp_event = {.type = EV_UDP_RX, .data = NULL};
         event_queue_push(&udp_event);
     }
 }
 
-void w5500_open_ipraw_socket(void){
+void w5500_open_ipraw_socket(void)
+{
     int8_t ret = socket(IP_SOCKET, Sn_MR_IPRAW, 0, 0);
     if (ret != IP_SOCKET)
     {
@@ -116,7 +115,8 @@ void w5500_open_ipraw_socket(void){
     LOG_DEBUG("W5500: IPRAW Socket opened successfully in blocking mode\r\n");
 }
 
-void w5500_open_udp_socket(UDP_CONFIG_T *config){
+void w5500_open_udp_socket(UDP_CONFIG_T* config)
+{
     LOG_DEBUG("Starting UDP echo on port %u...\r\n", config->port);
 
     // socket() allocates one of the W5500's 8 hardware sockets
@@ -132,25 +132,22 @@ void w5500_open_udp_socket(UDP_CONFIG_T *config){
         }
     }
     LOG_DEBUG("W5500: Socket opened successfully in non blocking mode\r\n");
-
 }
 
-
-void w5500_set_network_defaults(NETWORK_CONFIG_T *config) {
+void w5500_set_network_defaults(NETWORK_CONFIG_T* config)
+{
 
     // Configure network settings
-    config->net_info = (wiz_NetInfo){
-        .mac  = DEFAULT_MAC_ADDR,
-        .ip   = DEFAULT_IP_ADDR,
-        .sn   = DEFAULT_SUBNET_MASK,
-        .gw   = DEFAULT_GATEWAY_ADDR,
-        .dns  = DEFAULT_DNS_ADDR,
-        .dhcp = NETINFO_STATIC
-    };
+    config->net_info = (wiz_NetInfo){.mac  = DEFAULT_MAC_ADDR,
+                                     .ip   = DEFAULT_IP_ADDR,
+                                     .sn   = DEFAULT_SUBNET_MASK,
+                                     .gw   = DEFAULT_GATEWAY_ADDR,
+                                     .dns  = DEFAULT_DNS_ADDR,
+                                     .dhcp = NETINFO_STATIC};
     ipv4_calc_broadcast_u8(config->net_info.ip, config->net_info.sn, config->broadcast_address);
-    LOG_DEBUG("Derived broadcast address %u.%u.%u.%u\r\n",
-        config->broadcast_address[0], config->broadcast_address[1],
-        config->broadcast_address[2], config->broadcast_address[3]);
+    LOG_DEBUG("Derived broadcast address %u.%u.%u.%u\r\n", config->broadcast_address[0],
+              config->broadcast_address[1], config->broadcast_address[2],
+              config->broadcast_address[3]);
     network_initialize(config->net_info);
     print_network_information(config->net_info);
 }

@@ -37,27 +37,29 @@
 #define RX_BUF_SIZE 2048
 #define TX_BUF_SIZE 2048
 
-
-typedef struct {
+typedef struct
+{
     wiz_NetInfo net_info;
-    uint8_t broadcast_address[4];
+    uint8_t     broadcast_address[4];
 } NETWORK_CONFIG_T;
-typedef struct {
-    uint8_t ip_address[4];
+typedef struct
+{
+    uint8_t  ip_address[4];
     uint16_t port;
 } UDP_CONFIG_T;
 
-typedef struct {
-    uint8_t *payload;
-    size_t length;
+typedef struct
+{
+    uint8_t* payload;
+    size_t   length;
 } UDP_FRAME_T;
 
 void w5500_debug_status(void);
-void w5500_udp_tx(UDP_CONFIG_T *send_config, UDP_FRAME_T *frame);
-void w5500_poll_rx(UDP_CONFIG_T *send_config, UDP_FRAME_T *frame);
-void w5500_open_udp_socket(UDP_CONFIG_T *send_config);
+void w5500_udp_tx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame);
+void w5500_poll_rx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame);
+void w5500_open_udp_socket(UDP_CONFIG_T* send_config);
 void w5500_open_ipraw_socket(void);
-void w5500_set_network_defaults(NETWORK_CONFIG_T *config);
+void w5500_set_network_defaults(NETWORK_CONFIG_T* config);
 void w5500_driver_init(void);
 
 #endif /* W5500_DRIVER_H */

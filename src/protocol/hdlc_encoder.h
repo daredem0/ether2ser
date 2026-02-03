@@ -24,7 +24,6 @@
 
 // Generated headers
 
-
-bool hdlc_encode(const uint8_t *payload, const size_t payload_length, HDLC_FRAME_T *frame);
+bool hdlc_encode(const uint8_t* payload, const size_t payload_length, HDLC_FRAME_T* frame);
 
 #endif /* HDLC_ENCODER_H */

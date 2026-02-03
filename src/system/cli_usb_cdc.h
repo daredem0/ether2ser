@@ -29,6 +29,6 @@ void cli_poll(void);
  * @brief Process one CLI line.
  * @param line Null-terminated line string.
  */
-void handle_cli_line(const char *line);
+void handle_cli_line(const char* line);
 
 #endif /* SYSTEM_CLI_USB_CDC_H */

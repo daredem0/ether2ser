@@ -35,8 +35,8 @@ typedef enum
 typedef struct
 {
     event_type_t type;
-    const void *data; // opaque payload pointer owned by caller
-    size_t data_len;  // length of payload in bytes
+    const void*  data;     // opaque payload pointer owned by caller
+    size_t       data_len; // length of payload in bytes
 } event_t;
 
 /**
@@ -49,14 +49,14 @@ void event_queue_init(void);
  * @param event_entry Event to push; payload pointer ownership stays with caller.
  * @return true if queued, false if the queue was full.
  */
-bool event_queue_push(const event_t *event_entry);
+bool event_queue_push(const event_t* event_entry);
 
 /**
  * @brief Dequeue an event.
  * @param event_out Destination for the popped event.
  * @return true if an event was popped, false if the queue was empty.
  */
-bool event_queue_pop(event_t *event_out);
+bool event_queue_pop(event_t* event_out);
 
 /**
  * @brief Check whether the queue is empty.

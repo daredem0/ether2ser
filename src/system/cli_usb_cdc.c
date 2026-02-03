@@ -37,9 +37,9 @@
 
 void cli_poll(void)
 {
-    static char line_buffer[CLI_BUFFER_SIZE];
+    static char    line_buffer[CLI_BUFFER_SIZE];
     static uint8_t buffer_len = 0;
-    static char cli_line_pool[CLI_EVENT_POOL_SIZE][CLI_BUFFER_SIZE];
+    static char    cli_line_pool[CLI_EVENT_POOL_SIZE][CLI_BUFFER_SIZE];
     static uint8_t cli_line_pool_write = 0;
 
     int input_char;
@@ -52,8 +52,8 @@ void cli_poll(void)
             printf("\r\n");
             line_buffer[buffer_len] = '\0';
 
-            char *line_slot = cli_line_pool[cli_line_pool_write];
-            int written = snprintf(line_slot, CLI_BUFFER_SIZE, "%s", line_buffer);
+            char* line_slot = cli_line_pool[cli_line_pool_write];
+            int   written   = snprintf(line_slot, CLI_BUFFER_SIZE, "%s", line_buffer);
             if (written < 0)
             {
                 printf("[WARN] failed to format CLI line\r\n");
@@ -68,8 +68,8 @@ void cli_poll(void)
             }
 
             event_t new_event = {
-                .type = EV_CLI_LINE,
-                .data = line_slot,
+                .type     = EV_CLI_LINE,
+                .data     = line_slot,
                 .data_len = strnlen(line_slot, CLI_BUFFER_SIZE) + 1,
             };
 
