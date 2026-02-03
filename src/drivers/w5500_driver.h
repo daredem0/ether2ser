@@ -37,6 +37,7 @@
 #define DEFAULT_DNS_ADDR {8, 8, 8, 8}
 #define DEFAULT_UDP_PORT 6969
 #define RX_BUF_SIZE 2048
+#define TX_BUF_SIZE 2048
 
 
 typedef struct {

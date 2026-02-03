@@ -33,8 +33,8 @@
 
 // Generated headers
 
-e2s_error_t tx_queue_init(TX_QUEUE_T *queue, Ringbuffer *buffer){
-    queue->queue_buffer = buffer;
+e2s_error_t tx_queue_init(TX_QUEUE_T *queue, uint8_t *buffer_data){
+    RbInit(&(queue->queue_buffer), buffer_data, TX_FRAME_QUEUE_SIZE, sizeof(TX_QUEUE_ENTRY_T));
     queue->queue_touched = false;
     return E2S_OK;
 }
@@ -45,8 +45,8 @@ e2s_error_t poll_queue_stats(TX_QUEUE_T *queue){
     }
     if (queue->queue_touched){
         printf("TX Queue Stats: %zu / %zu frames used\r\n",
-            queue->queue_buffer->count,
-            queue->queue_buffer->capacity);
+            queue->queue_buffer.count,
+            queue->queue_buffer.capacity);
         queue->queue_touched = false;
     }
     return E2S_OK;
@@ -88,7 +88,7 @@ static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_ENTRY_T *entry, size_t bytes_to
 }
 
 bool tx_queue_is_empty(TX_QUEUE_T *queue){
-    return queue->queue_buffer->count == 0;
+    return queue->queue_buffer.count == 0;
 }
 
 e2s_error_t tx_queue_drain(TX_QUEUE_T *queue, size_t bytes_to_drain){
@@ -100,7 +100,7 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T *queue, size_t bytes_to_drain){
     }
     static TX_QUEUE_ENTRY_T current_entry = {0};
     if(current_entry.offset == 0 || current_entry.offset >= current_entry.frame.length){
-        if (RbPopFront(queue->queue_buffer, &current_entry) < 0){
+        if (RbPopFront(&(queue->queue_buffer), &current_entry) < 0){
             return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
         }
     }
@@ -114,14 +114,14 @@ e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T *queue, UDP_FRAME_T *frame){
     if (!queue || !frame){
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
     }
-    if (queue->queue_buffer->count == queue->queue_buffer->capacity){
+    if (queue->queue_buffer.count == queue->queue_buffer.capacity){
         return E2S_ERR_TX_QUEUE_FULL;
     }
     TX_QUEUE_ENTRY_T tx_entry = tx_queue_entry_init();
     if (!hdlc_encode(frame->payload, frame->length, &tx_entry.frame)){
         return E2S_ERR_HDLC_ENCODE_FAILED;
     }
-    if (RbPushBack(queue->queue_buffer, &tx_entry) < 0){
+    if (RbPushBack(&(queue->queue_buffer), &tx_entry) < 0){
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
     }
     queue->queue_touched = true;

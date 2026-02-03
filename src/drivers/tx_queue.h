@@ -19,7 +19,7 @@
     tq_queue_init(&var_name, &var_name##_ringbuf)
 
 typedef struct {
-    Ringbuffer *queue_buffer;
+    Ringbuffer queue_buffer;
     bool queue_touched;
 } TX_QUEUE_T;
 
@@ -33,6 +33,6 @@ e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T *queue, UDP_FRAME_T *frame);
 bool tx_queue_is_empty(TX_QUEUE_T *queue);
 e2s_error_t tx_queue_drain(TX_QUEUE_T *queue, size_t bytes_to_drain);
 e2s_error_t poll_queue_stats(TX_QUEUE_T *queue);
-e2s_error_t tx_queue_init(TX_QUEUE_T *queue, Ringbuffer *buffer);
+e2s_error_t tx_queue_init(TX_QUEUE_T *queue, uint8_t *buffer_data);
 
 #endif /* TX_QUEUE_H */
