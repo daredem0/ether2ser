@@ -95,15 +95,27 @@ typedef struct
     subcmd_get_handler_t get_handler;
 } subcmd_t;
 
-static void subcmd_set_ip(const char* args);
-static void subcmd_get_ip(const char* args);
+static void subcmd_set_ip_local(const char* args);
+static void subcmd_get_ip_local(const char* args);
+static void subcmd_set_ip_remote(const char* args);
+static void subcmd_get_ip_remote(const char* args);
+static void subcmd_set_ip_gateway(const char* args);
+static void subcmd_get_ip_gateway(const char* args);
+static void subcmd_set_udp_port_local(const char* args);
+static void subcmd_get_udp_port_local(const char* args);
+static void subcmd_set_udp_port_remote(const char* args);
+static void subcmd_get_udp_port_remote(const char* args);
 
-static const subcmd_t subcmds[] = {
-    {"ip", subcmd_set_ip, subcmd_get_ip},
+static const subcmd_t net_subcmds[] = {
+    {"ip.local", subcmd_set_ip_local, subcmd_get_ip_local},
+    {"ip.remote", subcmd_set_ip_remote, subcmd_get_ip_remote},
+    {"gateway", subcmd_set_ip_gateway, subcmd_get_ip_gateway},
+    {"udp.port.local", subcmd_set_udp_port_local, subcmd_get_udp_port_local},
+    {"udp.port.remote", subcmd_set_udp_port_remote, subcmd_get_udp_port_remote},
 };
 
 #define NUM_CATEGORIES ARRAY_LEN(categories)
-#define NUM_SUBCMDS ARRAY_LEN(subcmds)
+#define NUM_NET_SUBCMDS ARRAY_LEN(net_subcmds)
 
 static void cmd_set(const char* args)
 {
@@ -140,7 +152,7 @@ const char* get_command_name(int index)
 
 #define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
 
-static void subcmd_get_ip(const char* args)
+static void subcmd_get_ip_local(const char* args)
 {
     wiz_NetInfo net_info;
     wizchip_getnetinfo(&net_info);
@@ -148,7 +160,7 @@ static void subcmd_get_ip(const char* args)
            net_info.ip[3], net_info.sn[0], net_info.sn[1], net_info.sn[2], net_info.sn[3]);
 }
 
-static void subcmd_set_ip(const char* args)
+static void subcmd_set_ip_local(const char* args)
 {
     uint8_t ip[4], mask[4];
     if (parse_set_ip_args(args, ip, mask) != E2S_OK)
@@ -165,6 +177,54 @@ static void subcmd_set_ip(const char* args)
     wizchip_setnetinfo(&net_info);
     printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u\r\n", ip[0], ip[1], ip[2], ip[3], mask[0], mask[1],
            mask[2], mask[3]);
+}
+
+static void subcmd_get_ip_remote(const char* args)
+{
+    (void)args;
+    printf("ip.remote: not implemented yet\r\n");
+}
+
+static void subcmd_set_ip_remote(const char* args)
+{
+    (void)args;
+    printf("set ip.remote: not implemented yet (args='%s')\r\n", args);
+}
+
+static void subcmd_get_ip_gateway(const char* args)
+{
+    (void)args;
+    printf("gateway: not implemented yet\r\n");
+}
+
+static void subcmd_set_ip_gateway(const char* args)
+{
+    (void)args;
+    printf("set gateway: not implemented yet (args='%s')\r\n", args);
+}
+
+static void subcmd_get_udp_port_local(const char* args)
+{
+    (void)args;
+    printf("udp.port.local: not implemented yet\r\n");
+}
+
+static void subcmd_set_udp_port_local(const char* args)
+{
+    (void)args;
+    printf("set udp.port.local: not implemented yet (args='%s')\r\n", args);
+}
+
+static void subcmd_get_udp_port_remote(const char* args)
+{
+    (void)args;
+    printf("udp.port.remote: not implemented yet\r\n");
+}
+
+static void subcmd_set_udp_port_remote(const char* args)
+{
+    (void)args;
+    printf("set udp.port.remote: not implemented yet (args='%s')\r\n", args);
 }
 
 static void cmd_save(const char* args)
@@ -222,14 +282,13 @@ static void cmd_net(const char* args)
 static void cat_net_get(const char* args)
 {
     LOG_DEBUG("get net: args='%s'\r\n", args);
-    for (size_t i = 0; i < NUM_SUBCMDS; i++)
+    for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
     {
-        size_t len = strlen(subcmds[i].name);
-        if (strncmp(args, subcmds[i].name, len) == 0 &&
-            (args[len] == ' ' || args[len] == '\0'))
+        size_t len = strlen(net_subcmds[i].name);
+        if (strncmp(args, net_subcmds[i].name, len) == 0 && (args[len] == ' ' || args[len] == '\0'))
         {
             const char* sub_args = args[len] == ' ' ? args + len + 1 : "";
-            subcmds[i].get_handler(sub_args);
+            net_subcmds[i].get_handler(sub_args);
             return;
         }
     }
@@ -276,14 +335,13 @@ static void cat_gpio_set(const char* args)
 static void cat_net_set(const char* args)
 {
     LOG_DEBUG("net set: '%s'\r\n", args);
-    for (size_t i = 0; i < NUM_SUBCMDS; i++)
+    for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
     {
-        size_t len = strlen(subcmds[i].name);
-        if (strncmp(args, subcmds[i].name, len) == 0 &&
-            (args[len] == ' ' || args[len] == '\0'))
+        size_t len = strlen(net_subcmds[i].name);
+        if (strncmp(args, net_subcmds[i].name, len) == 0 && (args[len] == ' ' || args[len] == '\0'))
         {
             const char* sub_args = args[len] == ' ' ? args + len + 1 : "";
-            subcmds[i].set_handler(sub_args);
+            net_subcmds[i].set_handler(sub_args);
             return;
         }
     }
