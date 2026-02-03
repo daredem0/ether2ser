@@ -142,8 +142,8 @@ void test_byte_aligned_hdlc_frame(void){
         .capacity = sizeof(frame_buffer)
     };
     TEST_ASSERT_EQUAL(
-        hdlc_sync_acc_poll(&accumulator, &reconstructed_frame),
-        E2S_ERR_HDLC_ACC_FRAME_READY
+        E2S_ERR_HDLC_ACC_FRAME_READY,
+        hdlc_sync_acc_poll(&accumulator, &reconstructed_frame)
     );
     TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_SYNCED, accumulator.state );
     TEST_ASSERT_EQUAL(0, accumulator.bit_offset);
