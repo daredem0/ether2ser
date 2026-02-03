@@ -225,9 +225,11 @@ static void cat_net_get(const char* args)
     for (size_t i = 0; i < NUM_SUBCMDS; i++)
     {
         size_t len = strlen(subcmds[i].name);
-        if (strncmp(args, subcmds[i].name, len) == 0 && args[len] == ' ')
+        if (strncmp(args, subcmds[i].name, len) == 0 &&
+            (args[len] == ' ' || args[len] == '\0'))
         {
-            subcmds[i].get_handler(args + len + 1);
+            const char* sub_args = args[len] == ' ' ? args + len + 1 : "";
+            subcmds[i].get_handler(sub_args);
             return;
         }
     }
@@ -277,9 +279,11 @@ static void cat_net_set(const char* args)
     for (size_t i = 0; i < NUM_SUBCMDS; i++)
     {
         size_t len = strlen(subcmds[i].name);
-        if (strncmp(args, subcmds[i].name, len) == 0 && args[len] == ' ')
+        if (strncmp(args, subcmds[i].name, len) == 0 &&
+            (args[len] == ' ' || args[len] == '\0'))
         {
-            subcmds[i].set_handler(args + len + 1);
+            const char* sub_args = args[len] == ' ' ? args + len + 1 : "";
+            subcmds[i].set_handler(sub_args);
             return;
         }
     }
