@@ -198,6 +198,16 @@ static void subcmd_set_udp_port_remote(const char* args)
 static void cat_net_get(const char* args)
 {
     LOG_DEBUG("get net: args='%s'\r\n", args);
+    if (args == NULL || args[0] == '\0')
+    {
+        printf("usage: get net <subcmd>\r\n");
+        printf("available net subcmds:\r\n");
+        for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
+        {
+            printf("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
+        }
+        return;
+    }
     for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
     {
         size_t len = strlen(net_subcmds[i].name);
@@ -208,6 +218,7 @@ static void cat_net_get(const char* args)
             return;
         }
     }
+    printf("unknown net subcmd: '%s'\r\n", args);
 }
 
 static void cat_gpio_set(const char* args)
@@ -251,6 +262,16 @@ static void cat_gpio_set(const char* args)
 static void cat_net_set(const char* args)
 {
     LOG_DEBUG("net set: '%s'\r\n", args);
+    if (args == NULL || args[0] == '\0')
+    {
+        printf("usage: set net <subcmd> <args>\r\n");
+        printf("available net subcmds:\r\n");
+        for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
+        {
+            printf("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
+        }
+        return;
+    }
     for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
     {
         size_t len = strlen(net_subcmds[i].name);
@@ -261,7 +282,7 @@ static void cat_net_set(const char* args)
             return;
         }
     }
-    // print usage
+    printf("unknown net subcmd: '%s'\r\n", args);
 }
 
 static void cat_gpio_get(const char* args)
@@ -312,6 +333,16 @@ static void cat_gpio_get(const char* args)
 
 static void cmd_set(const char* args)
 {
+    if (args == NULL || args[0] == '\0')
+    {
+        printf("usage: set <category> <args>\r\n");
+        printf("available categories:\r\n");
+        for (size_t i = 0; i < NUM_CATEGORIES; i++)
+        {
+            printf("  %s  - %s\r\n", categories[i].name, categories[i].help);
+        }
+        return;
+    }
     for (size_t i = 0; i < NUM_CATEGORIES; i++)
     {
         size_t len = strlen(categories[i].name);
@@ -321,11 +352,21 @@ static void cmd_set(const char* args)
             return;
         }
     }
-    // print usage
+    printf("unknown set category: '%s'\r\n", args);
 }
 
 static void cmd_get(const char* args)
 {
+    if (args == NULL || args[0] == '\0')
+    {
+        printf("usage: get <category> <args>\r\n");
+        printf("available categories:\r\n");
+        for (size_t i = 0; i < NUM_CATEGORIES; i++)
+        {
+            printf("  %s  - %s\r\n", categories[i].name, categories[i].help);
+        }
+        return;
+    }
     for (size_t i = 0; i < NUM_CATEGORIES; i++)
     {
         size_t len = strlen(categories[i].name);
@@ -335,7 +376,7 @@ static void cmd_get(const char* args)
             return;
         }
     }
-    // print usage
+    printf("unknown get category: '%s'\r\n", args);
 }
 
 static void cmd_set_ip(const char* args)
@@ -415,6 +456,11 @@ static void cmd_status(const char* args)
 
 static void cmd_net(const char* args)
 {
+    if (args != NULL && args[0] != '\0')
+    {
+        printf("usage: net\r\n");
+        return;
+    }
     wiz_NetInfo net_info;
     wizchip_getnetinfo(&net_info);
     printf("ip=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1], net_info.ip[2],
