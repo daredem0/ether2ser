@@ -46,25 +46,6 @@ typedef struct
     const char*   help;
 } command_t;
 
-static void cmd_help(const char* args);
-static void cmd_status(const char* args);
-static void cmd_net(const char* args);
-static void cmd_set(const char* args);
-static void cmd_get(const char* args);
-static void cmd_pininfo(const char* args);
-static void cmd_save(const char* args);
-static void cmd_set_ip(const char* args);
-
-// Command table
-static const command_t commands[] = {
-    {"help", cmd_help, "Show available commands"},
-    {"status", cmd_status, "Show system status"},
-    {"save", cmd_save, "Save configuration"},
-    {"net", cmd_net, "Show network info"},
-    {"set", cmd_set, "Set values: set gpio <pin> <0|1> | set net ip <addr>/<cidr>"},
-    {"get", cmd_get, "Get pin state: get <pin>"},
-    {"pininfo", cmd_pininfo, "Show pin details: pininfo <pin>"}};
-
 typedef void (*category_set_handler_t)(const char* args);
 typedef void (*category_get_handler_t)(const char* args);
 
@@ -74,16 +55,6 @@ typedef struct
     category_set_handler_t set_handler;
     category_get_handler_t get_handler;
 } category_t;
-
-static void cat_gpio_set(const char* args);
-static void cat_gpio_get(const char* args);
-static void cat_net_set(const char* args);
-static void cat_net_get(const char* args);
-
-static const category_t categories[] = {
-    {"gpio", cat_gpio_set, cat_gpio_get},
-    {"net", cat_net_set, cat_net_get},
-};
 
 typedef void (*subcmd_set_handler_t)(const char* args);
 typedef void (*subcmd_get_handler_t)(const char* args);
@@ -95,6 +66,19 @@ typedef struct
     subcmd_get_handler_t get_handler;
 } subcmd_t;
 
+// Forward declarations for lookup tables
+static void cmd_help(const char* args);
+static void cmd_status(const char* args);
+static void cmd_net(const char* args);
+static void cmd_set(const char* args);
+static void cmd_get(const char* args);
+static void cmd_pininfo(const char* args);
+static void cmd_save(const char* args);
+static void cmd_set_ip(const char* args);
+static void cat_gpio_set(const char* args);
+static void cat_gpio_get(const char* args);
+static void cat_net_set(const char* args);
+static void cat_net_get(const char* args);
 static void subcmd_set_ip_local(const char* args);
 static void subcmd_get_ip_local(const char* args);
 static void subcmd_set_ip_remote(const char* args);
@@ -106,6 +90,21 @@ static void subcmd_get_udp_port_local(const char* args);
 static void subcmd_set_udp_port_remote(const char* args);
 static void subcmd_get_udp_port_remote(const char* args);
 
+// Lookup tables
+static const command_t commands[] = {
+    {"help", cmd_help, "Show available commands"},
+    {"status", cmd_status, "Show system status"},
+    {"save", cmd_save, "Save configuration"},
+    {"net", cmd_net, "Show network info"},
+    {"set", cmd_set, "Set values: set gpio <pin> <0|1> | set net ip <addr>/<cidr>"},
+    {"get", cmd_get, "Get pin state: get <pin>"},
+    {"pininfo", cmd_pininfo, "Show pin details: pininfo <pin>"}};
+
+static const category_t categories[] = {
+    {"gpio", cat_gpio_set, cat_gpio_get},
+    {"net", cat_net_set, cat_net_get},
+};
+
 static const subcmd_t net_subcmds[] = {
     {"ip.local", subcmd_set_ip_local, subcmd_get_ip_local},
     {"ip.remote", subcmd_set_ip_remote, subcmd_get_ip_remote},
@@ -114,43 +113,9 @@ static const subcmd_t net_subcmds[] = {
     {"udp.port.remote", subcmd_set_udp_port_remote, subcmd_get_udp_port_remote},
 };
 
+#define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
 #define NUM_CATEGORIES ARRAY_LEN(categories)
 #define NUM_NET_SUBCMDS ARRAY_LEN(net_subcmds)
-
-static void cmd_set(const char* args)
-{
-    for (size_t i = 0; i < NUM_CATEGORIES; i++)
-    {
-        size_t len = strlen(categories[i].name);
-        if (strncmp(args, categories[i].name, len) == 0 && args[len] == ' ')
-        {
-            categories[i].set_handler(args + len + 1);
-            return;
-        }
-    }
-    // print usage
-}
-
-static void cmd_get(const char* args)
-{
-    for (size_t i = 0; i < NUM_CATEGORIES; i++)
-    {
-        size_t len = strlen(categories[i].name);
-        if (strncmp(args, categories[i].name, len) == 0 && args[len] == ' ')
-        {
-            categories[i].get_handler(args + len + 1);
-            return;
-        }
-    }
-    // print usage
-}
-
-const char* get_command_name(int index)
-{
-    return commands[index].name;
-}
-
-#define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
 
 static void subcmd_get_ip_local(const char* args)
 {
@@ -227,58 +192,6 @@ static void subcmd_set_udp_port_remote(const char* args)
     printf("set udp.port.remote: not implemented yet (args='%s')\r\n", args);
 }
 
-static void cmd_save(const char* args)
-{
-    (void)args;
-    event_t save_event = {.type = EV_SAVE_CONFIG, .data = NULL, .data_len = 0};
-    event_queue_push(&save_event);
-}
-
-// Command handlers
-static void cmd_help(const char* args)
-{
-    (void)args;
-
-    size_t max_cmd = 0;
-    for (size_t i = 0; i < NUM_COMMANDS; i++)
-    {
-        size_t len = strlen(commands[i].name);
-        if (len > max_cmd)
-        {
-            max_cmd = len;
-        }
-    }
-
-    printf("\r\nCommands:\r\n");
-    for (size_t i = 0; i < NUM_COMMANDS; i++)
-    {
-        printf("  %-*s  %s\r\n", (int)max_cmd, commands[i].name, commands[i].help);
-    }
-
-    printf("\r\nPins:\r\n");
-    const pin_info_t* pin_table = get_pin_table();
-    for (size_t i = 0; i < NUM_PINS; i++)
-    {
-        printf("  %-10s  %s\r\n", pin_table[i].name, pin_table[i].is_output ? "OUT" : "IN");
-    }
-    printf("\r\n");
-}
-
-static void cmd_status(const char* args)
-{
-    printf("status: ok\r\n");
-    printf("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
-           baudrate_estimator_get_current_estimation(V24_RXC));
-}
-
-static void cmd_net(const char* args)
-{
-    wiz_NetInfo net_info;
-    wizchip_getnetinfo(&net_info);
-    printf("ip=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1], net_info.ip[2],
-           net_info.ip[3], net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
-}
-
 static void cat_net_get(const char* args)
 {
     LOG_DEBUG("get net: args='%s'\r\n", args);
@@ -345,29 +258,7 @@ static void cat_net_set(const char* args)
             return;
         }
     }
-    // e2s_error_t parser_result = E2S_ERR_CLI_USAGE_SET;
-
-    // uint8_t ip[4];
-    // uint8_t mask[4];
-    // if (parse_set_ip_args(args, ip, mask) == E2S_OK)
-    // {
-    //     cmd_set_ip(args + 3);
-    //     return;
-    // }
-    // parser_result = E2S_ERR_CLI_USAGE_SET;
-
-    // switch (parser_result)
-    // {
-    // case E2S_ERR_CLI_USAGE_SET:
-    //     printf("usage:\r\n");
-    //     printf("  set net ip <addr>/<cidr>\r\n");
-    //     return;
-    // case E2S_OK:
-    //     break;
-    // default:
-    //     // Unreachable
-    //     return;
-    // }
+    // print usage
 }
 
 static void cat_gpio_get(const char* args)
@@ -416,6 +307,105 @@ static void cat_gpio_get(const char* args)
            is_output ? "OUT" : "IN");
 }
 
+static void cmd_set(const char* args)
+{
+    for (size_t i = 0; i < NUM_CATEGORIES; i++)
+    {
+        size_t len = strlen(categories[i].name);
+        if (strncmp(args, categories[i].name, len) == 0 && args[len] == ' ')
+        {
+            categories[i].set_handler(args + len + 1);
+            return;
+        }
+    }
+    // print usage
+}
+
+static void cmd_get(const char* args)
+{
+    for (size_t i = 0; i < NUM_CATEGORIES; i++)
+    {
+        size_t len = strlen(categories[i].name);
+        if (strncmp(args, categories[i].name, len) == 0 && args[len] == ' ')
+        {
+            categories[i].get_handler(args + len + 1);
+            return;
+        }
+    }
+    // print usage
+}
+
+static void cmd_set_ip(const char* args)
+{
+    uint8_t ip[4], mask[4];
+    if (parse_set_ip_args(args, ip, mask) != E2S_OK)
+    {
+        printf("usage: set net ip 192.168.29.2/24\r\n");
+        return;
+    }
+
+    // Example: read, modify, write live config
+    wiz_NetInfo net_info;
+    wizchip_getnetinfo(&net_info);
+    memcpy(net_info.ip, ip, 4);
+    memcpy(net_info.sn, mask, 4);
+    wizchip_setnetinfo(&net_info);
+    printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u\r\n", ip[0], ip[1], ip[2], ip[3], mask[0], mask[1],
+           mask[2], mask[3]);
+}
+
+static void cmd_save(const char* args)
+{
+    (void)args;
+    event_t save_event = {.type = EV_SAVE_CONFIG, .data = NULL, .data_len = 0};
+    event_queue_push(&save_event);
+}
+
+// Command handlers
+static void cmd_help(const char* args)
+{
+    (void)args;
+
+    size_t max_cmd = 0;
+    for (size_t i = 0; i < NUM_COMMANDS; i++)
+    {
+        size_t len = strlen(commands[i].name);
+        if (len > max_cmd)
+        {
+            max_cmd = len;
+        }
+    }
+
+    printf("\r\nCommands:\r\n");
+    for (size_t i = 0; i < NUM_COMMANDS; i++)
+    {
+        printf("  %-*s  %s\r\n", (int)max_cmd, commands[i].name, commands[i].help);
+    }
+
+    printf("\r\nPins:\r\n");
+    const pin_info_t* pin_table = get_pin_table();
+    for (size_t i = 0; i < NUM_PINS; i++)
+    {
+        printf("  %-10s  %s\r\n", pin_table[i].name, pin_table[i].is_output ? "OUT" : "IN");
+    }
+    printf("\r\n");
+}
+
+static void cmd_status(const char* args)
+{
+    printf("status: ok\r\n");
+    printf("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
+           baudrate_estimator_get_current_estimation(V24_RXC));
+}
+
+static void cmd_net(const char* args)
+{
+    wiz_NetInfo net_info;
+    wizchip_getnetinfo(&net_info);
+    printf("ip=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1], net_info.ip[2],
+           net_info.ip[3], net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
+}
+
 static void cmd_pininfo(const char* args)
 {
     char pin_name[MAX_PIN_NAME_LEN];
@@ -441,6 +431,11 @@ static void cmd_pininfo(const char* args)
     printf("  Direction: %s\r\n", is_output ? "OUTPUT" : "INPUT");
     printf("  Value: %d\r\n", value);
     printf("  Function: %d\r\n", gpio_get_function(gpio_num));
+}
+
+const char* get_command_name(int index)
+{
+    return commands[index].name;
 }
 
 void handle_cli_line(const char* line)
