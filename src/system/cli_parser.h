@@ -16,6 +16,7 @@
 
 // Standard library headers
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 // Project Headers
@@ -31,8 +32,7 @@ typedef struct
     bool        is_output;
 } pin_info_t;
 
-#define NUM_PINS (sizeof(pin_table) / sizeof(pin_table[0]))
-
+size_t            get_num_pins(void);
 e2s_error_t       cli_parse(const char* line, char* cmd, char* args);
 e2s_error_t       parse_get_args(const char* args, char* pin_name, const pin_info_t** pin);
 const pin_info_t* find_pin(const char* name);

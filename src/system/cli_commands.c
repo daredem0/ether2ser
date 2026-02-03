@@ -54,6 +54,7 @@ typedef struct
     const char*            name;
     category_set_handler_t set_handler;
     category_get_handler_t get_handler;
+    const char*            help;
 } category_t;
 
 typedef void (*subcmd_set_handler_t)(const char* args);
@@ -64,6 +65,7 @@ typedef struct
     const char*          name;
     subcmd_set_handler_t set_handler;
     subcmd_get_handler_t get_handler;
+    const char*          help;
 } subcmd_t;
 
 // Forward declarations for lookup tables
@@ -93,29 +95,30 @@ static void subcmd_get_udp_port_remote(const char* args);
 // Lookup tables
 static const command_t commands[] = {
     {"help", cmd_help, "Show available commands"},
-    {"status", cmd_status, "Show system status"},
-    {"save", cmd_save, "Save configuration"},
-    {"net", cmd_net, "Show network info"},
-    {"set", cmd_set, "Set values: set gpio <pin> <0|1> | set net ip <addr>/<cidr>"},
-    {"get", cmd_get, "Get pin state: get <pin>"},
+    {"status", cmd_status, "Show system status and RXC estimate"},
+    {"save", cmd_save, "Persist current configuration to flash"},
+    {"net", cmd_net, "Show current network status (W5500)"},
+    {"set", cmd_set, "Set values (e.g. set gpio <pin> <0|1>, set net ip.local <addr>/<cidr>)"},
+    {"get", cmd_get, "Get values (e.g. get gpio <pin>, get net ip.local)"},
     {"pininfo", cmd_pininfo, "Show pin details: pininfo <pin>"}};
 
 static const category_t categories[] = {
-    {"gpio", cat_gpio_set, cat_gpio_get},
-    {"net", cat_net_set, cat_net_get},
+    {"gpio", cat_gpio_set, cat_gpio_get, "GPIO controls and queries"},
+    {"net", cat_net_set, cat_net_get, "Network configuration and queries"},
 };
 
 static const subcmd_t net_subcmds[] = {
-    {"ip.local", subcmd_set_ip_local, subcmd_get_ip_local},
-    {"ip.remote", subcmd_set_ip_remote, subcmd_get_ip_remote},
-    {"gateway", subcmd_set_ip_gateway, subcmd_get_ip_gateway},
-    {"udp.port.local", subcmd_set_udp_port_local, subcmd_get_udp_port_local},
-    {"udp.port.remote", subcmd_set_udp_port_remote, subcmd_get_udp_port_remote},
+    {"ip.local", subcmd_set_ip_local, subcmd_get_ip_local, "Local IP address (CIDR)"},
+    {"ip.remote", subcmd_set_ip_remote, subcmd_get_ip_remote, "Remote IP address"},
+    {"gateway", subcmd_set_ip_gateway, subcmd_get_ip_gateway, "Gateway IP address"},
+    {"udp.port.local", subcmd_set_udp_port_local, subcmd_get_udp_port_local, "Local UDP port"},
+    {"udp.port.remote", subcmd_set_udp_port_remote, subcmd_get_udp_port_remote, "Remote UDP port"},
 };
 
 #define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
 #define NUM_CATEGORIES ARRAY_LEN(categories)
 #define NUM_NET_SUBCMDS ARRAY_LEN(net_subcmds)
+#define NUM_PINS get_num_pins()
 
 static void subcmd_get_ip_local(const char* args)
 {
@@ -380,6 +383,18 @@ static void cmd_help(const char* args)
     for (size_t i = 0; i < NUM_COMMANDS; i++)
     {
         printf("  %-*s  %s\r\n", (int)max_cmd, commands[i].name, commands[i].help);
+    }
+
+    printf("\r\nSet/Get Categories:\r\n");
+    for (size_t i = 0; i < NUM_CATEGORIES; i++)
+    {
+        printf("  %s  - %s\r\n", categories[i].name, categories[i].help);
+    }
+
+    printf("\r\nNet Subcommands:\r\n");
+    for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
+    {
+        printf("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
     }
 
     printf("\r\nPins:\r\n");

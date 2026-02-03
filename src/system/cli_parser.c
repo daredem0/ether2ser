@@ -23,13 +23,20 @@
 #include "platform/pinmap.h"
 
 // Generated headers
-
+// Todo: Get these entries from main
 static const pin_info_t pin_table[] = {
     {"txd", V24_TXD, true},       {"rxd", V24_RXD, false},
     {"rts", V24_RTS, true},       {"cts", V24_CTS, false},
     {"dtr", V24_DTR, true},       {"dsr", V24_DSR, false},
     {"dcd", V24_DCD, false},      {"tx_active", V24_TX_ACTIVE, true},
     {"led", V24_STATUS_LED, true}};
+
+#define NUM_PINS (sizeof(pin_table) / sizeof(pin_table[0]))
+
+size_t get_num_pins(void)
+{
+    return NUM_PINS;
+}
 
 // cli_parser.c
 static bool prefix_to_mask(uint8_t prefix, uint8_t mask[4])
