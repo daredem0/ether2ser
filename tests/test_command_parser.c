@@ -14,9 +14,9 @@ void test_cli_parse_command_only(void){
 
 void test_cli_parse_command_and_args(void){
     char cmd[16], args[64];
-    TEST_ASSERT_EQUAL(E2S_OK, cli_parse("set txd 1", cmd, args));
+    TEST_ASSERT_EQUAL(E2S_OK, cli_parse("set gpio txd 1", cmd, args));
     TEST_ASSERT_EQUAL_STRING("set", cmd);
-    TEST_ASSERT_EQUAL_STRING("txd 1", args);
+    TEST_ASSERT_EQUAL_STRING("gpio txd 1", args);
 }
 
 void test_cli_parse_empty_line(void){
@@ -31,7 +31,7 @@ void test_cli_parse_set_args_unknown_pin(void){
     const pin_info_t *pin = NULL;
     TEST_ASSERT_EQUAL(
         E2S_ERR_CLI_UNKNOWN_PIN,
-        parse_set_args(args, pin_name, &value, &pin));
+        parse_set_gpio_args(args, pin_name, &value, &pin));
 }
 
 void test_cli_parse_set_args_cli_usage_set(void){
@@ -41,7 +41,7 @@ void test_cli_parse_set_args_cli_usage_set(void){
     const pin_info_t *pin = NULL;
     TEST_ASSERT_EQUAL(
         E2S_ERR_CLI_USAGE_SET,
-        parse_set_args(args, pin_name, &value, &pin));
+        parse_set_gpio_args(args, pin_name, &value, &pin));
 }
 
 void test_cli_parse_set_args_input_only(void){
@@ -51,7 +51,7 @@ void test_cli_parse_set_args_input_only(void){
     const pin_info_t *pin = NULL;
     TEST_ASSERT_EQUAL(
         E2S_ERR_CLI_PIN_INPUT_ONLY,
-        parse_set_args(args, pin_name, &value, &pin));
+        parse_set_gpio_args(args, pin_name, &value, &pin));
 }
 
 void test_cli_parse_get_args_cli_usage_get(void){
@@ -79,7 +79,7 @@ void test_cli_parse_set_args_cli_ok(void){
     const pin_info_t *pin = NULL;
     TEST_ASSERT_EQUAL(
         E2S_OK,
-        parse_set_args(args, pin_name, &value, &pin));
+        parse_set_gpio_args(args, pin_name, &value, &pin));
     TEST_ASSERT_EQUAL_STRING("txd", pin_name);
     TEST_ASSERT_EQUAL_INT(1, value);
 }
@@ -101,7 +101,7 @@ void test_cli_parse_set_args_invalid_value_upper_bound(void){
     const pin_info_t *pin = NULL;
     TEST_ASSERT_EQUAL(
         E2S_ERR_CLI_USAGE_SET,
-        parse_set_args(args, pin_name, &value, &pin));
+        parse_set_gpio_args(args, pin_name, &value, &pin));
 }
 
 void test_cli_parse_set_args_invalid_value_lower_bound(void){
@@ -111,7 +111,7 @@ void test_cli_parse_set_args_invalid_value_lower_bound(void){
     const pin_info_t *pin = NULL;
     TEST_ASSERT_EQUAL(
         E2S_ERR_CLI_USAGE_SET,
-        parse_set_args(args, pin_name, &value, &pin));
+        parse_set_gpio_args(args, pin_name, &value, &pin));
 }
 
 void test_cli_parse_set_args_extra_space_at_end(void){
@@ -121,7 +121,7 @@ void test_cli_parse_set_args_extra_space_at_end(void){
     const pin_info_t *pin = NULL;
     TEST_ASSERT_EQUAL(
         E2S_OK,
-        parse_set_args(args, pin_name, &value, &pin));
+        parse_set_gpio_args(args, pin_name, &value, &pin));
     TEST_ASSERT_EQUAL_STRING("txd", pin_name);
     TEST_ASSERT_EQUAL_INT(1, value);
 }
@@ -133,7 +133,7 @@ void test_cli_parse_set_args_extra_space_between_pin_and_args(void){
     const pin_info_t *pin = NULL;
     TEST_ASSERT_EQUAL(
         E2S_OK,
-        parse_set_args(args, pin_name, &value, &pin));
+        parse_set_gpio_args(args, pin_name, &value, &pin));
     TEST_ASSERT_EQUAL_STRING("txd", pin_name);
     TEST_ASSERT_EQUAL_INT(1, value);
 }
