@@ -19,6 +19,7 @@
  */
 
 // Related headers
+#include "system/app_context.h"
 
 // Standard library headers
 #include <inttypes.h>
@@ -220,25 +221,28 @@ static void print_net_get_settings_event(const event_t* event)
 
 int main(void)
 {
+    // Application Context
+    app_ctx_t app_context = {0};
+
     // Config variables
     config_t persistent_config;
-    bool     config_valid = false;
+    // bool     config_valid = false;
 
-    // Network variables
-    UDP_CONFIG_T     local_config;
-    UDP_CONFIG_T     destination_config;
-    UDP_CONFIG_T     sender_config;
-    NETWORK_CONFIG_T net_config;
+    // // Network variables
+    // UDP_CONFIG_T     local_config;
+    // UDP_CONFIG_T     destination_config;
+    // UDP_CONFIG_T     sender_config;
+    // NETWORK_CONFIG_T net_config;
 
-    // Protocol and Interface variables
-    V24_CONFIG_T v24_config;
-    uint8_t      rx_frame_buffer_data[RX_BUF_SIZE];
-    UDP_FRAME_T  rx_frame_buffer = {.length = RX_BUF_SIZE, .payload = rx_frame_buffer_data};
-    uint8_t      tx_frame_buffer_data[TX_BUF_SIZE];
-    UDP_FRAME_T  tx_frame_buffer = {
-         .length  = TX_BUF_SIZE,
-         .payload = tx_frame_buffer_data,
-    };
+    // // Protocol and Interface variables
+    // V24_CONFIG_T v24_config;
+    // uint8_t      rx_frame_buffer_data[RX_BUF_SIZE];
+    // UDP_FRAME_T  rx_frame_buffer = {.length = RX_BUF_SIZE, .payload = rx_frame_buffer_data};
+    // uint8_t      tx_frame_buffer_data[TX_BUF_SIZE];
+    // UDP_FRAME_T  tx_frame_buffer = {
+    //      .length  = TX_BUF_SIZE,
+    //      .payload = tx_frame_buffer_data,
+    // };
 
     // Initialize USB CDC
     stdio_init_all();
@@ -253,57 +257,64 @@ int main(void)
 
     if (config_is_valid())
     {
-        config_valid = config_read(&persistent_config);
-    }
-
-    if (config_valid)
-    {
-        // Setup loglevel
-        set_loglevel(persistent_config.log_level);
-        local_config       = (UDP_CONFIG_T)persistent_config.local_config;
-        destination_config = (UDP_CONFIG_T)persistent_config.remote_config;
-        v24_config         = (V24_CONFIG_T)persistent_config.v24_config;
-        net_config         = (NETWORK_CONFIG_T)persistent_config.net_config;
-        w5500_set_network(&net_config);
-        init_v24_config(&v24_config, v24_config.baudrate);
+        app_context.config_valid = config_read(&persistent_config);
     }
     else
     {
-        // Setup loglevel
-        set_loglevel(LOG_LEVEL_DEBUG);
-        // Initialize Network Configuration
-        local_config = (UDP_CONFIG_T){
-            .ip_address = DEFAULT_IP_ADDR,
-            .port       = DEFAULT_UDP_PORT,
-        };
-        w5500_set_network_defaults(&net_config);
-        init_v24_config(&v24_config, V24_BAUD_9600);
-        destination_config = (UDP_CONFIG_T){
-            .port = DEFAULT_UDP_PORT,
-        };
-        memcpy(destination_config.ip_address, net_config.broadcast_address, 4);
+        app_context.config_valid = false;
     }
 
-    w5500_open_udp_socket(&local_config);
+    init_app(&app_context, &persistent_config);
+
+    // if (config_valid)
+    // {
+    //     // Setup loglevel
+    //     set_loglevel(persistent_config.log_level);
+    //     local_config       = (UDP_CONFIG_T)persistent_config.local_config;
+    //     destination_config = (UDP_CONFIG_T)persistent_config.remote_config;
+    //     v24_config         = (V24_CONFIG_T)persistent_config.v24_config;
+    //     net_config         = (NETWORK_CONFIG_T)persistent_config.net_config;
+    //     w5500_set_network(&net_config);
+    //     init_v24_config(&v24_config, v24_config.baudrate);
+    // }
+    // else
+    // {
+    //     // Setup loglevel
+    //     set_loglevel(LOG_LEVEL_DEBUG);
+    //     // Initialize Network Configuration
+    //     local_config = (UDP_CONFIG_T){
+    //         .ip_address = DEFAULT_IP_ADDR,
+    //         .port       = DEFAULT_UDP_PORT,
+    //     };
+    //     w5500_set_network_defaults(&net_config);
+    //     init_v24_config(&v24_config, V24_BAUD_9600);
+    //     destination_config = (UDP_CONFIG_T){
+    //         .port = DEFAULT_UDP_PORT,
+    //     };
+    //     memcpy(destination_config.ip_address, net_config.broadcast_address, 4);
+    // }
+
+    w5500_open_udp_socket(&app_context.local_config);
     w5500_debug_status();
 
     // Initialize TX Queue
-    TX_QUEUE_T tx_queue;
-    uint8_t    tx_queue_buffer[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)];
-    tx_queue_init(&tx_queue, tx_queue_buffer);
+    // TX_QUEUE_T tx_queue;
+    // uint8_t    tx_queue_buffer[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)];
+    tx_queue_init(&app_context.tx_queue, app_context.tx_queue_buffer);
 
     // Initialize HDLC Sync
     HDLC_SYNC_ACCUMULATOR_T accumulator;
     hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
-    uint8_t      reconstructed_frame_buffer[RX_HDLC_SYNC_MAX_BUFFER_SIZE];
-    HDLC_FRAME_T reconstructed_frame = {.payload  = reconstructed_frame_buffer,
-                                        .length   = 0,
-                                        .capacity = sizeof(reconstructed_frame_buffer)};
+    // uint8_t      reconstructed_frame_buffer[RX_HDLC_SYNC_MAX_BUFFER_SIZE];
+    // HDLC_FRAME_T reconstructed_frame = {.payload  = reconstructed_frame_buffer,
+    //                                     .length   = 0,
+    //                                     .capacity = sizeof(reconstructed_frame_buffer)};
 
     // Initialize PIO
     // Currently anything faster than 38400 is not supported
-    tx_clock_init(pio0, 0, v24_config.baudrate, &(v24_config.polarities.tx_polarities));
-    rx_clock_init(pio0, 1, &(v24_config.polarities.rx_polarities));
+    tx_clock_init(pio0, 0, app_context.v24_config.baudrate,
+                  &(app_context.v24_config.polarities.tx_polarities));
+    rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
     baudrate_estimator_init(V24_RXC);
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
@@ -327,14 +338,14 @@ int main(void)
     {
         // Poll the event queue
         cli_poll();
-        w5500_poll_rx(&sender_config, &rx_frame_buffer);
-        poll_queue_stats(&tx_queue);
+        w5500_poll_rx(&app_context.sender_config, &app_context.rx_frame_buffer);
+        poll_queue_stats(&app_context.tx_queue);
 
         // Poll the tx queue. This writes out bytes on the serial line
-        tx_queue_drain(&tx_queue, 4);
+        tx_queue_drain(&app_context.tx_queue, 4);
 
         // If the tx queue is empty check if the fifo is empty to and reset rts
-        if (tx_queue_is_empty(&tx_queue))
+        if (tx_queue_is_empty(&app_context.tx_queue))
         {
             tx_poll();
         }
@@ -346,19 +357,20 @@ int main(void)
         }
 
         // Try to get a full hdlc frame
-        if (hdlc_sync_acc_poll(&accumulator, &reconstructed_frame) == E2S_ERR_HDLC_ACC_FRAME_READY)
+        if (hdlc_sync_acc_poll(&accumulator, &app_context.reconstructed_frame) ==
+            E2S_ERR_HDLC_ACC_FRAME_READY)
         {
             event_t hdlc_frame_event = {.type      = EV_HDLC_DECODE,
-                                        .data.ptr  = &reconstructed_frame,
-                                        .data_len  = reconstructed_frame.length,
+                                        .data.ptr  = &app_context.reconstructed_frame,
+                                        .data_len  = app_context.reconstructed_frame.length,
                                         .is_inline = false};
             event_queue_push(&hdlc_frame_event);
         }
         else
         {
             // Reset state if end wasnt found. We need to hunt again
-            accumulator.state          = HDLC_SYNC_STATE_HUNTING;
-            reconstructed_frame.length = 0;
+            accumulator.state                      = HDLC_SYNC_STATE_HUNTING;
+            app_context.reconstructed_frame.length = 0;
         }
 
         event_t event_item;
@@ -372,36 +384,38 @@ int main(void)
                 break;
             case EV_UDP_RX:
                 LOG_DEBUG("tx_queue_enqueue_udp_frame: %d\r\n",
-                          tx_queue_enqueue_udp_frame(&tx_queue, &rx_frame_buffer));
-                memset(rx_frame_buffer.payload, 0, rx_frame_buffer.length);
-                rx_frame_buffer.length = 0;
+                          tx_queue_enqueue_udp_frame(&app_context.tx_queue,
+                                                     &app_context.rx_frame_buffer));
+                memset(app_context.rx_frame_buffer.payload, 0, app_context.rx_frame_buffer.length);
+                app_context.rx_frame_buffer.length = 0;
                 printf("> ");
                 break;
             case EV_UDP_TX:
                 UDP_FRAME_T tx_frame = *(UDP_FRAME_T*)event_item.data.ptr;
-                w5500_udp_tx(&destination_config, &tx_frame);
+                w5500_udp_tx(&app_context.destination_config, &tx_frame);
                 printf("> ");
                 break;
             case EV_HDLC_DECODE:
-                HDLC_FRAME_T hdlc_frame = *(HDLC_FRAME_T*)event_item.data.ptr;
-                tx_frame_buffer.length  = hdlc_frame.length;
+                HDLC_FRAME_T hdlc_frame            = *(HDLC_FRAME_T*)event_item.data.ptr;
+                app_context.tx_frame_buffer.length = hdlc_frame.length;
                 PRINT_FRAME_HEX("Frame: ", hdlc_frame.payload, hdlc_frame.length);
-                hdlc_decode(&hdlc_frame, tx_frame_buffer.payload, TX_BUF_SIZE,
-                            &(tx_frame_buffer.length));
+                hdlc_decode(&hdlc_frame, app_context.tx_frame_buffer.payload, TX_BUF_SIZE,
+                            &(app_context.tx_frame_buffer.length));
                 memset(hdlc_frame.payload, 0, hdlc_frame.length);
                 hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
-                event_t hdlc_frame_event = {.type = EV_UDP_TX, .data = &tx_frame_buffer};
+                event_t hdlc_frame_event = {.type     = EV_UDP_TX,
+                                            .data.ptr = &app_context.tx_frame_buffer};
                 event_queue_push(&hdlc_frame_event);
                 break;
             case EV_SAVE_CONFIG:
                 LOG_INFO("Storing persistent config in flash.\r\n");
-                wizchip_getnetinfo(&(net_config.net_info));
-                persistent_config.log_level     = current_log_level;
-                persistent_config.v24_config    = v24_config;
-                persistent_config.net_config    = net_config;
-                persistent_config.local_config  = local_config;
-                persistent_config.remote_config = destination_config;
-                config_write(&persistent_config);
+                wizchip_getnetinfo(&(app_context.net_config.net_info));
+                app_context.persistent_config.log_level     = current_log_level;
+                app_context.persistent_config.v24_config    = app_context.v24_config;
+                app_context.persistent_config.net_config    = app_context.net_config;
+                app_context.persistent_config.local_config  = app_context.local_config;
+                app_context.persistent_config.remote_config = app_context.destination_config;
+                config_write(&app_context.persistent_config);
                 LOG_INFO("Config stored. Dumping for checking:\r\n");
                 dump_config();
                 printf("\r\n> ");
@@ -423,11 +437,11 @@ int main(void)
                 switch (payload->id)
                 {
                 case NET_IP_REMOTE:
-                    memcpy(destination_config.ip_address, payload->value.ip, 4);
+                    memcpy(app_context.destination_config.ip_address, payload->value.ip, 4);
                     break;
                 case NET_IP_LOCAL:
                 {
-                    memcpy(local_config.ip_address, payload->value.ip, 4);
+                    memcpy(app_context.local_config.ip_address, payload->value.ip, 4);
                     wiz_NetInfo net_info;
                     wizchip_getnetinfo(&net_info);
                     memcpy(net_info.ip, payload->value.ip, 4);
@@ -452,13 +466,13 @@ int main(void)
                     break;
                 }
                 case NET_PORT_LOCAL:
-                    local_config.port = payload->value.port;
-                    w5500_reconfigure_udp_socket(&local_config);
+                    app_context.local_config.port = payload->value.port;
+                    w5500_reconfigure_udp_socket(&app_context.local_config);
                     printf("> ");
                     break;
                 case NET_PORT_REMOTE:
-                    destination_config.port = payload->value.port;
-                    w5500_reconfigure_udp_socket(&destination_config);
+                    app_context.destination_config.port = payload->value.port;
+                    w5500_reconfigure_udp_socket(&app_context.destination_config);
                     printf("> ");
                     break;
                 default:
@@ -481,9 +495,11 @@ int main(void)
                 switch (payload->id)
                 {
                 case NET_IP_REMOTE:
-                    printf("NET_IP_REMOTE: %d.%d.%d.%d\r\n", destination_config.ip_address[0],
-                           destination_config.ip_address[1], destination_config.ip_address[2],
-                           destination_config.ip_address[3]);
+                    printf("NET_IP_REMOTE: %d.%d.%d.%d\r\n",
+                           app_context.destination_config.ip_address[0],
+                           app_context.destination_config.ip_address[1],
+                           app_context.destination_config.ip_address[2],
+                           app_context.destination_config.ip_address[3]);
                     break;
                 case NET_IP_LOCAL:
                 case NET_IP_MASK:
@@ -498,10 +514,10 @@ int main(void)
                     break;
                 }
                 case NET_PORT_LOCAL:
-                    printf("NET_PORT_LOCAL: %d\r\n", local_config.port);
+                    printf("NET_PORT_LOCAL: %d\r\n", app_context.local_config.port);
                     break;
                 case NET_PORT_REMOTE:
-                    printf("NET_PORT_REMOTE: %d\r\n", destination_config.port);
+                    printf("NET_PORT_REMOTE: %d\r\n", app_context.destination_config.port);
                     break;
                 default:
                     break;
@@ -515,19 +531,20 @@ int main(void)
                 switch (payload->id)
                 {
                 case V24_BAUDRATE:
-                    memcpy(&v24_config.baudrate, &payload->value.baudrate, sizeof(V24_BAUDRATE_T));
-                    tx_clock_init(pio0, 0, v24_config.baudrate,
-                                  &(v24_config.polarities.tx_polarities));
-                    rx_clock_init(pio0, 1, &(v24_config.polarities.rx_polarities));
+                    memcpy(&app_context.v24_config.baudrate, &payload->value.baudrate,
+                           sizeof(V24_BAUDRATE_T));
+                    tx_clock_init(pio0, 0, app_context.v24_config.baudrate,
+                                  &(app_context.v24_config.polarities.tx_polarities));
+                    rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
                     printf("> ");
                     break;
                 case V24_POLARITIES:
-                    memcpy(&v24_config.polarities, &payload->value.polarities,
+                    memcpy(&app_context.v24_config.polarities, &payload->value.polarities,
                            sizeof(V24_POLARITIES_T));
 
-                    tx_clock_init(pio0, 0, v24_config.baudrate,
-                                  &(v24_config.polarities.tx_polarities));
-                    rx_clock_init(pio0, 1, &(v24_config.polarities.rx_polarities));
+                    tx_clock_init(pio0, 0, app_context.v24_config.baudrate,
+                                  &(app_context.v24_config.polarities.tx_polarities));
+                    rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
                     printf("> ");
                     break;
                 default:
@@ -545,11 +562,11 @@ int main(void)
                 switch (payload->id)
                 {
                 case V24_BAUDRATE:
-                    printf("V24_BAUDRATE: %d\r\n", v24_config.baudrate);
+                    printf("V24_BAUDRATE: %d\r\n", app_context.v24_config.baudrate);
                     printf("> ");
                     break;
                 case V24_POLARITIES:
-                    print_v24_polarities(&v24_config.polarities);
+                    print_v24_polarities(&app_context.v24_config.polarities);
                     printf("> ");
                     break;
                 default:

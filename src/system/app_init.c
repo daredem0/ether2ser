@@ -1,0 +1,75 @@
+
+
+// Related headers
+#include "app_context.h"
+
+// Standard library headers
+#include <inttypes.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Library Headers
+#include "pico/stdio.h"
+#include "pico/time.h"
+#include "wizchip_conf.h"
+#include "wizchip_qspi_pio.h"
+
+// Project Headers
+#include "drivers/pio_tx_rx_driver.h"
+#include "drivers/tx_queue.h"
+#include "drivers/w5500_driver.h"
+#include "platform/pinmap.h"
+#include "protocol/hdlc_common.h"
+#include "protocol/hdlc_decoder.h"
+#include "protocol/hdlc_sync.h"
+#include "system/baudrate_monitor.h"
+#include "system/cli_commands.h"
+#include "system/cli_usb_cdc.h"
+#include "system/common.h"
+#include "system/event_queue.h"
+#include "system/persistent_config.h"
+
+// Generated headers
+
+void init_app(app_ctx_t* app, config_t* persistent_config)
+{
+    app->rx_frame_buffer.payload = app->rx_frame_buffer_data;
+    app->rx_frame_buffer.length  = 0;
+
+    app->tx_frame_buffer.payload = app->tx_frame_buffer_data;
+    app->tx_frame_buffer.length  = 0;
+
+    if (app->config_valid)
+    {
+        memcpy(&app->persistent_config, persistent_config, sizeof(config_t));
+        set_loglevel(app->persistent_config.log_level);
+
+        app->local_config       = (UDP_CONFIG_T)app->persistent_config.local_config;
+        app->destination_config = (UDP_CONFIG_T)app->persistent_config.remote_config;
+        app->v24_config         = (V24_CONFIG_T)app->persistent_config.v24_config;
+        app->net_config         = (NETWORK_CONFIG_T)app->persistent_config.net_config;
+        w5500_set_network(&app->net_config);
+        init_v24_config(&app->v24_config, app->v24_config.baudrate);
+    }
+    else
+    {
+        // Setup loglevel
+        set_loglevel(LOG_LEVEL_DEBUG);
+        // Initialize Network Configuration
+        app->local_config = (UDP_CONFIG_T){
+            .ip_address = DEFAULT_IP_ADDR,
+            .port       = DEFAULT_UDP_PORT,
+        };
+        w5500_set_network_defaults(&app->net_config);
+        init_v24_config(&app->v24_config, V24_BAUD_9600);
+        app->destination_config = (UDP_CONFIG_T){
+            .port = DEFAULT_UDP_PORT,
+        };
+        memcpy(app->destination_config.ip_address, app->net_config.broadcast_address, 4);
+    }
+    app->reconstructed_frame = (HDLC_FRAME_T){.payload  = app->reconstructed_frame_buffer,
+                                              .length   = 0,
+                                              .capacity = sizeof(app->reconstructed_frame_buffer)};
+}
