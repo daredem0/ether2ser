@@ -41,5 +41,9 @@ e2s_error_t       parse_set_ip_args(const char* args, uint8_t ip[4], uint8_t mas
 e2s_error_t       parse_set_gpio_args(const char* args, char* pin_name, int* value,
                                       const pin_info_t** pin);
 e2s_error_t       parse_set_net_ip_args(const char* args, uint8_t ip[4], uint8_t mask[4]);
+e2s_error_t       parse_set_ip_remote_args(const char* args, uint8_t ip[4]);
+e2s_error_t       parse_set_gateway_args(const char* args, uint8_t ip[4]);
+e2s_error_t       parse_set_udp_port_local_args(const char* args, uint16_t* port);
+e2s_error_t       parse_set_udp_port_remote_args(const char* args, uint16_t* port);
 
 #endif /* CLI_PARSER_H */

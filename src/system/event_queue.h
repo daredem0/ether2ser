@@ -17,6 +17,7 @@
 // Standard library headers
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 // Project Headers
 
@@ -30,14 +31,42 @@ typedef enum
     EV_UDP_RX,
     EV_UDP_TX,
     EV_HDLC_DECODE,
-    EV_SAVE_CONFIG
+    EV_SAVE_CONFIG,
+    EV_WIPE_CONFIG,
+    EV_SET_NET_SETTINGS,
+    EV_GET_NET_SETTINGS
 } event_type_t;
+
+typedef enum
+{
+    NET_IP_REMOTE,
+    NET_IP_GATEWAY,
+    NET_IP_LOCAL,
+    NET_IP_MASK,
+    NET_PORT_LOCAL,
+    NET_PORT_REMOTE
+} event_queue_data_types_t;
+
+typedef struct
+{
+    event_queue_data_types_t id;
+    union
+    {
+        uint8_t  ip[4];
+        uint16_t port;
+    } value;
+} event_queue_data_t;
 
 typedef struct
 {
     event_type_t type;
-    const void*  data;     // opaque payload pointer owned by caller
-    size_t       data_len; // length of payload in bytes
+    size_t       data_len;
+    union
+    {
+        const void* ptr;       // for large/external data
+        uint8_t     bytes[16]; // for small inline data
+    } data;
+    bool is_inline;
 } event_t;
 
 /**

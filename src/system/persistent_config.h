@@ -35,5 +35,6 @@ bool config_read(config_t* cfg);
 void config_write(const config_t* cfg);
 bool config_is_valid(void);
 void dump_config(void);
+void config_wipe(void);
 
 #endif /* PERSISTENT_CONFIG_H */

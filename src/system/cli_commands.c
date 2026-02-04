@@ -20,6 +20,7 @@
 
 // Library Headers
 #include "hardware/gpio.h"
+#include "hardware/watchdog.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 
@@ -76,11 +77,15 @@ static void cmd_set(const char* args);
 static void cmd_get(const char* args);
 static void cmd_pininfo(const char* args);
 static void cmd_save(const char* args);
+static void cmd_wipe(const char* args);
 static void cmd_set_ip(const char* args);
+static void cmd_reboot(const char* args);
 static void cat_gpio_set(const char* args);
 static void cat_gpio_get(const char* args);
 static void cat_net_set(const char* args);
 static void cat_net_get(const char* args);
+static void cat_v24_set(const char* args);
+static void cat_v24_get(const char* args);
 static void subcmd_set_ip_local(const char* args);
 static void subcmd_get_ip_local(const char* args);
 static void subcmd_set_ip_remote(const char* args);
@@ -97,20 +102,24 @@ static const command_t commands[] = {
     {"help", cmd_help, "Show available commands"},
     {"status", cmd_status, "Show system status and RXC estimate"},
     {"save", cmd_save, "Persist current configuration to flash"},
+    {"wipe", cmd_wipe, "Erase persistent configuration from flash"},
     {"net", cmd_net, "Show current network status (W5500)"},
     {"set", cmd_set, "Set values (e.g. set gpio <pin> <0|1>, set net ip.local <addr>/<cidr>)"},
     {"get", cmd_get, "Get values (e.g. get gpio <pin>, get net ip.local)"},
-    {"pininfo", cmd_pininfo, "Show pin details: pininfo <pin>"}};
+    {"pininfo", cmd_pininfo, "Show pin details: pininfo <pin>"},
+    {"reboot", cmd_reboot, "Reboot the device"},
+};
 
 static const category_t categories[] = {
     {"gpio", cat_gpio_set, cat_gpio_get, "GPIO controls and queries"},
     {"net", cat_net_set, cat_net_get, "Network configuration and queries"},
+    {"v24", cat_v24_set, cat_v24_get, "V.24 config (inverted pins, baudrate)"},
 };
 
 static const subcmd_t net_subcmds[] = {
     {"ip.local", subcmd_set_ip_local, subcmd_get_ip_local, "Local IP address (CIDR)"},
     {"ip.remote", subcmd_set_ip_remote, subcmd_get_ip_remote, "Remote IP address"},
-    {"gateway", subcmd_set_ip_gateway, subcmd_get_ip_gateway, "Gateway IP address"},
+    {"ip.gateway", subcmd_set_ip_gateway, subcmd_get_ip_gateway, "Gateway IP address"},
     {"udp.port.local", subcmd_set_udp_port_local, subcmd_get_udp_port_local, "Local UDP port"},
     {"udp.port.remote", subcmd_set_udp_port_remote, subcmd_get_udp_port_remote, "Remote UDP port"},
 };
@@ -120,12 +129,49 @@ static const subcmd_t net_subcmds[] = {
 #define NUM_NET_SUBCMDS ARRAY_LEN(net_subcmds)
 #define NUM_PINS get_num_pins()
 
+static void cmd_reboot(const char* args)
+{
+    (void)args;
+    printf("Rebooting...\r\n");
+    watchdog_reboot(0, 0, 100); // small delay to let printf flush
+}
+
+static void dispatch_ip(const uint8_t* ip, const event_queue_data_types_t type)
+{
+    event_queue_data_t ip_event_data = {.id = type};
+    memcpy(ip_event_data.value.ip, ip, 4); //
+
+    event_t ip_event = {
+        .type      = EV_SET_NET_SETTINGS,
+        .data_len  = sizeof(ip_event_data),
+        .is_inline = true,
+    };
+    memcpy(ip_event.data.bytes, &ip_event_data, sizeof(ip_event_data));
+    event_queue_push(&ip_event);
+}
+
+static void dispatch_get_request(event_queue_data_types_t type)
+{
+    event_queue_data_t get_request = {.id = type};
+
+    event_t event = {
+        .type      = EV_GET_NET_SETTINGS,
+        .data_len  = sizeof(get_request),
+        .is_inline = true,
+    };
+    memcpy(event.data.bytes, &get_request, sizeof(get_request));
+    event_queue_push(&event);
+}
+
 static void subcmd_get_ip_local(const char* args)
 {
-    wiz_NetInfo net_info;
-    wizchip_getnetinfo(&net_info);
-    printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1], net_info.ip[2],
-           net_info.ip[3], net_info.sn[0], net_info.sn[1], net_info.sn[2], net_info.sn[3]);
+
+    if (args != NULL && args[0] != '\0')
+    {
+        printf("usage: get net ip.local\r\n");
+        return;
+    }
+    dispatch_get_request(NET_IP_LOCAL);
 }
 
 static void subcmd_set_ip_local(const char* args)
@@ -136,63 +182,119 @@ static void subcmd_set_ip_local(const char* args)
         printf("usage: set net ip 192.168.29.2/24\r\n");
         return;
     }
-
-    // Example: read, modify, write live config
-    wiz_NetInfo net_info;
-    wizchip_getnetinfo(&net_info);
-    memcpy(net_info.ip, ip, 4);
-    memcpy(net_info.sn, mask, 4);
-    wizchip_setnetinfo(&net_info);
-    printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u\r\n", ip[0], ip[1], ip[2], ip[3], mask[0], mask[1],
-           mask[2], mask[3]);
+    dispatch_ip(ip, NET_IP_LOCAL);
+    dispatch_ip(mask, NET_IP_MASK);
 }
 
 static void subcmd_get_ip_remote(const char* args)
 {
-    (void)args;
-    printf("ip.remote: not implemented yet\r\n");
+    if (args != NULL && args[0] != '\0')
+    {
+        printf("usage: get net ip.remote\r\n");
+        return;
+    }
+    dispatch_get_request(NET_IP_REMOTE);
 }
 
 static void subcmd_set_ip_remote(const char* args)
 {
-    (void)args;
-    printf("set ip.remote: not implemented yet (args='%s')\r\n", args);
+    uint8_t ip[4];
+    if (parse_set_ip_remote_args(args, ip) != E2S_OK)
+    {
+        printf("usage: set net ip.remote 192.168.29.2\r\n");
+        return;
+    }
+    dispatch_ip(ip, NET_IP_REMOTE);
 }
 
 static void subcmd_get_ip_gateway(const char* args)
 {
-    (void)args;
-    printf("gateway: not implemented yet\r\n");
+    if (args != NULL && args[0] != '\0')
+    {
+        printf("usage: get net ip.gateway\r\n");
+        return;
+    }
+    dispatch_get_request(NET_IP_GATEWAY);
 }
 
 static void subcmd_set_ip_gateway(const char* args)
 {
-    (void)args;
-    printf("set gateway: not implemented yet (args='%s')\r\n", args);
+    uint8_t ip[4];
+    if (parse_set_ip_remote_args(args, ip) != E2S_OK)
+    {
+        printf("usage: set net ip.gateway 192.168.29.1\r\n");
+        return;
+    }
+    dispatch_ip(ip, NET_IP_GATEWAY);
+}
+
+static void dispatch_get_udp_port(const event_queue_data_types_t type)
+{
+    event_queue_data_t get_request = {.id = type};
+
+    event_t event = {
+        .type      = EV_GET_NET_SETTINGS,
+        .data_len  = sizeof(get_request),
+        .is_inline = true,
+    };
+    memcpy(event.data.bytes, &get_request, sizeof(get_request));
+    event_queue_push(&event);
+}
+
+static void dispatch_set_udp_port(const event_queue_data_types_t type, uint16_t port)
+{
+    event_queue_data_t set_request = {.id = type, .value.port = port};
+
+    event_t event = {
+        .type      = EV_SET_NET_SETTINGS,
+        .data_len  = sizeof(set_request),
+        .is_inline = true,
+    };
+    memcpy(event.data.bytes, &set_request, sizeof(set_request));
+    event_queue_push(&event);
 }
 
 static void subcmd_get_udp_port_local(const char* args)
 {
-    (void)args;
-    printf("udp.port.local: not implemented yet\r\n");
+    if (args != NULL && args[0] != '\0')
+    {
+        printf("usage: get net udp.port.local\r\n");
+        return;
+    }
+    dispatch_get_udp_port(NET_PORT_LOCAL);
 }
 
 static void subcmd_set_udp_port_local(const char* args)
 {
-    (void)args;
-    printf("set udp.port.local: not implemented yet (args='%s')\r\n", args);
+    uint16_t port = 0;
+    if (parse_set_udp_port_local_args(args, &port) != E2S_OK)
+    {
+        printf("usage: set net udp.port.local 6969\r\n");
+        return;
+    }
+    dispatch_set_udp_port(NET_PORT_LOCAL, port);
 }
 
 static void subcmd_get_udp_port_remote(const char* args)
 {
-    (void)args;
-    printf("udp.port.remote: not implemented yet\r\n");
+    if (args != NULL && args[0] != '\0')
+    {
+        printf("usage: get net udp.port.remote\r\n");
+        return;
+    }
+
+    dispatch_get_udp_port(NET_PORT_REMOTE);
 }
 
 static void subcmd_set_udp_port_remote(const char* args)
 {
-    (void)args;
-    printf("set udp.port.remote: not implemented yet (args='%s')\r\n", args);
+    uint16_t port = 0;
+    if (parse_set_udp_port_remote_args(args, &port) != E2S_OK)
+    {
+        printf("usage: set net udp.port.remote 6969\r\n");
+        return;
+    }
+    dispatch_set_udp_port(NET_PORT_REMOTE, port);
 }
 
 static void cat_net_get(const char* args)
@@ -261,7 +363,6 @@ static void cat_gpio_set(const char* args)
 
 static void cat_net_set(const char* args)
 {
-    LOG_DEBUG("net set: '%s'\r\n", args);
     if (args == NULL || args[0] == '\0')
     {
         printf("usage: set net <subcmd> <args>\r\n");
@@ -379,23 +480,11 @@ static void cmd_get(const char* args)
     printf("unknown get category: '%s'\r\n", args);
 }
 
-static void cmd_set_ip(const char* args)
+static void cmd_wipe(const char* args)
 {
-    uint8_t ip[4], mask[4];
-    if (parse_set_ip_args(args, ip, mask) != E2S_OK)
-    {
-        printf("usage: set net ip 192.168.29.2/24\r\n");
-        return;
-    }
-
-    // Example: read, modify, write live config
-    wiz_NetInfo net_info;
-    wizchip_getnetinfo(&net_info);
-    memcpy(net_info.ip, ip, 4);
-    memcpy(net_info.sn, mask, 4);
-    wizchip_setnetinfo(&net_info);
-    printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u\r\n", ip[0], ip[1], ip[2], ip[3], mask[0], mask[1],
-           mask[2], mask[3]);
+    (void)args;
+    event_t wipe_event = {.type = EV_WIPE_CONFIG, .data = NULL, .data_len = 0};
+    event_queue_push(&wipe_event);
 }
 
 static void cmd_save(const char* args)

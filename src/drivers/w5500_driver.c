@@ -133,6 +133,12 @@ void w5500_open_udp_socket(UDP_CONFIG_T* config)
     }
     LOG_DEBUG("W5500: Socket opened successfully in non blocking mode\r\n");
 }
+void w5500_reconfigure_udp_socket(UDP_CONFIG_T* config)
+{
+    close(UDP_SOCKET);
+    LOG_DEBUG("W5500: Socket closed\r\n");
+    w5500_open_udp_socket(config);
+}
 
 void w5500_set_network(NETWORK_CONFIG_T* config)
 {

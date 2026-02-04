@@ -55,6 +55,133 @@
 
 #define MAIN_LOOP_SLEEP_MS 1
 
+static const char* net_setting_id_name(event_queue_data_types_t id)
+{
+    switch (id)
+    {
+    case NET_IP_REMOTE:
+        return "NET_IP_REMOTE";
+    case NET_IP_GATEWAY:
+        return "NET_GATEWAY";
+    case NET_IP_LOCAL:
+        return "NET_IP_LOCAL";
+    case NET_IP_MASK:
+        return "NET_IP_MASK";
+    case NET_PORT_LOCAL:
+        return "NET_PORT_LOCAL";
+    case NET_PORT_REMOTE:
+        return "NET_PORT_REMOTE";
+    default:
+        return "NET_UNKNOWN";
+    }
+}
+
+static void print_net_set_settings_event(const event_t* event)
+{
+    if (event == NULL)
+    {
+        return;
+    }
+
+    const event_queue_data_t* payload = NULL;
+    event_queue_data_t        inline_payload;
+
+    if (event->is_inline)
+    {
+        if (event->data_len < sizeof(event_queue_data_t))
+        {
+            printf("EV_SET_NET_SETTINGS: invalid data_len=%u\r\n", (unsigned)event->data_len);
+            return;
+        }
+        memcpy(&inline_payload, event->data.bytes, sizeof(inline_payload));
+        payload = &inline_payload;
+    }
+    else
+    {
+        if (event->data.ptr == NULL || event->data_len < sizeof(event_queue_data_t))
+        {
+            printf("EV_SET_NET_SETTINGS: invalid data ptr/len\r\n");
+            return;
+        }
+        payload = (const event_queue_data_t*)event->data.ptr;
+    }
+
+    printf("EV_SET_NET_SETTINGS: id=%s\r\n", net_setting_id_name(payload->id));
+    switch (payload->id)
+    {
+    case NET_IP_REMOTE:
+    case NET_IP_LOCAL:
+    case NET_IP_GATEWAY:
+        printf("  ip=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
+               payload->value.ip[2], payload->value.ip[3]);
+        break;
+    case NET_IP_MASK:
+        printf("  subnetmask=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
+               payload->value.ip[2], payload->value.ip[3]);
+        break;
+    case NET_PORT_LOCAL:
+    case NET_PORT_REMOTE:
+        printf("  port=%u\r\n", payload->value.port);
+        break;
+    default:
+        printf("  raw: %02X %02X %02X %02X %02X %02X\r\n", payload->value.ip[0],
+               payload->value.ip[1], payload->value.ip[2], payload->value.ip[3],
+               (uint8_t)(payload->value.port >> 8), (uint8_t)(payload->value.port & 0xFF));
+        break;
+    }
+}
+
+static void print_net_get_settings_event(const event_t* event)
+{
+    if (event == NULL)
+    {
+        return;
+    }
+
+    const event_queue_data_t* payload = NULL;
+    event_queue_data_t        inline_payload;
+
+    if (event->is_inline)
+    {
+        if (event->data_len < sizeof(event_queue_data_t))
+        {
+            printf("EV_GET_NET_SETTINGS: invalid data_len=%u\r\n", (unsigned)event->data_len);
+            return;
+        }
+        memcpy(&inline_payload, event->data.bytes, sizeof(inline_payload));
+        payload = &inline_payload;
+    }
+    else
+    {
+        if (event->data.ptr == NULL || event->data_len < sizeof(event_queue_data_t))
+        {
+            printf("EV_GET_NET_SETTINGS: invalid data ptr/len\r\n");
+            return;
+        }
+        payload = (const event_queue_data_t*)event->data.ptr;
+    }
+
+    printf("EV_GET_NET_SETTINGS: id=%s\r\n", net_setting_id_name(payload->id));
+    switch (payload->id)
+    {
+    case NET_IP_REMOTE:
+    case NET_IP_LOCAL:
+    case NET_IP_GATEWAY:
+        printf("  ip=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
+               payload->value.ip[2], payload->value.ip[3]);
+        break;
+    case NET_PORT_LOCAL:
+    case NET_PORT_REMOTE:
+        printf("  port=%u\r\n", payload->value.port);
+        break;
+    default:
+        printf("  raw: %02X %02X %02X %02X %02X %02X\r\n", payload->value.ip[0],
+               payload->value.ip[1], payload->value.ip[2], payload->value.ip[3],
+               (uint8_t)(payload->value.port >> 8), (uint8_t)(payload->value.port & 0xFF));
+        break;
+    }
+}
+
 int main(void)
 {
     // Config variables
@@ -150,6 +277,7 @@ int main(void)
     {
         printf("\r\nDebug logging enabled.\r\n> ");
         dump_config();
+        printf("> ");
     }
 
     // Initialize event queue finally
@@ -184,7 +312,10 @@ int main(void)
         // Try to get a full hdlc frame
         if (hdlc_sync_acc_poll(&accumulator, &reconstructed_frame) == E2S_ERR_HDLC_ACC_FRAME_READY)
         {
-            event_t hdlc_frame_event = {.type = EV_HDLC_DECODE, .data = &reconstructed_frame};
+            event_t hdlc_frame_event = {.type      = EV_HDLC_DECODE,
+                                        .data.ptr  = &reconstructed_frame,
+                                        .data_len  = reconstructed_frame.length,
+                                        .is_inline = false};
             event_queue_push(&hdlc_frame_event);
         }
         else
@@ -200,7 +331,7 @@ int main(void)
             switch (event_item.type)
             {
             case EV_CLI_LINE:
-                handle_cli_line((const char*)event_item.data);
+                handle_cli_line((const char*)event_item.data.ptr);
                 printf("> ");
                 break;
             case EV_UDP_RX:
@@ -211,12 +342,12 @@ int main(void)
                 printf("> ");
                 break;
             case EV_UDP_TX:
-                UDP_FRAME_T tx_frame = *(UDP_FRAME_T*)event_item.data;
+                UDP_FRAME_T tx_frame = *(UDP_FRAME_T*)event_item.data.ptr;
                 w5500_udp_tx(&destination_config, &tx_frame);
                 printf("> ");
                 break;
             case EV_HDLC_DECODE:
-                HDLC_FRAME_T hdlc_frame = *(HDLC_FRAME_T*)event_item.data;
+                HDLC_FRAME_T hdlc_frame = *(HDLC_FRAME_T*)event_item.data.ptr;
                 tx_frame_buffer.length  = hdlc_frame.length;
                 PRINT_FRAME_HEX("Frame: ", hdlc_frame.payload, hdlc_frame.length);
                 hdlc_decode(&hdlc_frame, tx_frame_buffer.payload, TX_BUF_SIZE,
@@ -239,6 +370,109 @@ int main(void)
                 dump_config();
                 printf("\r\n> ");
                 break;
+            case EV_WIPE_CONFIG:
+                LOG_INFO("Wiping persistent config in flash.\r\n");
+                config_wipe();
+                LOG_INFO("Config wiped. Dumping for checking:\r\n");
+                dump_config();
+                printf("\r\n> ");
+                break;
+            case EV_SET_NET_SETTINGS:
+            {
+                if (current_log_level == LOG_LEVEL_DEBUG)
+                {
+                    print_net_set_settings_event(&event_item);
+                }
+                event_queue_data_t* payload = (event_queue_data_t*)event_item.data.bytes;
+                switch (payload->id)
+                {
+                case NET_IP_REMOTE:
+                    memcpy(destination_config.ip_address, payload->value.ip, 4);
+                    break;
+                case NET_IP_LOCAL:
+                {
+                    memcpy(local_config.ip_address, payload->value.ip, 4);
+                    wiz_NetInfo net_info;
+                    wizchip_getnetinfo(&net_info);
+                    memcpy(net_info.ip, payload->value.ip, 4);
+                    wizchip_setnetinfo(&net_info);
+                    break;
+                }
+                case NET_IP_MASK:
+                {
+                    wiz_NetInfo net_info;
+                    wizchip_getnetinfo(&net_info);
+                    memcpy(net_info.sn, payload->value.ip, 4);
+                    wizchip_setnetinfo(&net_info);
+                    break;
+                }
+                case NET_IP_GATEWAY:
+                {
+                    wiz_NetInfo net_info;
+                    wizchip_getnetinfo(&net_info);
+                    memcpy(net_info.gw, payload->value.ip, 4);
+                    wizchip_setnetinfo(&net_info);
+                    printf("> ");
+                    break;
+                }
+                case NET_PORT_LOCAL:
+                    local_config.port = payload->value.port;
+                    w5500_reconfigure_udp_socket(&local_config);
+                    printf("> ");
+                    break;
+                case NET_PORT_REMOTE:
+                    destination_config.port = payload->value.port;
+                    w5500_reconfigure_udp_socket(&destination_config);
+                    printf("> ");
+                    break;
+                default:
+                    break;
+                }
+                break;
+
+                // For now dumbly always save after a change of settings.
+                // This is nto the best idea since it degrades flash lifetime.
+                event_t save_event = {.type = EV_SAVE_CONFIG, .data = NULL, .data_len = 0};
+                event_queue_push(&save_event);
+            }
+            case EV_GET_NET_SETTINGS:
+            {
+                if (current_log_level == LOG_LEVEL_DEBUG)
+                {
+                    print_net_get_settings_event(&event_item);
+                }
+                event_queue_data_t* payload = (event_queue_data_t*)event_item.data.bytes;
+                switch (payload->id)
+                {
+                case NET_IP_REMOTE:
+                    printf("NET_IP_REMOTE: %d.%d.%d.%d\r\n", destination_config.ip_address[0],
+                           destination_config.ip_address[1], destination_config.ip_address[2],
+                           destination_config.ip_address[3]);
+                    break;
+                case NET_IP_LOCAL:
+                case NET_IP_MASK:
+                case NET_IP_GATEWAY:
+                {
+                    wiz_NetInfo net_info;
+                    wizchip_getnetinfo(&net_info);
+                    printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0],
+                           net_info.ip[1], net_info.ip[2], net_info.ip[3], net_info.sn[0],
+                           net_info.sn[1], net_info.sn[2], net_info.sn[3], net_info.gw[0],
+                           net_info.gw[1], net_info.gw[2], net_info.gw[3]);
+                    break;
+                }
+                case NET_PORT_LOCAL:
+                    printf("NET_PORT_LOCAL: %d\r\n", local_config.port);
+                    break;
+                case NET_PORT_REMOTE:
+                    printf("NET_PORT_REMOTE: %d\r\n", destination_config.port);
+                    break;
+                default:
+                    break;
+                }
+                break;
+            }
+            break;
             default:
                 break;
             }

@@ -39,6 +39,15 @@ bool config_read(config_t* cfg)
     return true;
 }
 
+void config_wipe(void)
+{
+    uint8_t  buf[FLASH_PAGE_SIZE] = {0}; // 256 bytes, pad with zeros
+    uint32_t ints                 = save_and_disable_interrupts();
+    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+    flash_range_program(FLASH_TARGET_OFFSET, buf, FLASH_PAGE_SIZE);
+    restore_interrupts(ints);
+}
+
 bool config_is_valid(void)
 {
     const config_t* cfg = nonsafe_config_read();

@@ -53,6 +53,58 @@ static bool prefix_to_mask(uint8_t prefix, uint8_t mask[4])
     return true;
 }
 
+static e2s_error_t parse_ipv4_with_optional_prefix(const char* args, const char* prefix,
+                                                   uint8_t ip[4])
+{
+    const char* s = args;
+    if (prefix != NULL)
+    {
+        size_t len = strlen(prefix);
+        if (strncmp(args, prefix, len) == 0 && args[len] == ' ')
+        {
+            s = args + len + 1;
+        }
+    }
+
+    unsigned a, b, c, d;
+    if (sscanf(s, "%u.%u.%u.%u", &a, &b, &c, &d) != 4)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+    if (a > 255 || b > 255 || c > 255 || d > 255)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+
+    ip[0] = a;
+    ip[1] = b;
+    ip[2] = c;
+    ip[3] = d;
+    return E2S_OK;
+}
+
+static e2s_error_t parse_u16_with_optional_prefix(const char* args, const char* prefix,
+                                                  uint16_t* value)
+{
+    const char* s = args;
+    if (prefix != NULL)
+    {
+        size_t len = strlen(prefix);
+        if (strncmp(args, prefix, len) == 0 && args[len] == ' ')
+        {
+            s = args + len + 1;
+        }
+    }
+
+    unsigned v;
+    if (sscanf(s, "%u", &v) != 1 || v > 0xFFFFu)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+    *value = (uint16_t)v;
+    return E2S_OK;
+}
+
 e2s_error_t parse_set_ip_args(const char* args, uint8_t ip[4], uint8_t mask[4])
 {
     unsigned a, b, c, d, prefix;
@@ -105,6 +157,26 @@ e2s_error_t parse_set_net_ip_args(const char* args, uint8_t ip[4], uint8_t mask[
         return E2S_ERR_CLI_USAGE_SET;
     }
     return parse_set_ip_args(args + 4, ip, mask);
+}
+
+e2s_error_t parse_set_ip_remote_args(const char* args, uint8_t ip[4])
+{
+    return parse_ipv4_with_optional_prefix(args, "ip", ip);
+}
+
+e2s_error_t parse_set_gateway_args(const char* args, uint8_t ip[4])
+{
+    return parse_ipv4_with_optional_prefix(args, "gateway", ip);
+}
+
+e2s_error_t parse_set_udp_port_local_args(const char* args, uint16_t* port)
+{
+    return parse_u16_with_optional_prefix(args, "port", port);
+}
+
+e2s_error_t parse_set_udp_port_remote_args(const char* args, uint16_t* port)
+{
+    return parse_u16_with_optional_prefix(args, "port", port);
 }
 
 const pin_info_t* get_pin_table(void)
