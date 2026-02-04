@@ -20,6 +20,7 @@
 #include <stdint.h>
 
 // Project Headers
+#include "drivers/pio_tx_rx_driver.h"
 
 // Generated headers
 #define EVENT_QUEUE_CAPACITY 16
@@ -34,7 +35,9 @@ typedef enum
     EV_SAVE_CONFIG,
     EV_WIPE_CONFIG,
     EV_SET_NET_SETTINGS,
-    EV_GET_NET_SETTINGS
+    EV_GET_NET_SETTINGS,
+    EV_SET_V24_SETTINGS,
+    EV_GET_V24_SETTINGS
 } event_type_t;
 
 typedef enum
@@ -44,7 +47,9 @@ typedef enum
     NET_IP_LOCAL,
     NET_IP_MASK,
     NET_PORT_LOCAL,
-    NET_PORT_REMOTE
+    NET_PORT_REMOTE,
+    V24_BAUDRATE,
+    V24_POLARITIES
 } event_queue_data_types_t;
 
 typedef struct
@@ -52,8 +57,10 @@ typedef struct
     event_queue_data_types_t id;
     union
     {
-        uint8_t  ip[4];
-        uint16_t port;
+        uint8_t          ip[4];
+        uint16_t         port;
+        V24_POLARITIES_T polarities;
+        V24_BAUDRATE_T   baudrate;
     } value;
 } event_queue_data_t;
 

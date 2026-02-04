@@ -78,7 +78,6 @@ static void cmd_get(const char* args);
 static void cmd_pininfo(const char* args);
 static void cmd_save(const char* args);
 static void cmd_wipe(const char* args);
-static void cmd_set_ip(const char* args);
 static void cmd_reboot(const char* args);
 static void cat_gpio_set(const char* args);
 static void cat_gpio_get(const char* args);
@@ -96,6 +95,10 @@ static void subcmd_set_udp_port_local(const char* args);
 static void subcmd_get_udp_port_local(const char* args);
 static void subcmd_set_udp_port_remote(const char* args);
 static void subcmd_get_udp_port_remote(const char* args);
+static void subcmd_set_v24_baudrate(const char* args);
+static void subcmd_get_v24_baudrate(const char* args);
+static void subcmd_set_v24_inverted(const char* args);
+static void subcmd_get_v24_inverted(const char* args);
 
 // Lookup tables
 static const command_t commands[] = {
@@ -123,11 +126,151 @@ static const subcmd_t net_subcmds[] = {
     {"udp.port.local", subcmd_set_udp_port_local, subcmd_get_udp_port_local, "Local UDP port"},
     {"udp.port.remote", subcmd_set_udp_port_remote, subcmd_get_udp_port_remote, "Remote UDP port"},
 };
+#define INVERT_HELP \
+    "Invert pins.\r\n \
+    You can pass them as a comma seperated list like this:\r\n\
+    \tset v24 invert txd,rxd\r\n\
+    Each pin in the list is inverted, all others are non inverted."
+static const subcmd_t v24_subcmds[] = {
+    {"invert", subcmd_set_v24_inverted, subcmd_get_v24_inverted, INVERT_HELP},
+    {"baudrate", subcmd_set_v24_baudrate, subcmd_get_v24_baudrate, "Baudrate"},
+};
 
 #define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
 #define NUM_CATEGORIES ARRAY_LEN(categories)
 #define NUM_NET_SUBCMDS ARRAY_LEN(net_subcmds)
+#define NUM_V24_SUBCMDS ARRAY_LEN(v24_subcmds)
 #define NUM_PINS get_num_pins()
+
+static const V24_BAUDRATE_T v24_baudrates[] = {
+    V24_BAUD_1200,  V24_BAUD_2400,  V24_BAUD_4800,  V24_BAUD_9600,   V24_BAUD_16000,
+    V24_BAUD_19200, V24_BAUD_38400, V24_BAUD_57600, V24_BAUD_115200,
+};
+#define NUM_V24_BAUDRATES ARRAY_LEN(v24_baudrates)
+
+static void dispatch_v24_polarities(const V24_POLARITIES_T* polarities)
+{
+    event_queue_data_t event_data = {.id = V24_POLARITIES};
+    memcpy(&event_data.value.polarities, polarities, sizeof(V24_POLARITIES_T));
+
+    event_t event = {
+        .type      = EV_SET_V24_SETTINGS,
+        .data_len  = sizeof(event_data),
+        .is_inline = true,
+    };
+    memcpy(event.data.bytes, &event_data, sizeof(event_data));
+    event_queue_push(&event);
+}
+
+static void dispatch_get_request(event_queue_data_types_t type, event_type_t event_type)
+{
+    event_queue_data_t get_request = {.id = type};
+
+    event_t event = {
+        .type      = event_type,
+        .data_len  = sizeof(get_request),
+        .is_inline = true,
+    };
+    memcpy(event.data.bytes, &get_request, sizeof(get_request));
+    event_queue_push(&event);
+}
+static void subcmd_set_v24_inverted(const char* args)
+{
+    V24_POLARITIES_T polarities;
+    if (parse_set_v24_polarities(args, &polarities) != E2S_OK)
+    {
+        printf("usage: set v24 polarities txd,rxd,rts\r\n");
+        return;
+    }
+    dispatch_v24_polarities(&polarities);
+}
+
+static void subcmd_get_v24_inverted(const char* args)
+{
+    dispatch_get_request(V24_POLARITIES, EV_GET_V24_SETTINGS);
+}
+
+static void dispatch_v24_baudrate(const V24_BAUDRATE_T* baudrate)
+{
+    event_queue_data_t event_data = {.id = V24_BAUDRATE};
+    memcpy(&event_data.value.baudrate, baudrate, sizeof(V24_BAUDRATE_T));
+
+    event_t event = {
+        .type      = EV_SET_V24_SETTINGS,
+        .data_len  = sizeof(event_data),
+        .is_inline = true,
+    };
+    memcpy(event.data.bytes, &event_data, sizeof(event_data));
+    event_queue_push(&event);
+}
+
+static void subcmd_set_v24_baudrate(const char* args)
+{
+    V24_BAUDRATE_T baudrate;
+    if (parse_set_v24_baudrate(args, &baudrate) != E2S_OK)
+    {
+        printf("usage: set v24 baudrate 9600\r\n");
+        return;
+    }
+    dispatch_v24_baudrate(&baudrate);
+}
+
+static void subcmd_get_v24_baudrate(const char* args)
+{
+    dispatch_get_request(V24_BAUDRATE, EV_GET_V24_SETTINGS);
+}
+
+static void cat_v24_set(const char* args)
+{
+    LOG_DEBUG("set v24: args='%s'\r\n", args);
+    if (args == NULL || args[0] == '\0')
+    {
+        printf("usage: set v24 <subcmd> <args>\r\n");
+        printf("available v24 subcmds:\r\n");
+        for (size_t i = 0; i < NUM_V24_SUBCMDS; i++)
+        {
+            printf("  %s  - %s\r\n", v24_subcmds[i].name, v24_subcmds[i].help);
+        }
+        return;
+    }
+    for (size_t i = 0; i < NUM_V24_SUBCMDS; i++)
+    {
+        size_t len = strlen(v24_subcmds[i].name);
+        if (strncmp(args, v24_subcmds[i].name, len) == 0 && (args[len] == ' ' || args[len] == '\0'))
+        {
+            const char* sub_args = args[len] == ' ' ? args + len + 1 : "";
+            v24_subcmds[i].set_handler(sub_args);
+            return;
+        }
+    }
+    printf("unknown v24 subcmd: '%s'\r\n", args);
+}
+
+static void cat_v24_get(const char* args)
+{
+    LOG_DEBUG("get v24: args='%s'\r\n", args);
+    if (args == NULL || args[0] == '\0')
+    {
+        printf("usage: get v24 <subcmd>\r\n");
+        printf("available v24 subcmds:\r\n");
+        for (size_t i = 0; i < NUM_V24_SUBCMDS; i++)
+        {
+            printf("  %s  - %s\r\n", v24_subcmds[i].name, v24_subcmds[i].help);
+        }
+        return;
+    }
+    for (size_t i = 0; i < NUM_V24_SUBCMDS; i++)
+    {
+        size_t len = strlen(v24_subcmds[i].name);
+        if (strncmp(args, v24_subcmds[i].name, len) == 0 && (args[len] == ' ' || args[len] == '\0'))
+        {
+            const char* sub_args = args[len] == ' ' ? args + len + 1 : "";
+            v24_subcmds[i].get_handler(sub_args);
+            return;
+        }
+    }
+    printf("unknown v24 subcmd: '%s'\r\n", args);
+}
 
 static void cmd_reboot(const char* args)
 {
@@ -150,28 +293,14 @@ static void dispatch_ip(const uint8_t* ip, const event_queue_data_types_t type)
     event_queue_push(&ip_event);
 }
 
-static void dispatch_get_request(event_queue_data_types_t type)
-{
-    event_queue_data_t get_request = {.id = type};
-
-    event_t event = {
-        .type      = EV_GET_NET_SETTINGS,
-        .data_len  = sizeof(get_request),
-        .is_inline = true,
-    };
-    memcpy(event.data.bytes, &get_request, sizeof(get_request));
-    event_queue_push(&event);
-}
-
 static void subcmd_get_ip_local(const char* args)
 {
-
     if (args != NULL && args[0] != '\0')
     {
         printf("usage: get net ip.local\r\n");
         return;
     }
-    dispatch_get_request(NET_IP_LOCAL);
+    dispatch_get_request(NET_IP_LOCAL, EV_GET_NET_SETTINGS);
 }
 
 static void subcmd_set_ip_local(const char* args)
@@ -193,7 +322,7 @@ static void subcmd_get_ip_remote(const char* args)
         printf("usage: get net ip.remote\r\n");
         return;
     }
-    dispatch_get_request(NET_IP_REMOTE);
+    dispatch_get_request(NET_IP_REMOTE, EV_GET_NET_SETTINGS);
 }
 
 static void subcmd_set_ip_remote(const char* args)
@@ -214,7 +343,7 @@ static void subcmd_get_ip_gateway(const char* args)
         printf("usage: get net ip.gateway\r\n");
         return;
     }
-    dispatch_get_request(NET_IP_GATEWAY);
+    dispatch_get_request(NET_IP_GATEWAY, EV_GET_NET_SETTINGS);
 }
 
 static void subcmd_set_ip_gateway(const char* args)
@@ -527,11 +656,28 @@ static void cmd_help(const char* args)
         printf("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
     }
 
+    printf("\r\nV24 Subcommands:\r\n");
+    for (size_t i = 0; i < NUM_V24_SUBCMDS; i++)
+    {
+        printf("  %s  - %s\r\n", v24_subcmds[i].name, v24_subcmds[i].help);
+    }
+
     printf("\r\nPins:\r\n");
     const pin_info_t* pin_table = get_pin_table();
     for (size_t i = 0; i < NUM_PINS; i++)
     {
         printf("  %-10s  %s\r\n", pin_table[i].name, pin_table[i].is_output ? "OUT" : "IN");
+    }
+
+    printf("\r\nBaudrates:\r\n");
+    printf("  ");
+    for (size_t i = 0; i < NUM_V24_BAUDRATES; i++)
+    {
+        printf("%u", (unsigned)v24_baudrates[i]);
+        if (i < NUM_V24_BAUDRATES - 1)
+        {
+            printf(", ");
+        }
     }
     printf("\r\n");
 }
@@ -590,7 +736,6 @@ const char* get_command_name(int index)
 
 void handle_cli_line(const char* line)
 {
-
     char cmd[MAX_CMD_BUFFER_LEN];
     cmd[0] = '\0';
     char args[MAX_ARG_BUFFER_LEN];

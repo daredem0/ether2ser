@@ -55,6 +55,42 @@
 
 #define MAIN_LOOP_SLEEP_MS 1
 
+static void print_v24_polarities(const V24_POLARITIES_T* p)
+{
+    if (p == NULL)
+    {
+        printf("polarities: <null>\r\n");
+        return;
+    }
+
+    printf("polarities: ");
+    bool first = true;
+#define ADD(name, flag)                             \
+    do                                              \
+    {                                               \
+        if (flag)                                   \
+        {                                           \
+            printf("%s%s", first ? "" : ",", name); \
+            first = false;                          \
+        }                                           \
+    } while (0)
+
+    ADD("txd", p->tx_polarities.txd_inverted);
+    ADD("txc", p->tx_polarities.txc_inverted);
+    ADD("cts", p->tx_polarities.cts_inverted);
+    ADD("rts", p->tx_polarities.rts_inverted);
+    ADD("dtr", p->tx_polarities.dtr_inverted);
+    ADD("rxd", p->rx_polarities.rxd_inverted);
+    ADD("rxc", p->rx_polarities.rxc_inverted);
+    ADD("dcd", p->rx_polarities.dcd_inverted);
+
+    if (first)
+    {
+        printf("<none>");
+    }
+    printf("\r\n");
+}
+
 static const char* net_setting_id_name(event_queue_data_types_t id)
 {
     switch (id)
@@ -473,6 +509,54 @@ int main(void)
                 break;
             }
             break;
+            case EV_SET_V24_SETTINGS:
+            {
+                event_queue_data_t* payload = (event_queue_data_t*)event_item.data.bytes;
+                switch (payload->id)
+                {
+                case V24_BAUDRATE:
+                    memcpy(&v24_config.baudrate, &payload->value.baudrate, sizeof(V24_BAUDRATE_T));
+                    tx_clock_init(pio0, 0, v24_config.baudrate,
+                                  &(v24_config.polarities.tx_polarities));
+                    rx_clock_init(pio0, 1, &(v24_config.polarities.rx_polarities));
+                    printf("> ");
+                    break;
+                case V24_POLARITIES:
+                    memcpy(&v24_config.polarities, &payload->value.polarities,
+                           sizeof(V24_POLARITIES_T));
+
+                    tx_clock_init(pio0, 0, v24_config.baudrate,
+                                  &(v24_config.polarities.tx_polarities));
+                    rx_clock_init(pio0, 1, &(v24_config.polarities.rx_polarities));
+                    printf("> ");
+                    break;
+                default:
+                    break;
+                }
+                // For now dumbly always save after a change of settings.
+                // This is nto the best idea since it degrades flash lifetime.
+                event_t save_event = {.type = EV_SAVE_CONFIG, .data = NULL, .data_len = 0};
+                event_queue_push(&save_event);
+                break;
+            }
+            case EV_GET_V24_SETTINGS:
+            {
+                event_queue_data_t* payload = (event_queue_data_t*)event_item.data.bytes;
+                switch (payload->id)
+                {
+                case V24_BAUDRATE:
+                    printf("V24_BAUDRATE: %d\r\n", v24_config.baudrate);
+                    printf("> ");
+                    break;
+                case V24_POLARITIES:
+                    print_v24_polarities(&v24_config.polarities);
+                    printf("> ");
+                    break;
+                default:
+                    break;
+                }
+                break;
+            }
             default:
                 break;
             }

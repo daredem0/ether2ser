@@ -20,6 +20,8 @@
 #include <stdint.h>
 
 // Project Headers
+#include "drivers/gpio_driver.h"
+#include "drivers/pio_tx_rx_driver.h"
 #include "error.h"
 
 // Generated headers
@@ -45,5 +47,7 @@ e2s_error_t       parse_set_ip_remote_args(const char* args, uint8_t ip[4]);
 e2s_error_t       parse_set_gateway_args(const char* args, uint8_t ip[4]);
 e2s_error_t       parse_set_udp_port_local_args(const char* args, uint16_t* port);
 e2s_error_t       parse_set_udp_port_remote_args(const char* args, uint16_t* port);
+e2s_error_t       parse_set_v24_polarities(const char* args, V24_POLARITIES_T* polarities);
+e2s_error_t       parse_set_v24_baudrate(const char* args, V24_BAUDRATE_T* baudrate);
 
 #endif /* CLI_PARSER_H */

@@ -19,6 +19,7 @@
 #include <string.h>
 
 // Project Headers
+#include "drivers/gpio_driver.h"
 #include "error.h"
 #include "platform/pinmap.h"
 
@@ -177,6 +178,148 @@ e2s_error_t parse_set_udp_port_local_args(const char* args, uint16_t* port)
 e2s_error_t parse_set_udp_port_remote_args(const char* args, uint16_t* port)
 {
     return parse_u16_with_optional_prefix(args, "port", port);
+}
+
+e2s_error_t parse_set_v24_polarities(const char* args, V24_POLARITIES_T* polarities)
+{
+    if (polarities == NULL)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+
+    memset(polarities, 0, sizeof(*polarities));
+
+    if (args == NULL)
+    {
+        return E2S_OK;
+    }
+
+    while (*args == ' ')
+    {
+        args++;
+    }
+    if (*args == '\0')
+    {
+        return E2S_OK;
+    }
+
+    const char* s = args;
+    if (strncmp(s, "invert ", 7) == 0)
+    {
+        s += 7;
+    }
+
+    char   buf[64];
+    size_t len = strnlen(s, sizeof(buf));
+    if (len == sizeof(buf))
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+    memcpy(buf, s, len + 1);
+
+    char* token = strtok(buf, ",");
+    while (token != NULL)
+    {
+        while (*token == ' ')
+        {
+            token++;
+        }
+        char* end = token + strlen(token);
+        while (end > token && end[-1] == ' ')
+        {
+            end--;
+        }
+        *end = '\0';
+
+        if (*token == '\0')
+        {
+            return E2S_ERR_CLI_USAGE_SET;
+        }
+
+        const pin_info_t* pin = find_pin(token);
+        if (pin == NULL)
+        {
+            return E2S_ERR_CLI_USAGE_SET;
+        }
+
+        if (strcmp(token, "txd") == 0)
+        {
+            polarities->tx_polarities.txd_inverted = true;
+        }
+        else if (strcmp(token, "rts") == 0)
+        {
+            polarities->tx_polarities.rts_inverted = true;
+        }
+        else if (strcmp(token, "cts") == 0)
+        {
+            polarities->tx_polarities.cts_inverted = true;
+        }
+        else if (strcmp(token, "dtr") == 0)
+        {
+            polarities->tx_polarities.dtr_inverted = true;
+        }
+        else if (strcmp(token, "rxd") == 0)
+        {
+            polarities->rx_polarities.rxd_inverted = true;
+        }
+        else if (strcmp(token, "dcd") == 0)
+        {
+            polarities->rx_polarities.dcd_inverted = true;
+        }
+        else
+        {
+            return E2S_ERR_CLI_USAGE_SET;
+        }
+
+        token = strtok(NULL, ",");
+    }
+
+    return E2S_OK;
+}
+
+e2s_error_t parse_set_v24_baudrate(const char* args, V24_BAUDRATE_T* baudrate)
+{
+    if (baudrate == NULL)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+
+    const char* s = args;
+    if (s == NULL)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+    while (*s == ' ')
+    {
+        s++;
+    }
+    if (*s == '\0')
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+
+    unsigned v;
+    if (sscanf(s, "%u", &v) != 1)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+
+    switch (v)
+    {
+    case V24_BAUD_1200:
+    case V24_BAUD_2400:
+    case V24_BAUD_4800:
+    case V24_BAUD_9600:
+    case V24_BAUD_16000:
+    case V24_BAUD_19200:
+    case V24_BAUD_38400:
+    case V24_BAUD_57600:
+    case V24_BAUD_115200:
+        *baudrate = (V24_BAUDRATE_T)v;
+        return E2S_OK;
+    default:
+        return E2S_ERR_CLI_USAGE_SET;
+    }
 }
 
 const pin_info_t* get_pin_table(void)
