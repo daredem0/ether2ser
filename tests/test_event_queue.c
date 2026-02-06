@@ -7,8 +7,9 @@ static event_t make_event(event_type_t type, uintptr_t data, size_t len)
 {
     event_t ev = {
         .type     = type,
-        .data     = (const void*)data,
+        .data.ptr = (const void*)data,
         .data_len = len,
+        .is_inline = false,
     };
     return ev;
 }
@@ -29,7 +30,7 @@ void test_event_queue_push_pop_single(void)
     event_t out = {0};
     TEST_ASSERT_TRUE(event_queue_pop(&out));
     TEST_ASSERT_EQUAL(in.type, out.type);
-    TEST_ASSERT_EQUAL_PTR(in.data, out.data);
+    TEST_ASSERT_EQUAL_PTR(in.data.ptr, out.data.ptr);
     TEST_ASSERT_EQUAL(in.data_len, out.data_len);
     TEST_ASSERT_TRUE(event_queue_is_empty());
 }
@@ -69,7 +70,7 @@ void test_event_queue_wraparound_preserves_order(void)
         event_t out = {0};
         TEST_ASSERT_TRUE(event_queue_pop(&out));
         TEST_ASSERT_EQUAL(EV_UDP_RX, out.type);
-        TEST_ASSERT_EQUAL_PTR((const void*)(0x1000 + i), out.data);
+        TEST_ASSERT_EQUAL_PTR((const void*)(0x1000 + i), out.data.ptr);
         TEST_ASSERT_EQUAL(i, out.data_len);
     }
 
@@ -84,7 +85,7 @@ void test_event_queue_wraparound_preserves_order(void)
         event_t out = {0};
         TEST_ASSERT_TRUE(event_queue_pop(&out));
         TEST_ASSERT_EQUAL(EV_UDP_RX, out.type);
-        TEST_ASSERT_EQUAL_PTR((const void*)(0x1000 + i), out.data);
+        TEST_ASSERT_EQUAL_PTR((const void*)(0x1000 + i), out.data.ptr);
         TEST_ASSERT_EQUAL(i, out.data_len);
     }
 
@@ -93,7 +94,7 @@ void test_event_queue_wraparound_preserves_order(void)
         event_t out = {0};
         TEST_ASSERT_TRUE(event_queue_pop(&out));
         TEST_ASSERT_EQUAL(EV_CLI_LINE, out.type);
-        TEST_ASSERT_EQUAL_PTR((const void*)(0x2000 + i), out.data);
+        TEST_ASSERT_EQUAL_PTR((const void*)(0x2000 + i), out.data.ptr);
         TEST_ASSERT_EQUAL(i + 10, out.data_len);
     }
 
