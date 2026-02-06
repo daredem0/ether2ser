@@ -40,8 +40,6 @@
 #include "drivers/tx_queue.h"
 #include "drivers/w5500_driver.h"
 #include "platform/pinmap.h"
-#include "protocol/hdlc_common.h"
-#include "protocol/hdlc_sync.h"
 #include "system/baudrate_monitor.h"
 #include "system/common.h"
 #include "system/event_loop.h"

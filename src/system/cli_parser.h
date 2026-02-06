@@ -21,7 +21,7 @@
 
 // Project Headers
 #include "drivers/gpio_driver.h"
-#include "drivers/pio_tx_rx_driver.h"
+#include "drivers/v24_config.h"
 #include "error.h"
 
 // Generated headers

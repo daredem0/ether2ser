@@ -405,7 +405,7 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         }
         ev_set_net_settings(payload, app);
         // For now dumbly always save after a change of settings.
-        // This is nto the best idea since it degrades flash lifetime.
+        // This is not the best idea since it degrades flash lifetime.
         request_save_config();
         break;
     }
@@ -424,7 +424,6 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         ev_get_net_settings(payload, app);
         break;
     }
-    break;
     case EV_SET_V24_SETTINGS:
     {
         const event_queue_data_t* payload = NULL;
@@ -434,7 +433,7 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         }
         ev_set_v24_settings(payload, app);
         // For now dumbly always save after a change of settings.
-        // This is nto the best idea since it degrades flash lifetime.
+        // This is not the best idea since it degrades flash lifetime.
         request_save_config();
         break;
     }

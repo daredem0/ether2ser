@@ -20,7 +20,7 @@
 #include <stdint.h>
 
 // Project Headers
-#include "drivers/pio_tx_rx_driver.h"
+#include "drivers/v24_config.h"
 
 // Generated headers
 #define EVENT_QUEUE_CAPACITY 16
