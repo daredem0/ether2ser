@@ -6,12 +6,9 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 // Library Headers
-#include "pico/stdio.h"
-#include "pico/time.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 
@@ -19,16 +16,13 @@
 #include "drivers/pio_tx_rx_driver.h"
 #include "drivers/tx_queue.h"
 #include "drivers/w5500_driver.h"
-#include "platform/pinmap.h"
 #include "protocol/hdlc_common.h"
 #include "protocol/hdlc_decoder.h"
 #include "protocol/hdlc_sync.h"
 #include "system/app_context.h"
-#include "system/baudrate_monitor.h"
 #include "system/cli_commands.h"
 #include "system/cli_usb_cdc.h"
 #include "system/common.h"
-#include "system/event_loop.h"
 #include "system/event_queue.h"
 #include "system/persistent_config.h"
 
@@ -197,6 +191,138 @@ static void print_net_get_settings_event(const event_t* event)
     }
 }
 
+static void request_save_config(void)
+{
+    event_t save_event = {
+        .type      = EV_SAVE_CONFIG,
+        .data.ptr  = NULL,
+        .data_len  = 0,
+        .is_inline = false,
+    };
+    event_queue_push(&save_event);
+}
+
+static void ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* app)
+{
+
+    switch (payload->id)
+    {
+    case NET_IP_REMOTE:
+        memcpy(app->destination_config.ip_address, payload->value.ip, 4);
+        break;
+    case NET_IP_LOCAL:
+    {
+        memcpy(app->local_config.ip_address, payload->value.ip, 4);
+        wiz_NetInfo net_info;
+        wizchip_getnetinfo(&net_info);
+        memcpy(net_info.ip, payload->value.ip, 4);
+        wizchip_setnetinfo(&net_info);
+        break;
+    }
+    case NET_IP_MASK:
+    {
+        wiz_NetInfo net_info;
+        wizchip_getnetinfo(&net_info);
+        memcpy(net_info.sn, payload->value.ip, 4);
+        wizchip_setnetinfo(&net_info);
+        break;
+    }
+    case NET_IP_GATEWAY:
+    {
+        wiz_NetInfo net_info;
+        wizchip_getnetinfo(&net_info);
+        memcpy(net_info.gw, payload->value.ip, 4);
+        wizchip_setnetinfo(&net_info);
+        app->need_prompt = true;
+        break;
+    }
+    case NET_PORT_LOCAL:
+        app->local_config.port = payload->value.port;
+        w5500_reconfigure_udp_socket(&app->local_config);
+        app->need_prompt = true;
+        break;
+    case NET_PORT_REMOTE:
+        app->destination_config.port = payload->value.port;
+        w5500_reconfigure_udp_socket(&app->destination_config);
+        app->need_prompt = true;
+        break;
+    default:
+        break;
+    }
+}
+
+static void ev_get_net_settings(const event_queue_data_t* payload, app_ctx_t* app)
+{
+    switch (payload->id)
+    {
+    case NET_IP_REMOTE:
+        printf("NET_IP_REMOTE: %d.%d.%d.%d\r\n", app->destination_config.ip_address[0],
+               app->destination_config.ip_address[1], app->destination_config.ip_address[2],
+               app->destination_config.ip_address[3]);
+        break;
+    case NET_IP_LOCAL:
+    case NET_IP_MASK:
+    case NET_IP_GATEWAY:
+    {
+        wiz_NetInfo net_info;
+        wizchip_getnetinfo(&net_info);
+        printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1],
+               net_info.ip[2], net_info.ip[3], net_info.sn[0], net_info.sn[1], net_info.sn[2],
+               net_info.sn[3], net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
+        break;
+    }
+    case NET_PORT_LOCAL:
+        printf("NET_PORT_LOCAL: %d\r\n", app->local_config.port);
+        break;
+    case NET_PORT_REMOTE:
+        printf("NET_PORT_REMOTE: %d\r\n", app->destination_config.port);
+        break;
+    default:
+        break;
+    }
+}
+
+static void ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* app)
+{
+    switch (payload->id)
+    {
+    case V24_BAUDRATE:
+        memcpy(&app->v24_config.baudrate, &payload->value.baudrate, sizeof(V24_BAUDRATE_T));
+        tx_clock_init(pio0, 0, app->v24_config.baudrate,
+                      &(app->v24_config.polarities.tx_polarities));
+        rx_clock_init(pio0, 1, &(app->v24_config.polarities.rx_polarities));
+        app->need_prompt = true;
+        break;
+    case V24_POLARITIES:
+        memcpy(&app->v24_config.polarities, &payload->value.polarities, sizeof(V24_POLARITIES_T));
+
+        tx_clock_init(pio0, 0, app->v24_config.baudrate,
+                      &(app->v24_config.polarities.tx_polarities));
+        rx_clock_init(pio0, 1, &(app->v24_config.polarities.rx_polarities));
+        app->need_prompt = true;
+        break;
+    default:
+        break;
+    }
+}
+
+static void ev_get_v24_settings(const event_queue_data_t* payload, app_ctx_t* app)
+{
+    switch (payload->id)
+    {
+    case V24_BAUDRATE:
+        printf("V24_BAUDRATE: %d\r\n", app->v24_config.baudrate);
+        app->need_prompt = true;
+        break;
+    case V24_POLARITIES:
+        print_v24_polarities(&app->v24_config.polarities);
+        app->need_prompt = true;
+        break;
+    default:
+        break;
+    }
+}
+
 void event_dispatch(event_t* event, app_ctx_t* app)
 {
     switch (event->type)
@@ -277,55 +403,10 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         {
             break;
         }
-        switch (payload->id)
-        {
-        case NET_IP_REMOTE:
-            memcpy(app->destination_config.ip_address, payload->value.ip, 4);
-            break;
-        case NET_IP_LOCAL:
-        {
-            memcpy(app->local_config.ip_address, payload->value.ip, 4);
-            wiz_NetInfo net_info;
-            wizchip_getnetinfo(&net_info);
-            memcpy(net_info.ip, payload->value.ip, 4);
-            wizchip_setnetinfo(&net_info);
-            break;
-        }
-        case NET_IP_MASK:
-        {
-            wiz_NetInfo net_info;
-            wizchip_getnetinfo(&net_info);
-            memcpy(net_info.sn, payload->value.ip, 4);
-            wizchip_setnetinfo(&net_info);
-            break;
-        }
-        case NET_IP_GATEWAY:
-        {
-            wiz_NetInfo net_info;
-            wizchip_getnetinfo(&net_info);
-            memcpy(net_info.gw, payload->value.ip, 4);
-            wizchip_setnetinfo(&net_info);
-            app->need_prompt = true;
-            break;
-        }
-        case NET_PORT_LOCAL:
-            app->local_config.port = payload->value.port;
-            w5500_reconfigure_udp_socket(&app->local_config);
-            app->need_prompt = true;
-            break;
-        case NET_PORT_REMOTE:
-            app->destination_config.port = payload->value.port;
-            w5500_reconfigure_udp_socket(&app->destination_config);
-            app->need_prompt = true;
-            break;
-        default:
-            break;
-        }
-
+        ev_set_net_settings(payload, app);
         // For now dumbly always save after a change of settings.
         // This is nto the best idea since it degrades flash lifetime.
-        event_t save_event = {.type = EV_SAVE_CONFIG, .data = NULL, .data_len = 0};
-        event_queue_push(&save_event);
+        request_save_config();
         break;
     }
     case EV_GET_NET_SETTINGS:
@@ -339,34 +420,8 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         {
             break;
         }
-        switch (payload->id)
-        {
-        case NET_IP_REMOTE:
-            printf("NET_IP_REMOTE: %d.%d.%d.%d\r\n", app->destination_config.ip_address[0],
-                   app->destination_config.ip_address[1], app->destination_config.ip_address[2],
-                   app->destination_config.ip_address[3]);
-            break;
-        case NET_IP_LOCAL:
-        case NET_IP_MASK:
-        case NET_IP_GATEWAY:
-        {
-            wiz_NetInfo net_info;
-            wizchip_getnetinfo(&net_info);
-            printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0],
-                   net_info.ip[1], net_info.ip[2], net_info.ip[3], net_info.sn[0], net_info.sn[1],
-                   net_info.sn[2], net_info.sn[3], net_info.gw[0], net_info.gw[1], net_info.gw[2],
-                   net_info.gw[3]);
-            break;
-        }
-        case NET_PORT_LOCAL:
-            printf("NET_PORT_LOCAL: %d\r\n", app->local_config.port);
-            break;
-        case NET_PORT_REMOTE:
-            printf("NET_PORT_REMOTE: %d\r\n", app->destination_config.port);
-            break;
-        default:
-            break;
-        }
+
+        ev_get_net_settings(payload, app);
         break;
     }
     break;
@@ -377,31 +432,10 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         {
             break;
         }
-        switch (payload->id)
-        {
-        case V24_BAUDRATE:
-            memcpy(&app->v24_config.baudrate, &payload->value.baudrate, sizeof(V24_BAUDRATE_T));
-            tx_clock_init(pio0, 0, app->v24_config.baudrate,
-                          &(app->v24_config.polarities.tx_polarities));
-            rx_clock_init(pio0, 1, &(app->v24_config.polarities.rx_polarities));
-            app->need_prompt = true;
-            break;
-        case V24_POLARITIES:
-            memcpy(&app->v24_config.polarities, &payload->value.polarities,
-                   sizeof(V24_POLARITIES_T));
-
-            tx_clock_init(pio0, 0, app->v24_config.baudrate,
-                          &(app->v24_config.polarities.tx_polarities));
-            rx_clock_init(pio0, 1, &(app->v24_config.polarities.rx_polarities));
-            app->need_prompt = true;
-            break;
-        default:
-            break;
-        }
+        ev_set_v24_settings(payload, app);
         // For now dumbly always save after a change of settings.
         // This is nto the best idea since it degrades flash lifetime.
-        event_t save_event = {.type = EV_SAVE_CONFIG, .data = NULL, .data_len = 0};
-        event_queue_push(&save_event);
+        request_save_config();
         break;
     }
     case EV_GET_V24_SETTINGS:
@@ -411,19 +445,7 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         {
             break;
         }
-        switch (payload->id)
-        {
-        case V24_BAUDRATE:
-            printf("V24_BAUDRATE: %d\r\n", app->v24_config.baudrate);
-            app->need_prompt = true;
-            break;
-        case V24_POLARITIES:
-            print_v24_polarities(&app->v24_config.polarities);
-            app->need_prompt = true;
-            break;
-        default:
-            break;
-        }
+        ev_get_v24_settings(payload, app);
         break;
     }
     default:
