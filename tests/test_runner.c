@@ -69,6 +69,18 @@ extern void test_event_queue_wraparound_preserves_order(void);
 extern void test_byte_aligned_hdlc_frame(void);
 extern void test_one_bit_shifted_hdlc_frame(void);
 extern void test_multiple_bits_shifted_hdlc_frame(void);
+extern void test_hdlc_sync_incomplete_frame_not_ready(void);
+extern void test_hdlc_sync_noise_then_frame(void);
+extern void test_hdlc_sync_accumulator_overflow_rejected(void);
+
+// Ringbuffer declarations
+extern void test_ringbuffer_init_null_buffer(void);
+extern void test_ringbuffer_init_sets_state(void);
+extern void test_ringbuffer_push_pop_order_with_wrap(void);
+extern void test_ringbuffer_push_full_fails(void);
+extern void test_ringbuffer_pop_empty_fails(void);
+extern void test_ringbuffer_push_wrap_overwrites_oldest(void);
+
 
 void setUp(void) {
     // set stuff up here
@@ -148,5 +160,17 @@ int main(void) {
     RUN_TEST(test_byte_aligned_hdlc_frame);
     RUN_TEST(test_one_bit_shifted_hdlc_frame);
     RUN_TEST(test_multiple_bits_shifted_hdlc_frame);
+    RUN_TEST(test_hdlc_sync_incomplete_frame_not_ready);
+    RUN_TEST(test_hdlc_sync_noise_then_frame);
+    RUN_TEST(test_hdlc_sync_accumulator_overflow_rejected);
+
+    // Ringbuffer Tests
+    RUN_TEST(test_ringbuffer_init_null_buffer);
+    RUN_TEST(test_ringbuffer_init_sets_state);
+    RUN_TEST(test_ringbuffer_push_pop_order_with_wrap);
+    RUN_TEST(test_ringbuffer_push_full_fails);
+    RUN_TEST(test_ringbuffer_pop_empty_fails);
+    RUN_TEST(test_ringbuffer_push_wrap_overwrites_oldest);
+
     return UNITY_END();
 }
