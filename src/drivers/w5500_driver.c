@@ -58,7 +58,7 @@ void w5500_debug_status(void)
     LOG_DEBUG("Socket Mode: 0x%02X, Status: 0x%02X\r\n", mode, status);
 }
 
-void w5500_udp_tx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame)
+void w5500_udp_tx(UDP_CONFIG_T* send_config, const UDP_FRAME_T* frame)
 {
     int32_t sent_len = sendto(UDP_SOCKET, frame->payload, (uint16_t)frame->length,
                               send_config->ip_address, send_config->port);

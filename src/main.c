@@ -25,26 +25,24 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 // Library Headers
+#include "hardware/gpio.h"
+#include "hardware/pio.h"
 #include "pico/stdio.h"
 #include "pico/time.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
+#include "drivers/gpio_driver.h"
 #include "drivers/pio_tx_rx_driver.h"
 #include "drivers/tx_queue.h"
 #include "drivers/w5500_driver.h"
 #include "platform/pinmap.h"
 #include "protocol/hdlc_common.h"
-#include "protocol/hdlc_decoder.h"
 #include "protocol/hdlc_sync.h"
 #include "system/baudrate_monitor.h"
-#include "system/cli_commands.h"
-#include "system/cli_usb_cdc.h"
 #include "system/common.h"
 #include "system/event_loop.h"
 #include "system/event_queue.h"
@@ -62,23 +60,6 @@ int main(void)
 
     // Config variables
     config_t persistent_config;
-    // bool     config_valid = false;
-
-    // // Network variables
-    // UDP_CONFIG_T     local_config;
-    // UDP_CONFIG_T     destination_config;
-    // UDP_CONFIG_T     sender_config;
-    // NETWORK_CONFIG_T net_config;
-
-    // // Protocol and Interface variables
-    // V24_CONFIG_T v24_config;
-    // uint8_t      rx_frame_buffer_data[RX_BUF_SIZE];
-    // UDP_FRAME_T  rx_frame_buffer = {.length = RX_BUF_SIZE, .payload = rx_frame_buffer_data};
-    // uint8_t      tx_frame_buffer_data[TX_BUF_SIZE];
-    // UDP_FRAME_T  tx_frame_buffer = {
-    //      .length  = TX_BUF_SIZE,
-    //      .payload = tx_frame_buffer_data,
-    // };
 
     // Initialize USB CDC
     stdio_init_all();
@@ -102,49 +83,11 @@ int main(void)
 
     init_app(&app_context, &persistent_config);
 
-    // if (config_valid)
-    // {
-    //     // Setup loglevel
-    //     set_loglevel(persistent_config.log_level);
-    //     local_config       = (UDP_CONFIG_T)persistent_config.local_config;
-    //     destination_config = (UDP_CONFIG_T)persistent_config.remote_config;
-    //     v24_config         = (V24_CONFIG_T)persistent_config.v24_config;
-    //     net_config         = (NETWORK_CONFIG_T)persistent_config.net_config;
-    //     w5500_set_network(&net_config);
-    //     init_v24_config(&v24_config, v24_config.baudrate);
-    // }
-    // else
-    // {
-    //     // Setup loglevel
-    //     set_loglevel(LOG_LEVEL_DEBUG);
-    //     // Initialize Network Configuration
-    //     local_config = (UDP_CONFIG_T){
-    //         .ip_address = DEFAULT_IP_ADDR,
-    //         .port       = DEFAULT_UDP_PORT,
-    //     };
-    //     w5500_set_network_defaults(&net_config);
-    //     init_v24_config(&v24_config, V24_BAUD_9600);
-    //     destination_config = (UDP_CONFIG_T){
-    //         .port = DEFAULT_UDP_PORT,
-    //     };
-    //     memcpy(destination_config.ip_address, net_config.broadcast_address, 4);
-    // }
-
     w5500_open_udp_socket(&app_context.local_config);
     w5500_debug_status();
 
     // Initialize TX Queue
-    // TX_QUEUE_T tx_queue;
-    // uint8_t    tx_queue_buffer[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)];
     tx_queue_init(&app_context.tx_queue, app_context.tx_queue_buffer);
-
-    // Initialize HDLC Sync
-    HDLC_SYNC_ACCUMULATOR_T accumulator;
-    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
-    // uint8_t      reconstructed_frame_buffer[RX_HDLC_SYNC_MAX_BUFFER_SIZE];
-    // HDLC_FRAME_T reconstructed_frame = {.payload  = reconstructed_frame_buffer,
-    //                                     .length   = 0,
-    //                                     .capacity = sizeof(reconstructed_frame_buffer)};
 
     // Initialize PIO
     // Currently anything faster than 38400 is not supported

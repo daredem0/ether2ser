@@ -55,7 +55,7 @@ typedef struct
 } UDP_FRAME_T;
 
 void w5500_debug_status(void);
-void w5500_udp_tx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame);
+void w5500_udp_tx(UDP_CONFIG_T* send_config, const UDP_FRAME_T* frame);
 void w5500_poll_rx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame);
 void w5500_open_udp_socket(UDP_CONFIG_T* send_config);
 void w5500_reconfigure_udp_socket(UDP_CONFIG_T* config);

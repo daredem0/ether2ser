@@ -5,6 +5,7 @@ option(BUILD_TESTS "Build unit tests." OFF)
 set(SOURCES
     src/system/app_init.c
     src/system/event_loop.c
+    src/system/event_dispatch.c
     src/system/event_queue.c
     src/system/cli_usb_cdc.c
     src/system/cli_commands.c

@@ -70,6 +70,9 @@ void init_app(app_ctx_t* app, config_t* persistent_config)
         };
         memcpy(app->destination_config.ip_address, app->net_config.broadcast_address, 4);
     }
+
+    // Initialize HDLC Sync
+    hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
     app->reconstructed_frame = (HDLC_FRAME_T){.payload  = app->reconstructed_frame_buffer,
                                               .length   = 0,
                                               .capacity = sizeof(app->reconstructed_frame_buffer)};
