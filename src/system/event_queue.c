@@ -65,3 +65,29 @@ bool event_queue_is_full(void)
     uint8_t next_write = (uint8_t)((event_queue_write + 1) % EVENT_QUEUE_CAPACITY);
     return next_write == event_queue_read;
 }
+
+bool event_get_payload_ptr(const event_t* event, size_t required_size, const void** out)
+{
+    if (!event || !out || required_size == 0)
+    {
+        return false;
+    }
+
+    if (event->is_inline)
+    {
+        if (event->data_len < required_size)
+        {
+            return false;
+        }
+        *out = (const void*)event->data.bytes;
+        return true;
+    }
+
+    if (!event->data.ptr || event->data_len < required_size)
+    {
+        return false;
+    }
+
+    *out = event->data.ptr;
+    return true;
+}

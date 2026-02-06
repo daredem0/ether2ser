@@ -39,6 +39,7 @@ typedef struct
 {
     config_t persistent_config;
     bool     config_valid;
+    bool     need_prompt;
 
     UDP_CONFIG_T     local_config;
     UDP_CONFIG_T     destination_config;

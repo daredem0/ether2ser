@@ -105,4 +105,6 @@ bool event_queue_is_empty(void);
  */
 bool event_queue_is_full(void);
 
+bool event_get_payload_ptr(const event_t* event, size_t required_size, const void** out);
+
 #endif /* SYSTEM_EVENT_QUEUE_H */

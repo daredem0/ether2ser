@@ -55,6 +55,16 @@
 #define USB_ENUMERATION_DELAY_MS 1500
 
 #define MAIN_LOOP_SLEEP_MS 1
+#define MAIN_LOOP_SLEEP_US 50
+
+static void print_prompt(app_ctx_t* app)
+{
+    if (app->need_prompt)
+    {
+        printf("ether2ser> ");
+        app->need_prompt = false;
+    }
+}
 
 static void print_v24_polarities(const V24_POLARITIES_T* p)
 {
@@ -324,7 +334,7 @@ int main(void)
     {
         printf("\r\nDebug logging enabled.\r\n> ");
         dump_config();
-        printf("> ");
+        app_context.need_prompt = true;
     }
 
     // Initialize event queue finally
@@ -362,7 +372,7 @@ int main(void)
         {
             event_t hdlc_frame_event = {.type      = EV_HDLC_DECODE,
                                         .data.ptr  = &app_context.reconstructed_frame,
-                                        .data_len  = app_context.reconstructed_frame.length,
+                                        .data_len  = sizeof(app_context.reconstructed_frame),
                                         .is_inline = false};
             event_queue_push(&hdlc_frame_event);
         }
@@ -379,34 +389,52 @@ int main(void)
             switch (event_item.type)
             {
             case EV_CLI_LINE:
-                handle_cli_line((const char*)event_item.data.ptr);
-                printf("> ");
+            {
+                const char* cli_line = NULL;
+                if (event_get_payload_ptr(&event_item, 1, (const void**)&cli_line))
+                {
+                    handle_cli_line(cli_line);
+                }
+                app_context.need_prompt = true;
                 break;
+            }
             case EV_UDP_RX:
                 LOG_DEBUG("tx_queue_enqueue_udp_frame: %d\r\n",
                           tx_queue_enqueue_udp_frame(&app_context.tx_queue,
                                                      &app_context.rx_frame_buffer));
                 memset(app_context.rx_frame_buffer.payload, 0, app_context.rx_frame_buffer.length);
                 app_context.rx_frame_buffer.length = 0;
-                printf("> ");
+                app_context.need_prompt            = true;
                 break;
             case EV_UDP_TX:
-                UDP_FRAME_T tx_frame = *(UDP_FRAME_T*)event_item.data.ptr;
-                w5500_udp_tx(&app_context.destination_config, &tx_frame);
-                printf("> ");
+            {
+                const UDP_FRAME_T* tx_frame = NULL;
+                if (event_get_payload_ptr(&event_item, sizeof(*tx_frame), (const void**)&tx_frame))
+                {
+                    w5500_udp_tx(&app_context.destination_config, tx_frame);
+                }
+                app_context.need_prompt = true;
                 break;
+            }
             case EV_HDLC_DECODE:
-                HDLC_FRAME_T hdlc_frame            = *(HDLC_FRAME_T*)event_item.data.ptr;
-                app_context.tx_frame_buffer.length = hdlc_frame.length;
-                PRINT_FRAME_HEX("Frame: ", hdlc_frame.payload, hdlc_frame.length);
-                hdlc_decode(&hdlc_frame, app_context.tx_frame_buffer.payload, TX_BUF_SIZE,
-                            &(app_context.tx_frame_buffer.length));
-                memset(hdlc_frame.payload, 0, hdlc_frame.length);
-                hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
-                event_t hdlc_frame_event = {.type     = EV_UDP_TX,
-                                            .data.ptr = &app_context.tx_frame_buffer};
-                event_queue_push(&hdlc_frame_event);
+            {
+                const HDLC_FRAME_T* hdlc_frame = NULL;
+                if (event_get_payload_ptr(&event_item, sizeof(*hdlc_frame),
+                                          (const void**)&hdlc_frame))
+                {
+                    app_context.tx_frame_buffer.length = hdlc_frame->length;
+                    PRINT_FRAME_HEX("Frame: ", hdlc_frame->payload, hdlc_frame->length);
+                    hdlc_decode(hdlc_frame, app_context.tx_frame_buffer.payload, TX_BUF_SIZE,
+                                &(app_context.tx_frame_buffer.length));
+                    memset(hdlc_frame->payload, 0, hdlc_frame->length);
+                    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+                    event_t hdlc_frame_event = {.type     = EV_UDP_TX,
+                                                .data.ptr = &app_context.tx_frame_buffer,
+                                                .data_len = sizeof(app_context.tx_frame_buffer)};
+                    event_queue_push(&hdlc_frame_event);
+                }
                 break;
+            }
             case EV_SAVE_CONFIG:
                 LOG_INFO("Storing persistent config in flash.\r\n");
                 wizchip_getnetinfo(&(app_context.net_config.net_info));
@@ -433,7 +461,11 @@ int main(void)
                 {
                     print_net_set_settings_event(&event_item);
                 }
-                event_queue_data_t* payload = (event_queue_data_t*)event_item.data.bytes;
+                const event_queue_data_t* payload = NULL;
+                if (!event_get_payload_ptr(&event_item, sizeof(*payload), (const void**)&payload))
+                {
+                    break;
+                }
                 switch (payload->id)
                 {
                 case NET_IP_REMOTE:
@@ -462,28 +494,28 @@ int main(void)
                     wizchip_getnetinfo(&net_info);
                     memcpy(net_info.gw, payload->value.ip, 4);
                     wizchip_setnetinfo(&net_info);
-                    printf("> ");
+                    app_context.need_prompt = true;
                     break;
                 }
                 case NET_PORT_LOCAL:
                     app_context.local_config.port = payload->value.port;
                     w5500_reconfigure_udp_socket(&app_context.local_config);
-                    printf("> ");
+                    app_context.need_prompt = true;
                     break;
                 case NET_PORT_REMOTE:
                     app_context.destination_config.port = payload->value.port;
                     w5500_reconfigure_udp_socket(&app_context.destination_config);
-                    printf("> ");
+                    app_context.need_prompt = true;
                     break;
                 default:
                     break;
                 }
-                break;
 
                 // For now dumbly always save after a change of settings.
                 // This is nto the best idea since it degrades flash lifetime.
                 event_t save_event = {.type = EV_SAVE_CONFIG, .data = NULL, .data_len = 0};
                 event_queue_push(&save_event);
+                break;
             }
             case EV_GET_NET_SETTINGS:
             {
@@ -491,7 +523,11 @@ int main(void)
                 {
                     print_net_get_settings_event(&event_item);
                 }
-                event_queue_data_t* payload = (event_queue_data_t*)event_item.data.bytes;
+                const event_queue_data_t* payload = NULL;
+                if (!event_get_payload_ptr(&event_item, sizeof(*payload), (const void**)&payload))
+                {
+                    break;
+                }
                 switch (payload->id)
                 {
                 case NET_IP_REMOTE:
@@ -527,7 +563,11 @@ int main(void)
             break;
             case EV_SET_V24_SETTINGS:
             {
-                event_queue_data_t* payload = (event_queue_data_t*)event_item.data.bytes;
+                const event_queue_data_t* payload = NULL;
+                if (!event_get_payload_ptr(&event_item, sizeof(*payload), (const void**)&payload))
+                {
+                    break;
+                }
                 switch (payload->id)
                 {
                 case V24_BAUDRATE:
@@ -536,7 +576,7 @@ int main(void)
                     tx_clock_init(pio0, 0, app_context.v24_config.baudrate,
                                   &(app_context.v24_config.polarities.tx_polarities));
                     rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
-                    printf("> ");
+                    app_context.need_prompt = true;
                     break;
                 case V24_POLARITIES:
                     memcpy(&app_context.v24_config.polarities, &payload->value.polarities,
@@ -545,7 +585,7 @@ int main(void)
                     tx_clock_init(pio0, 0, app_context.v24_config.baudrate,
                                   &(app_context.v24_config.polarities.tx_polarities));
                     rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
-                    printf("> ");
+                    app_context.need_prompt = true;
                     break;
                 default:
                     break;
@@ -558,16 +598,20 @@ int main(void)
             }
             case EV_GET_V24_SETTINGS:
             {
-                event_queue_data_t* payload = (event_queue_data_t*)event_item.data.bytes;
+                const event_queue_data_t* payload = NULL;
+                if (!event_get_payload_ptr(&event_item, sizeof(*payload), (const void**)&payload))
+                {
+                    break;
+                }
                 switch (payload->id)
                 {
                 case V24_BAUDRATE:
                     printf("V24_BAUDRATE: %d\r\n", app_context.v24_config.baudrate);
-                    printf("> ");
+                    app_context.need_prompt = true;
                     break;
                 case V24_POLARITIES:
                     print_v24_polarities(&app_context.v24_config.polarities);
-                    printf("> ");
+                    app_context.need_prompt = true;
                     break;
                 default:
                     break;
@@ -578,6 +622,7 @@ int main(void)
                 break;
             }
         }
-        // sleep_ms(MAIN_LOOP_SLEEP_MS);
+        print_prompt(&app_context);
+        sleep_us(MAIN_LOOP_SLEEP_US);
     }
 }

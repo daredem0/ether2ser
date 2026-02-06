@@ -49,7 +49,7 @@ V24_POLARITIES_T init_polarities(void)
                                   {
                                       .txd_inverted = false,
                                       .txc_inverted = false,
-                                      .cts_inverted = true,
+                                      .cts_inverted = false,
                                       .rts_inverted = false,
                                       .dtr_inverted = false,
                                   },
