@@ -20,17 +20,19 @@
 
 // Library Headers
 #include "hardware/gpio.h"
+#include "hardware/structs/io_bank0.h"
 #include "hardware/watchdog.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
-#include "baudrate_monitor.h"
-#include "board_pins.h"
-#include "cli_parser.h"
-#include "error.h"
-#include "event_queue.h"
-#include "persistent_config.h"
+#include "drivers/v24_config.h"
+#include "platform/pinmap.h"
+#include "system/baudrate_monitor.h"
+#include "system/cli_parser.h"
+#include "system/common.h"
+#include "system/error.h"
+#include "system/event_queue.h"
 // Generated headers
 
 #define MAX_CMD_BUFFER_LEN 16
@@ -187,6 +189,7 @@ static void subcmd_set_v24_inverted(const char* args)
 
 static void subcmd_get_v24_inverted(const char* args)
 {
+    (void)args;
     dispatch_get_request(V24_POLARITIES, EV_GET_V24_SETTINGS);
 }
 
@@ -217,6 +220,7 @@ static void subcmd_set_v24_baudrate(const char* args)
 
 static void subcmd_get_v24_baudrate(const char* args)
 {
+    (void)args;
     dispatch_get_request(V24_BAUDRATE, EV_GET_V24_SETTINGS);
 }
 
@@ -305,7 +309,8 @@ static void subcmd_get_ip_local(const char* args)
 
 static void subcmd_set_ip_local(const char* args)
 {
-    uint8_t ip[4], mask[4];
+    uint8_t ip[4];
+    uint8_t mask[4];
     if (parse_set_ip_args(args, ip, mask) != E2S_OK)
     {
         printf("usage: set net ip 192.168.29.2/24\r\n");
@@ -684,6 +689,7 @@ static void cmd_help(const char* args)
 
 static void cmd_status(const char* args)
 {
+    (void)args;
     printf("status: ok\r\n");
     printf("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
            baudrate_estimator_get_current_estimation(V24_RXC));
@@ -719,9 +725,9 @@ static void cmd_pininfo(const char* args)
         return;
     }
 
-    uint gpio_num  = pin->gpio_num;
-    bool is_output = gpio_is_dir_out(gpio_num);
-    int  value     = gpio_get(gpio_num);
+    uint8_t gpio_num  = pin->gpio_num;
+    bool    is_output = gpio_is_dir_out(gpio_num);
+    int     value     = gpio_get(gpio_num);
 
     printf("Pin %s (GPIO %u):\r\n", pin_name, gpio_num);
     printf("  Direction: %s\r\n", is_output ? "OUTPUT" : "INPUT");

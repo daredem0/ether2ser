@@ -19,6 +19,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// Library Headers
+#include "hardware/pio.h"
+
 // Project Headers
 #include "drivers/gpio_driver.h"
 #include "drivers/v24_config.h"

@@ -6,29 +6,18 @@
 // Standard library headers
 #include <inttypes.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 // Library Headers
-#include "pico/stdio.h"
-#include "pico/time.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "drivers/pio_tx_rx_driver.h"
-#include "drivers/tx_queue.h"
 #include "drivers/w5500_driver.h"
-#include "platform/pinmap.h"
 #include "protocol/hdlc_common.h"
-#include "protocol/hdlc_decoder.h"
 #include "protocol/hdlc_sync.h"
-#include "system/baudrate_monitor.h"
-#include "system/cli_commands.h"
-#include "system/cli_usb_cdc.h"
 #include "system/common.h"
-#include "system/event_queue.h"
 #include "system/persistent_config.h"
 
 // Generated headers

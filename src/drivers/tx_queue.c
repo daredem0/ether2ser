@@ -20,20 +20,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Library Headers
+#include "hardware/pio.h"
+#include "wizchip_conf.h"
+#include "wizchip_qspi_pio.h"
+
 // Project Headers
 #include "drivers/pio_tx_rx_driver.h"
 #include "drivers/w5500_driver.h"
-#include "pico/stdio.h"
-#include "pico/time.h"
-#include "platform/pinmap.h"
 #include "protocol/hdlc_encoder.h"
-#include "system/baudrate_monitor.h"
-#include "system/cli_commands.h"
-#include "system/cli_usb_cdc.h"
-#include "system/event_queue.h"
+#include "system/error.h"
 #include "system/ringbuffer.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
 
 // Generated headers
 

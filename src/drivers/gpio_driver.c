@@ -19,23 +19,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Project Headers
-#include "drivers/pio_tx_rx_driver.h"
-#include "drivers/tx_queue.h"
-#include "drivers/w5500_driver.h"
-#include "pico/stdio.h"
-#include "pico/time.h"
-#include "platform/pinmap.h"
-#include "protocol/hdlc_common.h"
-#include "protocol/hdlc_decoder.h"
-#include "protocol/hdlc_sync.h"
-#include "system/baudrate_monitor.h"
-#include "system/cli_commands.h"
-#include "system/cli_usb_cdc.h"
-#include "system/common.h"
-#include "system/event_queue.h"
+// Library Headers
+#include "hardware/gpio.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
+
+// Project Headers
+#include "platform/pinmap.h"
+#include "system/common.h"
 
 // Generated headers
 

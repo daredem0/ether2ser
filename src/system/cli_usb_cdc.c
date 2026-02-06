@@ -17,13 +17,14 @@
 #include <stdio.h>
 #include <string.h>
 
-// Project Headers
-#include "cli_commands.h"
+// Library Headers
 #include "pico/error.h"
 #include "pico/stdio.h"
-#include "system/event_queue.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
+
+// Project Headers
+#include "system/event_queue.h"
 
 // Generated headers
 

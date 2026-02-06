@@ -18,12 +18,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Project Headers
+// Library Headers
 #include "socket.h"
 #include "w5500.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 #include "wizchip_spi.h"
+
+// Project Headers
 
 // Generated headers
 

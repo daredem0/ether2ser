@@ -18,19 +18,17 @@
 #include <stdio.h>
 #include <string.h>
 
-// Project Headers
-#include "hardware/gpio.h"
-#include "pico/stdio.h"
-#include "pico/stdlib.h"
+// Library Headers
 #include "pico/time.h"
-#include "pico/types.h"
-#include "socket.h"
-#include "system/common.h"
-#include "system/event_queue.h"
 #include "w5500.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 #include "wizchip_spi.h"
+
+// Project Headers
+#include "socket.h"
+#include "system/common.h"
+#include "system/event_queue.h"
 
 // Generated headers
 

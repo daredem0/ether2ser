@@ -15,6 +15,7 @@
 // Project Headers
 #include "drivers/pio_tx_rx_driver.h"
 #include "drivers/tx_queue.h"
+#include "drivers/v24_config.h"
 #include "drivers/w5500_driver.h"
 #include "protocol/hdlc_common.h"
 #include "protocol/hdlc_decoder.h"

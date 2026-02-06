@@ -24,13 +24,6 @@
 // Generated headers
 
 // Project Headers
-#include "drivers/pio_tx_rx_driver.h"
-#include "drivers/w5500_driver.h"
-#include "platform/pinmap.h"
-#include "system/baudrate_monitor.h"
-#include "system/cli_commands.h"
-#include "system/cli_usb_cdc.h"
-#include "system/event_queue.h"
 
 int RbInit(Ringbuffer* bufferStruct, void* bufferPointer, size_t capacity, size_t itemSizeInByte)
 {

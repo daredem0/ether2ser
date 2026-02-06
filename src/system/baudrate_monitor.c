@@ -17,13 +17,15 @@
 #include <stdint.h>
 #include <stdio.h>
 
-// Project Headers
+// Library Headers
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
 #include "pico/time.h"
-#include "platform/pinmap.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
+
+// Project Headers
+#include "platform/pinmap.h"
 
 // Generated headers
 

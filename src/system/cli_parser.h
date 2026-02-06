@@ -22,7 +22,7 @@
 // Project Headers
 #include "drivers/gpio_driver.h"
 #include "drivers/v24_config.h"
-#include "error.h"
+#include "system/error.h"
 
 // Generated headers
 

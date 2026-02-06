@@ -9,7 +9,9 @@
 #include <string.h>
 
 // Library Headers
+#include "boards/pico.h"
 #include "hardware/flash.h"
+#include "hardware/regs/addressmap.h"
 #include "hardware/sync.h"
 
 // Project Headers

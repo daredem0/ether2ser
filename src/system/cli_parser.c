@@ -19,9 +19,9 @@
 #include <string.h>
 
 // Project Headers
-#include "drivers/gpio_driver.h"
-#include "error.h"
+#include "drivers/v24_config.h"
 #include "platform/pinmap.h"
+#include "system/error.h"
 
 // Generated headers
 // Todo: Get these entries from main
