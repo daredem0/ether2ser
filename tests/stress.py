@@ -3,7 +3,7 @@ import socket, time, struct, statistics, argparse
 HOST = "192.168.29.20"
 PORT = 6969
 SIZE = 1000         # payload size
-RATE = 5   # packets per second
+RATE = 2   # packets per second
 DURATION = 5      # seconds
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -54,7 +54,7 @@ while time.monotonic() < end:
     try_recv()
 
 # Drain a bit
-drain_until = time.monotonic() + 5.0
+drain_until = time.monotonic() + 20.0
 while time.monotonic() < drain_until:
     try_recv()
 

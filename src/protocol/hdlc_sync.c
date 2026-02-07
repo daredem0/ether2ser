@@ -26,20 +26,20 @@
 
 void hdlc_sync_acc_init(HDLC_SYNC_ACCUMULATOR_T* accumulator, uint8_t sync_byte)
 {
-    accumulator->position         = 0;
-    accumulator->processed        = 0;
-    accumulator->candidate_start  = 0;
-    accumulator->candidate_end    = 0;
-    accumulator->candidate_valid  = false;
-    accumulator->candidate_i      = 0;
+    accumulator->position          = 0;
+    accumulator->processed         = 0;
+    accumulator->candidate_start   = 0;
+    accumulator->candidate_end     = 0;
+    accumulator->candidate_valid   = false;
+    accumulator->candidate_i       = 0;
     accumulator->candidate_bit_pos = 0;
-    accumulator->resume_pending   = false;
-    accumulator->resume_i         = 0;
-    accumulator->resume_bit_pos   = 0;
-    accumulator->bit_offset       = 0;
-    accumulator->state            = HDLC_SYNC_STATE_HUNTING;
-    accumulator->sync_byte        = sync_byte;
-    accumulator->sync_accumulator = 0;
+    accumulator->resume_pending    = false;
+    accumulator->resume_i          = 0;
+    accumulator->resume_bit_pos    = 0;
+    accumulator->bit_offset        = 0;
+    accumulator->state             = HDLC_SYNC_STATE_HUNTING;
+    accumulator->sync_byte         = sync_byte;
+    accumulator->sync_accumulator  = 0;
 }
 
 bool hdlc_sync_acc_process_byte(HDLC_SYNC_ACCUMULATOR_T* accumulator, uint8_t byte)
@@ -59,15 +59,24 @@ bool hdlc_sync_acc_process_byte(HDLC_SYNC_ACCUMULATOR_T* accumulator, uint8_t by
 
 e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_T* out_frame)
 {
-    static size_t frame_ready_count = 0;
+    static size_t   frame_ready_count    = 0;
+    static uint32_t lookahead_wait_count = 0;
     if (!accumulator || !out_frame || !out_frame->payload || out_frame->capacity == 0)
     {
         return E2S_OK;
     }
-    if (accumulator->position < 2 * sizeof(accumulator->sync_accumulator))
+    if (accumulator->position == 0)
     {
         return E2S_OK;
     }
+
+    // only needed when aligned byte needs lookahead
+    if (accumulator->state != HDLC_SYNC_STATE_HUNTING && accumulator->bit_offset != 0 &&
+        accumulator->position < 2)
+    {
+        return E2S_OK;
+    }
+
     e2s_error_t result  = E2S_OK;
     size_t      i       = accumulator->processed;
     uint8_t     aligned = 0;
@@ -85,12 +94,12 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
                     if ((((accumulator->sync_accumulator << bit_pos) >> 8) & 0xFF) ==
                         accumulator->sync_byte)
                     {
-                        accumulator->state      = HDLC_SYNC_STATE_SYNCING;
-                        accumulator->bit_offset = bit_pos;
-                        accumulator->candidate_start = (i >= 1) ? (i - 1) : 0;
-                        accumulator->candidate_i     = i;
+                        accumulator->state             = HDLC_SYNC_STATE_SYNCING;
+                        accumulator->bit_offset        = bit_pos;
+                        accumulator->candidate_start   = (i >= 1) ? (i - 1) : 0;
+                        accumulator->candidate_i       = i;
                         accumulator->candidate_bit_pos = (uint8_t)bit_pos;
-                        out_frame->length       = 0;
+                        out_frame->length              = 0;
                         for (size_t j = 0; j < sizeof(accumulator->sync_accumulator); j++)
                         {
                             if (out_frame->length >= out_frame->capacity)
@@ -117,6 +126,14 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
         case HDLC_SYNC_STATE_SYNCING:
             if (accumulator->bit_offset != 0 && (i + 1) >= accumulator->position)
             {
+                lookahead_wait_count++;
+                if (lookahead_wait_count <= 20 || (lookahead_wait_count % 100) == 0)
+                {
+                    printf("SYNC DBG: wait lookahead (SYNCING) count=%lu i=%zu pos=%zu off=%u "
+                           "out_len=%zu\n",
+                           (unsigned long)lookahead_wait_count, i, accumulator->position,
+                           accumulator->bit_offset, out_frame->length);
+                }
                 goto out;
             }
             if (accumulator->bit_offset == 0)
@@ -141,6 +158,14 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
         case HDLC_SYNC_STATE_SYNCED:
             if (accumulator->bit_offset != 0 && (i + 1) >= accumulator->position)
             {
+                lookahead_wait_count++;
+                if (lookahead_wait_count <= 20 || (lookahead_wait_count % 100) == 0)
+                {
+                    printf("SYNC DBG: wait lookahead (SYNCED) count=%lu i=%zu pos=%zu off=%u "
+                           "out_len=%zu\n",
+                           (unsigned long)lookahead_wait_count, i, accumulator->position,
+                           accumulator->bit_offset, out_frame->length);
+                }
                 goto out;
             }
             if (accumulator->bit_offset == 0)
@@ -164,6 +189,10 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
             {
                 ++frame_ready_count;
                 printf("%zu FRAME READY\n", frame_ready_count);
+                printf("SYNC DBG: frame_ready off=%u cand_start=%zu cand_end=%zu pos=%zu "
+                       "out_len=%zu\n",
+                       accumulator->bit_offset, accumulator->candidate_start, i + 1,
+                       accumulator->position, out_frame->length);
                 accumulator->state            = HDLC_SYNC_STATE_HUNTING;
                 accumulator->sync_accumulator = 0;
                 accumulator->candidate_end    = i + 1;
@@ -185,10 +214,11 @@ out:
         accumulator->processed = 0;
         return result;
     }
-    size_t keep            = 0;
+    size_t keep = 0;
     if (accumulator->state == HDLC_SYNC_STATE_HUNTING)
     {
-        keep = 1;
+        // Hunting checks a cross-byte sync pattern, so keep 2 bytes overlap.
+        keep = 2;
     }
     else if (accumulator->bit_offset != 0)
     {
@@ -209,6 +239,7 @@ out:
 
 void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool accept)
 {
+    static uint32_t consume_count = 0;
     if (!accumulator || !accumulator->candidate_valid)
     {
         return;
@@ -226,6 +257,10 @@ void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool 
         if (drop > 0)
         {
             size_t remaining = accumulator->position - drop;
+            consume_count++;
+            printf("SYNC DBG: consume #%lu accept=%d drop=%zu remaining=%zu off=%u state=%d\n",
+                   (unsigned long)consume_count, accept ? 1 : 0, drop, remaining,
+                   accumulator->bit_offset, (int)accumulator->state);
             memmove(accumulator->buffer, accumulator->buffer + drop, remaining);
             accumulator->position = remaining;
         }
@@ -251,6 +286,7 @@ void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool 
         size_t drop = accumulator->position > keep ? (accumulator->position - keep) : 0;
         if (drop > 0)
         {
+            printf("SYNC DBG: hardcap drop=%zu keep=%zu\n", drop, keep);
             memmove(accumulator->buffer, accumulator->buffer + drop, keep);
             accumulator->position = keep;
         }

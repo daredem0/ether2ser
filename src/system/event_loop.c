@@ -48,6 +48,7 @@ void event_loop(app_ctx_t* app)
     static uint32_t udp_tx_count           = 0;
     static uint32_t hdlc_decode_fail_count = 0;
     static uint32_t hdlc_decode_ok_count   = 0;
+    static uint32_t pending_log_count      = 0;
     while (true)
     {
         // Poll the event queue
@@ -87,11 +88,21 @@ void event_loop(app_ctx_t* app)
 
         // Drain RX FIFO into the accumulator buffer
         static uint32_t total_rx_bytes = 0;
+        size_t          rx_drained     = 0;
         while (rx_get(&rx_byte))
         {
             total_rx_bytes++;
+            rx_drained++;
             hdlc_sync_acc_process_byte(&app->accumulator, rx_byte);
         }
+        // if (rx_drained > 0)
+        // {
+        //     LOG_DEBUG("RX FIFO DRAIN: +%zu bytes total=%lu acc_pos=%zu acc_proc=%zu state=%d "
+        //               "off=%u\n",
+        //               rx_drained, (unsigned long)total_rx_bytes, app->accumulator.position,
+        //               app->accumulator.processed, (int)app->accumulator.state,
+        //               app->accumulator.bit_offset);
+        // }
 
         static bool   first_frame_logged = false;
         static size_t max_position       = 0;
@@ -104,22 +115,41 @@ void event_loop(app_ctx_t* app)
             printf("After first frame: accumulator max position was %zu bytes\n", max_position);
             first_frame_logged = true;
         }
-        static bool     rx_count_logged = false;
-        static uint32_t last_log_time   = 0;
-        uint32_t        now             = to_ms_since_boot(get_absolute_time());
+        static bool     rx_count_logged       = false;
+        static uint32_t last_pending_log_time = 0;
+        uint32_t        now                   = to_ms_since_boot(get_absolute_time());
         if (!rx_count_logged && now > 5000)
         {
             printf("Total RX bytes received: %lu\n", (unsigned long)total_rx_bytes);
             rx_count_logged = true;
         }
+        if (rx_drained == 0 && app->accumulator.position > 0 &&
+            (now - last_pending_log_time) >= 1000)
+        {
+            pending_log_count++;
+            LOG_DEBUG("ACC PENDING #%lu: pos=%zu proc=%zu state=%d off=%u cand_valid=%d "
+                      "cand_end=%zu\n",
+                      (unsigned long)pending_log_count, app->accumulator.position,
+                      app->accumulator.processed, (int)app->accumulator.state,
+                      app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
+                      app->accumulator.candidate_end);
+            last_pending_log_time = now;
+        }
 
         // Try to extract all complete HDLC frames currently buffered.
+        size_t frame_ready_this_tick = 0;
         while (true)
         {
             e2s_error_t acc_result =
                 hdlc_sync_acc_poll(&app->accumulator, &app->reconstructed_frame);
             if (acc_result == E2S_ERR_HDLC_ACC_FRAME_READY)
             {
+                frame_ready_this_tick++;
+                LOG_DEBUG("ACC FRAME READY #%zu this_tick: len=%zu cand_end=%zu acc_pos=%zu "
+                          "off=%u\n",
+                          frame_ready_this_tick, app->reconstructed_frame.length,
+                          app->accumulator.candidate_end, app->accumulator.position,
+                          app->accumulator.bit_offset);
                 hdlc_rx_count++;
                 LOG_DEBUG("HDLC RX COUNT: %lu\n", (unsigned long)hdlc_rx_count);
                 app->tx_frame_buffer.length = 0;
