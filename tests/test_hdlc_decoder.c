@@ -20,7 +20,7 @@ void test_decode_empty_frame_no_escape(void) {
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
 
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(0, payload_length);
 }
@@ -38,7 +38,7 @@ void test_decode_one_byte_frame_no_escape(void) {
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
 
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(1, payload_length);
     TEST_ASSERT_EQUAL_HEX8(0x42, payload_out[0]);
@@ -56,7 +56,7 @@ void test_decode_three_bytes_frame_no_escape(void){
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
 
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(3, payload_length);
     TEST_ASSERT_EQUAL_HEX8(0x01, payload_out[0]);
@@ -70,7 +70,7 @@ void test_decode_abort_empty_frame(void){
     const size_t out_capacity = 3;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(NULL, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(NULL, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -85,7 +85,7 @@ void test_decode_abort_empty_frame_2(void){
     };
     const size_t out_capacity = 3;
     uint8_t payload_out[out_capacity];
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, NULL);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, NULL);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -100,7 +100,7 @@ void test_decode_abort_payload_null(void){
     const size_t out_capacity = 3;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, NULL, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, NULL, out_capacity, &payload_length);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -115,7 +115,7 @@ void test_decode_abort_no_capacity(void){
     const size_t out_capacity = 0;
     uint8_t payload_out[1];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -130,7 +130,7 @@ void test_decode_frame_too_long(void){
     const size_t out_capacity = sizeof(frame_buffer) -2 -2 -1; //-2 flags -2 crc -1 to underflow
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -145,7 +145,7 @@ void test_decode_payload_fits_exact_capacity(void){
     const size_t out_capacity = 3+2;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(3, payload_length);
     TEST_ASSERT_EQUAL_HEX8(0x01, payload_out[0]);
@@ -164,7 +164,7 @@ void test_decode_one_byte_flag_escape(void){
     const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(1, payload_length);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, payload_out[0]);
@@ -182,7 +182,7 @@ void test_decode_second_byte_flag_escape(void){
     const size_t out_capacity = 2+2;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(2, payload_length);
     TEST_ASSERT_EQUAL_HEX8(0x42, payload_out[0]);
@@ -200,7 +200,7 @@ void test_decode_one_byte_escape_escape(void){
     const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(1, payload_length);
     TEST_ASSERT_EQUAL_HEX8(HDLC_ESCAPE_BYTE, payload_out[0]);
@@ -218,7 +218,7 @@ void test_decode_second_byte_escape_escape(void){
     const size_t out_capacity = 2+2;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(2, payload_length);
     TEST_ASSERT_EQUAL_HEX8(0x42, payload_out[0]);
@@ -237,7 +237,7 @@ void test_decode_mixed_escape_and_plain_bytes(void){
     const size_t out_capacity = 5+2;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(5, payload_length);
     // 0x11, HDLC_FLAG_BYTE, 0x22, HDLC_ESCAPE_BYTE, 0x33
@@ -259,7 +259,7 @@ void test_decode_one_byte_crc_check_sunny_day(void){
     const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
 }
 
@@ -275,7 +275,7 @@ void test_decode_one_byte_crc_check_rainy_day(void){
     const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -290,7 +290,7 @@ void test_decode_one_byte_crc_contains_flag_byte(void){
     const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
 }
 
@@ -305,7 +305,7 @@ void test_decode_one_byte_crc_contains_escape_byte(void){
     const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
 }
 
@@ -320,7 +320,7 @@ void test_decode_one_byte_crc_contains_escape_and_flag_byte(void){
     const size_t out_capacity = 10;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    bool result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    bool result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
 }
 
@@ -345,7 +345,7 @@ void test_round_trip(void){
     const size_t out_capacity = 256;
     uint8_t payload_out[out_capacity];
     size_t payload_length = 0;
-    result = hdlc_decode(&frame, payload_out, out_capacity, &payload_length);
+    result = hdlc_decode_byte(&frame, payload_out, out_capacity, &payload_length);
     TEST_ASSERT_TRUE(result);
 
     for(size_t i = 0; i < sizeof(payload); i++){

@@ -24,8 +24,6 @@
 
 // Generated headers
 
-bool lsb_first = true;
-
 #define HDLC_TRY_PUT_BYTE(byte, frame, error_handling) \
     do                                                 \
     {                                                  \
@@ -159,7 +157,8 @@ static bool hdlc_put_byte(hdlc_encoder_t* encoder, uint8_t byte, HDLC_FRAME_T* f
     return true;
 }
 
-bool hdlc_encode(const uint8_t* payload, const size_t payload_length, HDLC_FRAME_T* frame)
+bool hdlc_encode(const uint8_t* payload, const size_t payload_length, HDLC_FRAME_T* frame,
+                 bool lsb_first)
 {
     if (frame == NULL || (payload == NULL && payload_length > 0) || (frame->capacity < 2) ||
         frame->length != 0)

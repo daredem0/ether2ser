@@ -221,6 +221,7 @@ else()
         tests/test_runner.c
         tests/test_hdlc_encoder.c
         tests/test_hdlc_decoder.c
+        tests/test_hdlc_bitstuff_encoder.c
         tests/test_command_parser.c
         tests/test_event_queue.c
         tests/test_byte_alignment.c

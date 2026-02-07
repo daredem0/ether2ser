@@ -1,5 +1,7 @@
 #include "unity.h"
 #include <stdint.h>
+// Keep this test TU build-only (no CMake changes required)
+#include "test_hdlc_bitstuff_decoder.c"
 
 // HDLC Encoder declarations
 extern void test_encode_empty_frame_no_escape(void);
@@ -20,6 +22,17 @@ extern void test_encode_one_byte_crc_check(void);
 extern void test_encode_one_byte_crc_contains_flag_byte(void);
 extern void test_encode_one_byte_crc_contains_escape_byte(void);
 extern void test_encode_one_byte_crc_contains_escape_and_flag_byte(void);
+extern void test_bitstuff_encoder_roundtrip_lsb_small(void);
+extern void test_bitstuff_encoder_roundtrip_lsb_stuffing(void);
+extern void test_bitstuff_encoder_roundtrip_msb(void);
+extern void test_bitstuff_encoder_empty_payload(void);
+extern void test_bitstuff_encoder_one_byte_payload(void);
+extern void test_bitstuff_encoder_payload_with_flag_and_escape_bytes(void);
+extern void test_bitstuff_encoder_stuffing_count_lsb(void);
+extern void test_bitstuff_encoder_abort_payload_null_with_length(void);
+extern void test_bitstuff_encoder_abort_frame_null(void);
+extern void test_bitstuff_encoder_abort_frame_capacity_invalid(void);
+extern void test_bitstuff_encoder_abort_frame_length_nonzero(void);
 
 // HDLC Decoder declarations
 extern void test_decode_empty_frame_no_escape(void);
@@ -41,6 +54,22 @@ extern void test_decode_one_byte_crc_contains_flag_byte(void);
 extern void test_decode_one_byte_crc_contains_escape_byte(void);
 extern void test_decode_one_byte_crc_contains_escape_and_flag_byte(void);
 extern void test_round_trip(void);
+extern void test_bitstuff_decode_roundtrip_empty_lsb(void);
+extern void test_bitstuff_decode_roundtrip_one_byte_lsb(void);
+extern void test_bitstuff_decode_roundtrip_multi_byte_lsb(void);
+extern void test_bitstuff_decode_roundtrip_multi_byte_msb(void);
+extern void test_bitstuff_decode_roundtrip_large_payload(void);
+extern void test_bitstuff_decode_abort_null_frame(void);
+extern void test_bitstuff_decode_abort_null_payload(void);
+extern void test_bitstuff_decode_abort_null_payload_length(void);
+extern void test_bitstuff_decode_abort_zero_out_capacity(void);
+extern void test_bitstuff_decode_abort_missing_start_flag(void);
+extern void test_bitstuff_decode_abort_missing_end_flag(void);
+extern void test_bitstuff_decode_abort_payload_too_long(void);
+extern void test_bitstuff_decode_exact_capacity_succeeds(void);
+extern void test_bitstuff_decode_abort_crc_mismatch(void);
+extern void test_bitstuff_decode_abort_unstuff_violation(void);
+extern void test_bitstuff_decode_abort_bit_order_mismatch(void);
 
 // CLI Parser declarations
 extern void test_cli_parse_command_only(void);
@@ -111,6 +140,17 @@ int main(void) {
     RUN_TEST(test_encode_one_byte_crc_contains_flag_byte);
     RUN_TEST(test_encode_one_byte_crc_contains_escape_byte);
     RUN_TEST(test_encode_one_byte_crc_contains_escape_and_flag_byte);
+    RUN_TEST(test_bitstuff_encoder_roundtrip_lsb_small);
+    RUN_TEST(test_bitstuff_encoder_roundtrip_lsb_stuffing);
+    RUN_TEST(test_bitstuff_encoder_roundtrip_msb);
+    RUN_TEST(test_bitstuff_encoder_empty_payload);
+    RUN_TEST(test_bitstuff_encoder_one_byte_payload);
+    RUN_TEST(test_bitstuff_encoder_payload_with_flag_and_escape_bytes);
+    RUN_TEST(test_bitstuff_encoder_stuffing_count_lsb);
+    RUN_TEST(test_bitstuff_encoder_abort_payload_null_with_length);
+    RUN_TEST(test_bitstuff_encoder_abort_frame_null);
+    RUN_TEST(test_bitstuff_encoder_abort_frame_capacity_invalid);
+    RUN_TEST(test_bitstuff_encoder_abort_frame_length_nonzero);
 
     // HDLC Decoder Tests
     RUN_TEST(test_decode_empty_frame_no_escape);
@@ -132,6 +172,22 @@ int main(void) {
     RUN_TEST(test_decode_one_byte_crc_contains_escape_byte);
     RUN_TEST(test_decode_one_byte_crc_contains_escape_and_flag_byte);
     RUN_TEST(test_round_trip);
+    RUN_TEST(test_bitstuff_decode_roundtrip_empty_lsb);
+    RUN_TEST(test_bitstuff_decode_roundtrip_one_byte_lsb);
+    RUN_TEST(test_bitstuff_decode_roundtrip_multi_byte_lsb);
+    RUN_TEST(test_bitstuff_decode_roundtrip_multi_byte_msb);
+    RUN_TEST(test_bitstuff_decode_roundtrip_large_payload);
+    RUN_TEST(test_bitstuff_decode_abort_null_frame);
+    RUN_TEST(test_bitstuff_decode_abort_null_payload);
+    RUN_TEST(test_bitstuff_decode_abort_null_payload_length);
+    RUN_TEST(test_bitstuff_decode_abort_zero_out_capacity);
+    RUN_TEST(test_bitstuff_decode_abort_missing_start_flag);
+    RUN_TEST(test_bitstuff_decode_abort_missing_end_flag);
+    RUN_TEST(test_bitstuff_decode_abort_payload_too_long);
+    RUN_TEST(test_bitstuff_decode_exact_capacity_succeeds);
+    RUN_TEST(test_bitstuff_decode_abort_crc_mismatch);
+    RUN_TEST(test_bitstuff_decode_abort_unstuff_violation);
+    RUN_TEST(test_bitstuff_decode_abort_bit_order_mismatch);
 
     // CLI Parser Tests
     RUN_TEST(test_cli_parse_command_only);

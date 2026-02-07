@@ -25,6 +25,8 @@
 // Generated headers
 
 bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_capacity,
-                 size_t* payload_length);
+                 size_t* payload_length, bool lsb_first);
+bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_capacity,
+                      size_t* payload_length);
 
 #endif /* HDLC_DECODER_H */
