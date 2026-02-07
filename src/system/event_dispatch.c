@@ -328,6 +328,24 @@ void event_dispatch(event_t* event, app_ctx_t* app)
 {
     switch (event->type)
     {
+    case EV_STATUS:
+    {
+        printf("PIPE STATS\r\n");
+        printf("  RX/TX      : udp_rx=%" PRIu64 " hdlc_tx=%" PRIu64 " udp_tx=%" PRIu64 "\r\n",
+               app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.udp_tx_frames);
+        printf("  Decode     : frame_ready=%" PRIu64 " ok=%" PRIu64 " fail=%" PRIu64 "\r\n",
+               app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok,
+               app->stats.hdlc_decode_fail);
+        printf("  Serial RX  : bytes=%" PRIu64 "\r\n", app->stats.serial_rx_bytes);
+        printf("  Sync Wait  : syncing=%" PRIu64 " synced=%" PRIu64 "\r\n",
+               app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
+        printf("  Sync Maint : consume=%" PRIu64 " hardcap_events=%" PRIu64
+               " hardcap_bytes=%" PRIu64 "\r\n",
+               app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
+               app->stats.sync_hardcap_drop_bytes);
+        app->need_prompt = true;
+    }
+    break;
     case EV_CLI_LINE:
     {
         const char* cli_line = NULL;

@@ -693,6 +693,8 @@ static void cmd_status(const char* args)
     printf("status: ok\r\n");
     printf("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
            baudrate_estimator_get_current_estimation(V24_RXC));
+    event_t status_event = {.type = EV_STATUS, .data = NULL, .data_len = 0};
+    event_queue_push(&status_event);
 }
 
 static void cmd_net(const char* args)

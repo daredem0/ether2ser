@@ -41,26 +41,20 @@ static void print_prompt(app_ctx_t* app)
 
 void event_loop(app_ctx_t* app)
 {
-    static uint8_t  rx_byte                = 0;
-    static uint32_t udp_rx_count           = 0;
-    static uint32_t hdlc_tx_count          = 0;
-    static uint32_t hdlc_rx_count          = 0;
-    static uint32_t udp_tx_count           = 0;
-    static uint32_t hdlc_decode_fail_count = 0;
-    static uint32_t hdlc_decode_ok_count   = 0;
-    static uint32_t pending_log_count      = 0;
+    static uint8_t rx_byte = 0;
     while (true)
     {
         // Poll the event queue
         cli_poll();
         if (w5500_poll_rx(&app->sender_config, &app->rx_frame_buffer))
         {
-            udp_rx_count++;
-            LOG_DEBUG("UDP RX COUNT: %lu\n", (unsigned long)udp_rx_count);
-            LOG_DEBUG("tx_queue_enqueue_udp_frame: %d\r\n",
-                      tx_queue_enqueue_udp_frame(&app->tx_queue, &app->rx_frame_buffer));
-            hdlc_tx_count++;
-            LOG_DEBUG("HDLC TX COUNT: %lu\n", (unsigned long)hdlc_tx_count);
+            app->stats.udp_rx_frames++;
+            e2s_error_t enqueue_result =
+                tx_queue_enqueue_udp_frame(&app->tx_queue, &app->rx_frame_buffer);
+            if (enqueue_result == E2S_OK)
+            {
+                app->stats.hdlc_tx_frames++;
+            }
             memset(app->rx_frame_buffer.payload, 0, app->rx_frame_buffer.length);
             app->rx_frame_buffer.length = 0;
             app->need_prompt            = true;
@@ -75,98 +69,36 @@ void event_loop(app_ctx_t* app)
         {
             tx_poll();
         }
-        // Add instrumentation to detect repeated PIO stalls
-        // static uint32_t pio_stall_count = 0;
-        // if (pio0->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + 0)))
-        // {
-        //     pio_stall_count++;
-        //     if (pio_stall_count % 1000 == 0)
-        //     {
-        //         LOG_DEBUG("PIO TX STALLED: %lu times\r\n", pio_stall_count);
-        //     }
-        // }
 
         // Drain RX FIFO into the accumulator buffer
-        static uint32_t total_rx_bytes = 0;
-        size_t          rx_drained     = 0;
+        size_t rx_drained = 0;
         while (rx_get(&rx_byte))
         {
-            total_rx_bytes++;
             rx_drained++;
             hdlc_sync_acc_process_byte(&app->accumulator, rx_byte);
         }
-        // if (rx_drained > 0)
-        // {
-        //     LOG_DEBUG("RX FIFO DRAIN: +%zu bytes total=%lu acc_pos=%zu acc_proc=%zu state=%d "
-        //               "off=%u\n",
-        //               rx_drained, (unsigned long)total_rx_bytes, app->accumulator.position,
-        //               app->accumulator.processed, (int)app->accumulator.state,
-        //               app->accumulator.bit_offset);
-        // }
-
-        static bool   first_frame_logged = false;
-        static size_t max_position       = 0;
-        if (app->accumulator.position > max_position)
-        {
-            max_position = app->accumulator.position;
-        }
-        if (!first_frame_logged && udp_rx_count >= 1 && hdlc_rx_count >= 0)
-        {
-            printf("After first frame: accumulator max position was %zu bytes\n", max_position);
-            first_frame_logged = true;
-        }
-        static bool     rx_count_logged       = false;
-        static uint32_t last_pending_log_time = 0;
-        uint32_t        now                   = to_ms_since_boot(get_absolute_time());
-        if (!rx_count_logged && now > 5000)
-        {
-            printf("Total RX bytes received: %lu\n", (unsigned long)total_rx_bytes);
-            rx_count_logged = true;
-        }
-        if (rx_drained == 0 && app->accumulator.position > 0 &&
-            (now - last_pending_log_time) >= 1000)
-        {
-            pending_log_count++;
-            LOG_DEBUG("ACC PENDING #%lu: pos=%zu proc=%zu state=%d off=%u cand_valid=%d "
-                      "cand_end=%zu\n",
-                      (unsigned long)pending_log_count, app->accumulator.position,
-                      app->accumulator.processed, (int)app->accumulator.state,
-                      app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
-                      app->accumulator.candidate_end);
-            last_pending_log_time = now;
-        }
+        app->stats.serial_rx_bytes += rx_drained;
 
         // Try to extract all complete HDLC frames currently buffered.
-        size_t frame_ready_this_tick = 0;
         while (true)
         {
             e2s_error_t acc_result =
                 hdlc_sync_acc_poll(&app->accumulator, &app->reconstructed_frame);
             if (acc_result == E2S_ERR_HDLC_ACC_FRAME_READY)
             {
-                frame_ready_this_tick++;
-                LOG_DEBUG("ACC FRAME READY #%zu this_tick: len=%zu cand_end=%zu acc_pos=%zu "
-                          "off=%u\n",
-                          frame_ready_this_tick, app->reconstructed_frame.length,
-                          app->accumulator.candidate_end, app->accumulator.position,
-                          app->accumulator.bit_offset);
-                hdlc_rx_count++;
-                LOG_DEBUG("HDLC RX COUNT: %lu\n", (unsigned long)hdlc_rx_count);
+                app->stats.hdlc_frame_ready++;
                 app->tx_frame_buffer.length = 0;
                 if (hdlc_decode(&app->reconstructed_frame, app->tx_frame_buffer.payload,
                                 TX_BUF_SIZE, &app->tx_frame_buffer.length, true))
                 {
-                    hdlc_decode_ok_count++;
-                    LOG_DEBUG("HDLC DECODE OK: %lu\n", (unsigned long)hdlc_decode_ok_count);
+                    app->stats.hdlc_decode_ok++;
                     w5500_udp_tx(&app->destination_config, &app->tx_frame_buffer);
-                    udp_tx_count++;
-                    LOG_DEBUG("UDP TX COUNT: %lu\n", (unsigned long)udp_tx_count);
+                    app->stats.udp_tx_frames++;
                     hdlc_sync_acc_consume_candidate(&app->accumulator, true);
                 }
                 else
                 {
-                    hdlc_decode_fail_count++;
-                    LOG_DEBUG("HDLC DECODE FAIL: %lu\n", (unsigned long)hdlc_decode_fail_count);
+                    app->stats.hdlc_decode_fail++;
                     hdlc_sync_acc_consume_candidate(&app->accumulator, false);
                 }
                 memset(app->reconstructed_frame.payload, 0, app->reconstructed_frame.length);
@@ -180,6 +112,12 @@ void event_loop(app_ctx_t* app)
             }
             break;
         }
+
+        app->stats.sync_lookahead_wait_syncing = app->accumulator.lookahead_wait_syncing;
+        app->stats.sync_lookahead_wait_synced  = app->accumulator.lookahead_wait_synced;
+        app->stats.sync_candidate_consume      = app->accumulator.consume_count;
+        app->stats.sync_hardcap_drop_events    = app->accumulator.hardcap_drop_events;
+        app->stats.sync_hardcap_drop_bytes     = app->accumulator.hardcap_drop_bytes;
 
         event_t event_item;
         for (int i = 0; i < 20 && event_queue_pop(&event_item); i++)

@@ -50,6 +50,13 @@ typedef struct
     HDLC_SYNC_STATE_T state;
     uint8_t           sync_byte;
     uint16_t          sync_accumulator;
+
+    uint32_t lookahead_wait_syncing;
+    uint32_t lookahead_wait_synced;
+    uint32_t frame_ready_count;
+    uint32_t consume_count;
+    uint32_t hardcap_drop_events;
+    uint32_t hardcap_drop_bytes;
 } HDLC_SYNC_ACCUMULATOR_T;
 
 void        hdlc_sync_acc_init(HDLC_SYNC_ACCUMULATOR_T* accumulator, uint8_t sync_byte);

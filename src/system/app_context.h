@@ -37,6 +37,25 @@
 
 typedef struct
 {
+    uint64_t udp_rx_frames;
+    uint64_t hdlc_tx_frames;
+    uint64_t serial_rx_bytes;
+    uint64_t hdlc_frame_ready;
+    uint64_t hdlc_decode_ok;
+    uint64_t hdlc_decode_fail;
+    uint64_t udp_tx_frames;
+
+    uint64_t sync_lookahead_wait_syncing;
+    uint64_t sync_lookahead_wait_synced;
+    uint64_t sync_candidate_consume;
+    uint64_t sync_hardcap_drop_events;
+    uint64_t sync_hardcap_drop_bytes;
+
+    uint32_t last_report_ms;
+} payload_statistics_t;
+
+typedef struct
+{
     config_t persistent_config;
     bool     config_valid;
     bool     need_prompt;
@@ -59,6 +78,7 @@ typedef struct
 
     uint8_t    tx_queue_buffer[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)];
     TX_QUEUE_T tx_queue;
+    payload_statistics_t stats;
     // ... anything else the event loop touches
 } app_ctx_t;
 

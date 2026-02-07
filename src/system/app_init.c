@@ -24,6 +24,7 @@
 
 void init_app(app_ctx_t* app, config_t* persistent_config)
 {
+    memset(&app->stats, 0, sizeof(app->stats));
     app->need_prompt             = true;
     app->rx_frame_buffer.payload = app->rx_frame_buffer_data;
     app->rx_frame_buffer.length  = 0;
