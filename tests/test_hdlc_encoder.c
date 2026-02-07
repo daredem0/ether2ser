@@ -19,7 +19,7 @@ void test_encode_empty_frame_no_escape(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(NULL, 0, &frame);
+    bool result = hdlc_encode_byte(NULL, 0, &frame);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(4, frame.length);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
@@ -38,7 +38,7 @@ void test_encode_one_byte_frame_no_escape(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(payload, 1, &frame);
+    bool result = hdlc_encode_byte(payload, 1, &frame);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(5, frame.length);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
@@ -57,7 +57,7 @@ void test_encode_three_bytes_frame_no_escape(void){
         .length = 0,
         .capacity = sizeof(frame_buffer)
     };
-    bool result = hdlc_encode(payload, 3, &frame);
+    bool result = hdlc_encode_byte(payload, 3, &frame);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(7, frame.length);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
@@ -73,7 +73,7 @@ void test_encode_three_bytes_frame_no_escape(void){
 void test_encode_abort_empty_frame(void){
     // Frame: <none> (encode fails)
     uint8_t payload[] = {0x01};
-    bool result = hdlc_encode(payload, 0, NULL);
+    bool result = hdlc_encode_byte(payload, 0, NULL);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -86,7 +86,7 @@ void test_encode_abort_payload_null_but_length(void){
         .length = 0,
         .capacity = sizeof(frame_buffer)
     };
-    bool result = hdlc_encode(NULL, 1, &frame);
+    bool result = hdlc_encode_byte(NULL, 1, &frame);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -99,7 +99,7 @@ void test_encode_abort_payload_too_long(void){
         .length = 0,
         .capacity = 2
     };
-    bool result = hdlc_encode(payload, 4, &frame);
+    bool result = hdlc_encode_byte(payload, 4, &frame);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -112,7 +112,7 @@ void test_encode_abort_frame_capacity_invalid(void){
         .length = 0,
         .capacity = 1
     };
-    bool result = hdlc_encode(payload, 4, &frame);
+    bool result = hdlc_encode_byte(payload, 4, &frame);
     TEST_ASSERT_FALSE(result);
 }
 
@@ -126,7 +126,7 @@ void test_encode_payload_fits_exact_capacity(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(payload, 3, &frame);
+    bool result = hdlc_encode_byte(payload, 3, &frame);
 
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(7, frame.length);
@@ -148,7 +148,7 @@ void test_encode_one_byte_flag_escape(void){
         .length = 0,
         .capacity = sizeof(frame_buffer)
     };
-    bool result = hdlc_encode(payload, 1, &frame);
+    bool result = hdlc_encode_byte(payload, 1, &frame);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(7, frame.length);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
@@ -169,7 +169,7 @@ void test_encode_second_byte_flag_escape(void){
         .length = 0,
         .capacity = sizeof(frame_buffer)
     };
-    bool result = hdlc_encode(payload, 2, &frame);
+    bool result = hdlc_encode_byte(payload, 2, &frame);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(7, frame.length);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
@@ -190,7 +190,7 @@ void test_encode_one_byte_escape_escape(void){
         .length = 0,
         .capacity = sizeof(frame_buffer)
     };
-    bool result = hdlc_encode(payload, 1, &frame);
+    bool result = hdlc_encode_byte(payload, 1, &frame);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(6, frame.length);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
@@ -210,7 +210,7 @@ void test_encode_second_byte_escape_escape(void){
         .length = 0,
         .capacity = sizeof(frame_buffer)
     };
-    bool result = hdlc_encode(payload, 2, &frame);
+    bool result = hdlc_encode_byte(payload, 2, &frame);
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_EQUAL(7, frame.length);
     TEST_ASSERT_EQUAL_HEX8(HDLC_FLAG_BYTE, frame.payload[0]);
@@ -232,7 +232,7 @@ void test_encode_mixed_escape_and_plain_bytes(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    bool result = hdlc_encode_byte(payload, sizeof(payload), &frame);
     TEST_ASSERT_TRUE(result);
 
     // expected: flag + 0x11 + 0x7D 0x5E + 0x22 + 0x7D 0x5D + 0x33 + 0xCF + 0xBB + flag
@@ -260,7 +260,7 @@ void test_encode_buffer_of_due_to_escape(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    bool result = hdlc_encode_byte(payload, sizeof(payload), &frame);
     TEST_ASSERT_FALSE(result);
 
 }
@@ -275,7 +275,7 @@ void test_encode_one_byte_crc_check(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    bool result = hdlc_encode_byte(payload, sizeof(payload), &frame);
     TEST_ASSERT_TRUE(result);
 
     TEST_ASSERT_EQUAL(5, frame.length);
@@ -296,7 +296,7 @@ void test_encode_one_byte_crc_contains_flag_byte(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    bool result = hdlc_encode_byte(payload, sizeof(payload), &frame);
     TEST_ASSERT_TRUE(result);
 
     TEST_ASSERT_EQUAL(6, frame.length);
@@ -318,7 +318,7 @@ void test_encode_one_byte_crc_contains_escape_byte(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    bool result = hdlc_encode_byte(payload, sizeof(payload), &frame);
     TEST_ASSERT_TRUE(result);
 
     TEST_ASSERT_EQUAL(6, frame.length);
@@ -340,7 +340,7 @@ void test_encode_one_byte_crc_contains_escape_and_flag_byte(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    bool result = hdlc_encode_byte(payload, sizeof(payload), &frame);
     TEST_ASSERT_TRUE(result);
 
     TEST_ASSERT_EQUAL(8, frame.length);

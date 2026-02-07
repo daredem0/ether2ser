@@ -82,7 +82,7 @@ void test_multiple_bits_shifted_hdlc_frame(void){
             hdlc_sync_acc_poll(&accumulator, &reconstructed_frame),
             E2S_ERR_HDLC_ACC_FRAME_READY
         );
-        TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_SYNCED, accumulator.state);
+        TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_HUNTING, accumulator.state);
         TEST_ASSERT_EQUAL(i, accumulator.bit_offset);
 
         TEST_ASSERT_EQUAL( sizeof(frame_buffer), reconstructed_frame.length);
@@ -115,7 +115,7 @@ void test_one_bit_shifted_hdlc_frame(void){
         hdlc_sync_acc_poll(&accumulator, &reconstructed_frame),
         E2S_ERR_HDLC_ACC_FRAME_READY
     );
-    TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_SYNCED, accumulator.state);
+    TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_HUNTING, accumulator.state);
     TEST_ASSERT_EQUAL(1, accumulator.bit_offset);
 
     TEST_ASSERT_EQUAL( sizeof(frame_buffer), reconstructed_frame.length);
@@ -145,7 +145,7 @@ void test_byte_aligned_hdlc_frame(void){
         E2S_ERR_HDLC_ACC_FRAME_READY,
         hdlc_sync_acc_poll(&accumulator, &reconstructed_frame)
     );
-    TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_SYNCED, accumulator.state );
+    TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_HUNTING, accumulator.state );
     TEST_ASSERT_EQUAL(0, accumulator.bit_offset);
 
     TEST_ASSERT_EQUAL( sizeof(frame_buffer), reconstructed_frame.length);
@@ -203,7 +203,7 @@ void test_hdlc_sync_noise_then_frame(void)
 
     TEST_ASSERT_EQUAL(E2S_ERR_HDLC_ACC_FRAME_READY,
                       hdlc_sync_acc_poll(&accumulator, &reconstructed_frame));
-    TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_SYNCED, accumulator.state);
+    TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_HUNTING, accumulator.state);
     TEST_ASSERT_EQUAL(0, accumulator.bit_offset);
     TEST_ASSERT_EQUAL(sizeof(frame_buffer), reconstructed_frame.length);
     for (size_t i = 0; i < sizeof(frame_buffer); i++)

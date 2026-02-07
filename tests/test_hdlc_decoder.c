@@ -339,7 +339,7 @@ void test_round_trip(void){
         .capacity = sizeof(frame_buffer)
     };
 
-    bool result = hdlc_encode(payload, sizeof(payload), &frame);
+    bool result = hdlc_encode_byte(payload, sizeof(payload), &frame);
     TEST_ASSERT_TRUE(result);
 
     const size_t out_capacity = 256;
