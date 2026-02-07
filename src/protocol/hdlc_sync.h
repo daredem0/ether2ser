@@ -24,7 +24,7 @@
 
 // Generated headers
 
-#define RX_HDLC_SYNC_MAX_BUFFER_SIZE 2048
+#define RX_HDLC_SYNC_MAX_BUFFER_SIZE 8192
 #define HDLC_SYNC_DEFAULT_SYNC_BYTE HDLC_FLAG_BYTE
 typedef enum
 {

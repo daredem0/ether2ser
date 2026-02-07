@@ -360,16 +360,18 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         const HDLC_FRAME_T* hdlc_frame = NULL;
         if (event_get_payload_ptr(event, sizeof(*hdlc_frame), (const void**)&hdlc_frame))
         {
-            app->tx_frame_buffer.length = hdlc_frame->length;
+            app->tx_frame_buffer.length = 0;
             PRINT_FRAME_HEX("Frame: ", hdlc_frame->payload, hdlc_frame->length);
-            hdlc_decode(hdlc_frame, app->tx_frame_buffer.payload, TX_BUF_SIZE,
-                        &(app->tx_frame_buffer.length));
+            if (hdlc_decode(hdlc_frame, app->tx_frame_buffer.payload, TX_BUF_SIZE,
+                            &(app->tx_frame_buffer.length), true))
+            {
+                event_t hdlc_frame_event = {.type     = EV_UDP_TX,
+                                            .data.ptr = &app->tx_frame_buffer,
+                                            .data_len = sizeof(app->tx_frame_buffer)};
+                event_queue_push(&hdlc_frame_event);
+            }
             memset(hdlc_frame->payload, 0, hdlc_frame->length);
             hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
-            event_t hdlc_frame_event = {.type     = EV_UDP_TX,
-                                        .data.ptr = &app->tx_frame_buffer,
-                                        .data_len = sizeof(app->tx_frame_buffer)};
-            event_queue_push(&hdlc_frame_event);
         }
         break;
     }

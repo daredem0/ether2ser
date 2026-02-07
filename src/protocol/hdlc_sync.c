@@ -80,13 +80,7 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
                 (accumulator->sync_accumulator << 8) | accumulator->buffer[i];
             if (i >= 1 && (i + 1) < accumulator->position)
             {
-                size_t bit_start = 0;
-                if (accumulator->resume_pending && i == accumulator->resume_i)
-                {
-                    bit_start = accumulator->resume_bit_pos;
-                    accumulator->resume_pending = false;
-                }
-                for (size_t bit_pos = bit_start; bit_pos < 8; bit_pos++)
+                for (size_t bit_pos = 0; bit_pos < 8; bit_pos++)
                 {
                     if ((((accumulator->sync_accumulator << bit_pos) >> 8) & 0xFF) ==
                         accumulator->sync_byte)
@@ -220,8 +214,10 @@ void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool 
         return;
     }
 
-    if (accept)
+    (void)accept;
     {
+        // With bit-stuffed HDLC, a detected closing flag is definitive. Always advance
+        // past the candidate frame boundary and continue scanning from there.
         size_t drop = accumulator->candidate_end;
         if (drop > accumulator->position)
         {
@@ -234,42 +230,19 @@ void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool 
             accumulator->position = remaining;
         }
     }
-    else
-    {
-        // Retry next bit-offset at the same byte if possible.
-        uint8_t next_bit = (uint8_t)(accumulator->candidate_bit_pos + 1);
-        if (next_bit < 8)
-        {
-            accumulator->resume_pending = true;
-            accumulator->resume_i       = accumulator->candidate_i;
-            accumulator->resume_bit_pos = next_bit;
-        }
-        else
-        {
-            // No more bit offsets for this byte, drop one byte to ensure progress.
-            size_t drop = accumulator->candidate_start + 1;
-            if (drop > accumulator->position)
-            {
-                drop = accumulator->position;
-            }
-            if (drop > 0)
-            {
-                size_t remaining = accumulator->position - drop;
-                memmove(accumulator->buffer, accumulator->buffer + drop, remaining);
-                accumulator->position = remaining;
-            }
-        }
-    }
 
-    accumulator->processed        = 0;
-    accumulator->candidate_start  = 0;
-    accumulator->candidate_end    = 0;
-    accumulator->candidate_valid  = false;
-    accumulator->candidate_i      = 0;
+    accumulator->processed         = 0;
+    accumulator->candidate_start   = 0;
+    accumulator->candidate_end     = 0;
+    accumulator->candidate_valid   = false;
+    accumulator->candidate_i       = 0;
     accumulator->candidate_bit_pos = 0;
-    accumulator->bit_offset       = 0;
-    accumulator->state            = HDLC_SYNC_STATE_HUNTING;
-    accumulator->sync_accumulator = 0;
+    accumulator->bit_offset        = 0;
+    accumulator->state             = HDLC_SYNC_STATE_HUNTING;
+    accumulator->sync_accumulator  = 0;
+    accumulator->resume_pending    = false;
+    accumulator->resume_i          = 0;
+    accumulator->resume_bit_pos    = 0;
 
     // Hard cap: if buffer is near full, drop oldest bytes to keep bounded.
     if (accumulator->position >= (RX_HDLC_SYNC_MAX_BUFFER_SIZE - 16))
@@ -281,7 +254,7 @@ void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool 
             memmove(accumulator->buffer, accumulator->buffer + drop, keep);
             accumulator->position = keep;
         }
-        accumulator->processed = 0;
+        accumulator->processed      = 0;
         accumulator->resume_pending = false;
     }
 }

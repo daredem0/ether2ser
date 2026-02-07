@@ -2,9 +2,9 @@ import socket, time, struct, statistics, argparse
 
 HOST = "192.168.29.20"
 PORT = 6969
-SIZE = 900         # payload size
-RATE = 2   # packets per second
-DURATION = 5       # seconds
+SIZE = 1000         # payload size
+RATE = 5   # packets per second
+DURATION = 5      # seconds
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.settimeout(0.0)
@@ -19,7 +19,11 @@ recv_matched = 0
 rtts = []
 sent_times = {}
 
-payload_pad = bytes(max(0, SIZE - 12))
+payload_len = max(0, SIZE - 12)
+
+def make_payload(seq, nbytes):
+    # Deterministic changing pattern: depends on packet sequence and byte index.
+    return bytes((((seq * 31) + (i * 17) + (seq >> 8)) & 0xFF) for i in range(nbytes))
 
 def try_recv():
     global recv_total, recv_matched
@@ -41,7 +45,7 @@ next_send = time.monotonic()
 while time.monotonic() < end:
     now = time.monotonic()
     if now >= next_send:
-        pkt = struct.pack("!Id", seq, now) + payload_pad
+        pkt = struct.pack("!Id", seq, now) + make_payload(seq, payload_len)
         sock.sendto(pkt, (HOST, PORT))
         sent_times[seq] = now
         seq += 1
@@ -50,7 +54,7 @@ while time.monotonic() < end:
     try_recv()
 
 # Drain a bit
-drain_until = time.monotonic() + 2.0
+drain_until = time.monotonic() + 5.0
 while time.monotonic() < drain_until:
     try_recv()
 

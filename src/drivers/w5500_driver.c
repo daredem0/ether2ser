@@ -28,7 +28,6 @@
 // Project Headers
 #include "socket.h"
 #include "system/common.h"
-#include "system/event_queue.h"
 
 // Generated headers
 
@@ -69,7 +68,7 @@ void w5500_udp_tx(UDP_CONFIG_T* send_config, const UDP_FRAME_T* frame)
     }
 }
 
-void w5500_poll_rx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame)
+bool w5500_poll_rx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame)
 {
     // Clean up frame buffer first to ensure no data corruption
     if (frame->length > 0)
@@ -94,9 +93,9 @@ void w5500_poll_rx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame)
             LOG_DEBUG("%02X ", frame->payload[i]);
         }
         LOG_DEBUG("\r\n");
-        event_t udp_event = {.type = EV_UDP_RX, .data = NULL};
-        event_queue_push(&udp_event);
+        return true;
     }
+    return false;
 }
 
 void w5500_open_ipraw_socket(void)
