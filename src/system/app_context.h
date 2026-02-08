@@ -45,6 +45,9 @@
 
 // Generated headers
 
+/**
+ * @brief Runtime pipeline statistics and counters.
+ */
 typedef struct
 {
     uint64_t udp_rx_frames;
@@ -64,6 +67,9 @@ typedef struct
     uint32_t last_report_ms;
 } payload_statistics_t;
 
+/**
+ * @brief Global application context shared across modules.
+ */
 typedef struct
 {
     config_t persistent_config;
@@ -92,6 +98,11 @@ typedef struct
     // ... anything else the event loop touches
 } app_ctx_t;
 
+/**
+ * @brief Initialize application context from persistent/default configuration.
+ * @param app Application context to initialize.
+ * @param persistent_config Source configuration (used when marked valid).
+ */
 void init_app(app_ctx_t* app, config_t* persistent_config);
 
 #endif /* APP_CONTEXT_H */

@@ -22,19 +22,34 @@
 
 // Generated headers
 
-// HDLC protocol constants
+/**
+ * @name HDLC Constants
+ * @{
+ */
 #define HDLC_FLAG_BYTE 0x7E
 #define HDLC_ESCAPE_BYTE 0x7D
 #define HDLC_ESCAPE_XOR 0x20
+/** @} */
 
-// HDLC Frame Structure
+/**
+ * @brief Generic HDLC frame buffer descriptor.
+ */
 typedef struct
 {
-    uint8_t* payload;  // Buffer containing encoded frame
-    size_t   length;   // Length of encoded frame
-    size_t   capacity; // Maximum length of encoded frame
+    /** Buffer containing encoded or decoded frame data. */
+    uint8_t* payload;
+    /** Current number of valid bytes in @ref payload. */
+    size_t   length;
+    /** Maximum number of bytes writable to @ref payload. */
+    size_t   capacity;
 } HDLC_FRAME_T;
 
+/**
+ * @brief Compute HDLC CRC16 (FCS) over a payload.
+ * @param payload Input data bytes.
+ * @param num_bytes Number of bytes in @p payload.
+ * @return Computed CRC16 value.
+ */
 uint16_t hdlc_crc16(const uint8_t* payload, size_t num_bytes);
 
 #endif /* HDLC_COMMON_H */

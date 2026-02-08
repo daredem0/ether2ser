@@ -24,6 +24,11 @@
 #include "system/event_queue.h"
 
 // Generated headers
+/**
+ * @brief Dispatch one event to the corresponding handler.
+ * @param event Event to process.
+ * @param app Application context.
+ */
 void event_dispatch(event_t* event, app_ctx_t* app);
 
 #endif /* EVENT_DISPATCH_H */

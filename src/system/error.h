@@ -20,6 +20,9 @@
 
 // Generated headers
 
+/**
+ * @brief Common error codes returned by ether2ser modules.
+ */
 typedef enum
 {
     E2S_OK = 0,

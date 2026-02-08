@@ -25,6 +25,9 @@
 
 // Generated headers
 
+/**
+ * @brief Supported synchronous V.24 baudrates.
+ */
 typedef enum
 {
     V24_BAUD_1200   = 1200,
@@ -38,33 +41,57 @@ typedef enum
     V24_BAUD_115200 = 115200
 } V24_BAUDRATE_T;
 
+/**
+ * @brief TX/control output polarity configuration.
+ */
 typedef struct
 {
+    /** Invert TXD output polarity when true. */
     bool txd_inverted;
+    /** Invert TXC output polarity when true. */
     bool txc_inverted;
+    /** Invert CTS input sense when true. */
     bool cts_inverted;
+    /** Invert RTS output polarity when true. */
     bool rts_inverted;
+    /** Invert DTR output polarity when true. */
     bool dtr_inverted;
 } V24_TX_POLARITIES_T;
 
+/**
+ * @brief RX/input polarity configuration.
+ */
 typedef struct
 {
+    /** Invert RXD input sense when true. */
     bool rxd_inverted;
+    /** Invert RXC input sense when true. */
     bool rxc_inverted;
+    /** Invert DCD input sense when true. */
     bool dcd_inverted;
 } V24_RX_POLARITIES_T;
 
+/**
+ * @brief Combined TX and RX polarity configuration.
+ */
 typedef struct
 {
     V24_TX_POLARITIES_T tx_polarities;
     V24_RX_POLARITIES_T rx_polarities;
 } V24_POLARITIES_T;
 
+/**
+ * @brief Runtime V.24 configuration and TX holdoff state.
+ */
 typedef struct
 {
+    /** Configured serial baudrate. */
     V24_BAUDRATE_T   baudrate;
+    /** Signal polarity set for TX and RX paths. */
     V24_POLARITIES_T polarities;
+    /** RTS release holdoff in microseconds after TX completion. */
     uint32_t         tx_rts_holdoff_us;
+    /** Internal state: current RTS asserted/deasserted status. */
     bool             rts_set;
 } V24_CONFIG_T;
 

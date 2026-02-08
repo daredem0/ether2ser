@@ -23,6 +23,10 @@
 
 // Generated headers
 
+/**
+ * @brief Run the main application polling loop.
+ * @param app Application context.
+ */
 void event_loop(app_ctx_t* app);
 
 #endif /* EVENT_LOOP_H */

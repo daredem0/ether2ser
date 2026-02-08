@@ -22,7 +22,15 @@
 
 // Generated headers
 
+/**
+ * @brief Build default V.24 polarity configuration.
+ * @return Default polarity set for TX/RX/control lines.
+ */
 V24_POLARITIES_T init_polarities(void);
+
+/**
+ * @brief Initialize all board GPIOs used by the application.
+ */
 void             init_pins(void);
 
 #endif /* GPIO_DRIVER_H */

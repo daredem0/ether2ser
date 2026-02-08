@@ -20,6 +20,10 @@
 
 // Generated headers
 
+/**
+ * @name V.24 Pin Mapping
+ * @{
+ */
 #define V24_TXC_DCE 0
 #define V24_RXC 4
 #define V24_TXC_DTE 5
@@ -33,7 +37,11 @@
 #define V24_DTR 15
 #define V24_TX_ACTIVE 1
 #define V24_STATUS_LED 25
+/** @} */
 
+/**
+ * @brief Typed aliases for V.24 GPIO assignments.
+ */
 typedef enum
 {
     V24_TXC_DCE_T    = V24_TXC_DCE,

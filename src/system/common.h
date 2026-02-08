@@ -26,12 +26,21 @@
 
 // Generated headers
 
+/**
+ * @brief Return compile-time element count for an array object.
+ */
 #define ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
 
+/**
+ * @brief Bit shift used to normalize RX byte ordering to LSB position.
+ */
 #define RX_SHIFT_TO_LSB (3U * CHAR_BIT)
 
 // Important: Keep this up with reality. It has to match the actual amount
 // of cycles used in the pio program, otherwise the clock will be off
+/**
+ * @brief Number of TX PIO instructions executed per serialized bit.
+ */
 #define TX_PIO_CYCLES_PER_BIT 3U
 
 /*
@@ -50,6 +59,9 @@
 #define PRIu64 "llu"
 #endif
 
+/**
+ * @brief Log verbosity levels.
+ */
 typedef enum
 {
     LOG_LEVEL_ERROR,
@@ -57,12 +69,32 @@ typedef enum
     LOG_LEVEL_DEBUG,
     LOG_LEVEL_TRACE
 } log_level_t;
+
+/**
+ * @brief Set current global log level.
+ * @param level New log level.
+ */
 void        set_loglevel(log_level_t level);
+
+/**
+ * @brief Get current global log level.
+ * @return Active log level.
+ */
 log_level_t get_loglevel(void);
+
+/**
+ * @brief Atomically read and clear "log emitted" flag.
+ * @return true if any log was emitted since previous call.
+ */
 bool        log_take_emitted_flag(void);
 
 // extern log_level_t current_log_level;
 
+/**
+ * @brief Get printable tag for a log level.
+ * @param level Log level.
+ * @return Static tag string.
+ */
 static inline const char* log_level_tag(log_level_t level)
 {
     switch (level)
@@ -79,6 +111,13 @@ static inline const char* log_level_tag(log_level_t level)
         return "LOG";
     }
 }
+
+/**
+ * @brief Emit one formatted log message if level is enabled.
+ * @param level Message level.
+ * @param fmt `printf`-style format string.
+ * @param ... Format arguments.
+ */
 void log_write(log_level_t level, const char* fmt, ...);
 #define LOG(level, fmt, ...)                      \
     do                                            \

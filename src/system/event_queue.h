@@ -23,8 +23,14 @@
 #include "drivers/v24_config.h"
 
 // Generated headers
+/**
+ * @brief Maximum number of event slots in queue storage.
+ */
 #define EVENT_QUEUE_CAPACITY 16
 
+/**
+ * @brief Event type identifiers.
+ */
 typedef enum
 {
     EV_NONE = 0,
@@ -41,6 +47,9 @@ typedef enum
     EV_GET_V24_SETTINGS
 } event_type_t;
 
+/**
+ * @brief Typed payload selector for configuration-oriented events.
+ */
 typedef enum
 {
     NET_IP_REMOTE,
@@ -53,9 +62,14 @@ typedef enum
     V24_POLARITIES
 } event_queue_data_types_t;
 
+/**
+ * @brief Generic event payload wrapper for network/V.24 config operations.
+ */
 typedef struct
 {
+    /** Payload value discriminator. */
     event_queue_data_types_t id;
+    /** Typed payload value. */
     union
     {
         uint8_t          ip[4];
@@ -65,15 +79,22 @@ typedef struct
     } value;
 } event_queue_data_t;
 
+/**
+ * @brief Event queue entry.
+ */
 typedef struct
 {
+    /** Event type. */
     event_type_t type;
+    /** Number of valid bytes in payload storage. */
     size_t       data_len;
+    /** Payload storage union. */
     union
     {
         const void* ptr;       // for large/external data
         uint8_t     bytes[16]; // for small inline data
     } data;
+    /** Selects inline payload (`true`) or pointer payload (`false`). */
     bool is_inline;
 } event_t;
 
@@ -106,6 +127,13 @@ bool event_queue_is_empty(void);
  */
 bool event_queue_is_full(void);
 
+/**
+ * @brief Resolve payload pointer and validate minimum payload size.
+ * @param event Event to inspect.
+ * @param required_size Minimum bytes required by caller.
+ * @param out Output pointer to payload bytes/object.
+ * @return true when payload is valid and large enough.
+ */
 bool event_get_payload_ptr(const event_t* event, size_t required_size, const void** out);
 
 #endif /* SYSTEM_EVENT_QUEUE_H */
