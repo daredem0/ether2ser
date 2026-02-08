@@ -330,12 +330,27 @@ void event_dispatch(event_t* event, app_ctx_t* app)
     {
     case EV_STATUS:
     {
+        uint64_t frame_gap = 0;
+        if (app->stats.hdlc_tx_frames > app->stats.hdlc_frame_ready)
+        {
+            frame_gap = app->stats.hdlc_tx_frames - app->stats.hdlc_frame_ready;
+        }
+        uint64_t tx_gap = 0;
+        if (app->stats.hdlc_frame_ready > app->stats.udp_tx_frames)
+        {
+            tx_gap = app->stats.hdlc_frame_ready - app->stats.udp_tx_frames;
+        }
+
         printf("PIPE STATS\r\n");
-        printf("  RX/TX      : udp_rx=%" PRIu64 " hdlc_tx=%" PRIu64 " udp_tx=%" PRIu64 "\r\n",
-               app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.udp_tx_frames);
+        printf("  RX/TX      : udp_rx=%" PRIu64 " hdlc_tx=%" PRIu64 " hdlc_rx=%" PRIu64
+               " udp_tx=%" PRIu64 "\r\n",
+               app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.hdlc_frame_ready,
+               app->stats.udp_tx_frames);
         printf("  Decode     : frame_ready=%" PRIu64 " ok=%" PRIu64 " fail=%" PRIu64 "\r\n",
                app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok,
                app->stats.hdlc_decode_fail);
+        printf("  Pipeline   : tx->ready_gap=%" PRIu64 " ready->udp_gap=%" PRIu64 "\r\n", frame_gap,
+               tx_gap);
         printf("  Serial RX  : bytes=%" PRIu64 "\r\n", app->stats.serial_rx_bytes);
         printf("  Sync Wait  : syncing=%" PRIu64 " synced=%" PRIu64 "\r\n",
                app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
@@ -343,6 +358,15 @@ void event_dispatch(event_t* event, app_ctx_t* app)
                " hardcap_bytes=%" PRIu64 "\r\n",
                app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
                app->stats.sync_hardcap_drop_bytes);
+        printf("  Accum      : pos=%zu proc=%zu state=%d off=%u cand_valid=%d cand_end=%zu\r\n",
+               app->accumulator.position, app->accumulator.processed, (int)app->accumulator.state,
+               app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
+               app->accumulator.candidate_end);
+        printf("  Queues     : tx_count=%zu/%zu tx_active=%d recon_len=%zu\r\n",
+               app->tx_queue.queue_buffer.count, app->tx_queue.queue_buffer.capacity,
+               (app->tx_queue.current_entry.offset < app->tx_queue.current_entry.frame.length) ? 1
+                                                                                                : 0,
+               app->reconstructed_frame.length);
         app->need_prompt = true;
     }
     break;
