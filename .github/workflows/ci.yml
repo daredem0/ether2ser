@@ -22,7 +22,9 @@ jobs:
             make \
             gcc-arm-none-eabi \
             libnewlib-arm-none-eabi \
-            git
+            git \
+            doxygen \
+            graphviz
 
       - name: Fetch Pico SDK
         run: |
@@ -37,6 +39,36 @@ jobs:
           cmake -S . -B build
           cmake --build build
 
+      - name: Build docs
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+        run: |
+          cmake --build build --target docs
+
+      - name: Prepare docs artifact
+        run: |
+          set -euo pipefail
+          mkdir -p docs-site
+
+          if [ -d "build/docs/doxygen/html" ]; then
+            cp -a build/docs/doxygen/html/. docs-site/
+          elif [ -d "docs/doxygen/html" ]; then
+            cp -a docs/doxygen/html/. docs-site/
+          else
+            DOC_HTML="$(find build -type f -path '*/html/index.html' | head -n1 || true)"
+            if [ -z "${DOC_HTML}" ]; then
+              echo "Could not locate generated Doxygen HTML output."
+              exit 1
+            fi
+            cp -a "$(dirname "${DOC_HTML}")"/. docs-site/
+          fi
+
+      - name: Upload docs artifact (CI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: doxygen-html
+          path: docs-site
+
       - name: Build tests
         run: |
           cmake -S . -B build-tests -DBUILD_TESTS=ON
@@ -45,3 +77,24 @@ jobs:
       - name: Run tests
         run: |
           ./build-tests/unit_tests
+
+      - name: Upload Pages artifact
+        if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs-site
+
+  deploy-docs:
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
