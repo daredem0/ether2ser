@@ -1,0 +1,11 @@
+.program led_mirror
+
+.wrap_target
+    check:      jmp pin, led_on     ; If TXD (jmp_pin) is high, turn on LED
+                in pins, 1          ; Otherwise, read RXD (in_pins)
+                mov x, isr          ; Move RXD bit to X
+                jmp !x, led_off     ; If RXD is low too, turn off LED
+    led_on:     set pins, 1         ; Turn on LED
+                jmp check           ; Check again
+    led_off:    set pins, 0         ; Turn off LED
+.wrap

@@ -25,6 +25,7 @@
 #include "system/common.h"
 
 // Generated headers
+#include "led_activity_mirror.pio.h"
 #include "rck_rxd.pio.h"
 #include "tck_txd.pio.h"
 
@@ -43,6 +44,46 @@ v24_runtime_t v24_runtime;
 static float baud_to_clockdiv(V24_BAUDRATE_T baudrate)
 {
     return 125000000.0f / (3.0f * (float)baudrate);
+}
+
+#define LED_MIRROR_PIO pio0
+void led_mirror_init(void)
+{
+    // For now this cant be used as pin 25 is also the
+    // reset signal for w5500
+    PIO pio = LED_MIRROR_PIO; // keep pio1 free for W5500 PIO-SPI
+    int sm  = pio_claim_unused_sm(pio, false);
+    if (sm < 0)
+    {
+        printf("LED mirror: no free SM on pio0\r\n");
+        return;
+    }
+    LOG_INFO("LED Mirror: init pio%u sm%u \r\n", (unsigned)pio_get_index(pio), (unsigned)sm);
+
+    if (!pio_can_add_program(pio, &led_mirror_program))
+    {
+        printf("LED mirror: no room for program on pio0\r\n");
+        pio_sm_unclaim(pio, (uint)sm);
+        return;
+    }
+
+    uint offset = pio_add_program(pio, &led_mirror_program);
+
+    pio_sm_config cfg = led_mirror_program_get_default_config(offset);
+    sm_config_set_set_pins(&cfg, V24_STATUS_LED, 1);
+    sm_config_set_jmp_pin(&cfg, V24_TXD);
+    sm_config_set_in_pins(&cfg, V24_RXD);
+    sm_config_set_in_shift(&cfg, false, false, 32);
+
+    pio_gpio_init(pio, V24_STATUS_LED);
+    pio_sm_set_consecutive_pindirs(pio, (uint)sm, V24_STATUS_LED, 1, true);
+
+    // TXD/RXD stay inputs; no pio_gpio_init needed for read-only pin sampling.
+    pio_sm_init(pio, (uint)sm, offset, &cfg);
+    pio_sm_set_enabled(pio, (uint)sm, true);
+
+    printf("LED mirror: enabled on pio%u sm%d offset=%u\r\n", (unsigned)pio_get_index(pio), sm,
+           (unsigned)offset);
 }
 
 void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
@@ -79,6 +120,7 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
     LOG_INFO("RXC: init pio%u sm%u pin%u\r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm,
              (unsigned)V24_RXC);
 
+    pio_sm_claim(pio, pio_sm);
     // Load PIO program
     uint offset = pio_add_program(pio, &rck_rxd_program);
     LOG_INFO("RXC: program offset=%u\r\n", (unsigned)offset);
@@ -185,6 +227,7 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
     LOG_INFO("TXC: init pio%u sm%u pin%u baud=%u clkdiv=%.6f\r\n", (unsigned)pio_get_index(pio),
              (unsigned)pio_sm, (unsigned)V24_TXC_DTE, (unsigned)baudrate, (double)clkdiv);
 
+    pio_sm_claim(pio, pio_sm);
     // Load PIO program
     uint offset = pio_add_program(pio, &tck_txd_program);
     LOG_INFO("TXC: program offset=%u\r\n", (unsigned)offset);

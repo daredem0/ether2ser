@@ -132,6 +132,7 @@ if(NOT BUILD_TESTS)
         ${CMAKE_CURRENT_LIST_DIR}/pio/tx_clock.pio
         ${CMAKE_CURRENT_LIST_DIR}/pio/tck_txd.pio
         ${CMAKE_CURRENT_LIST_DIR}/pio/rck_rxd.pio
+        ${CMAKE_CURRENT_LIST_DIR}/pio/led_activity_mirror.pio
     )
 
     configure_pico_target(ether2serial)

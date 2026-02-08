@@ -37,5 +37,6 @@ bool rx_get(uint8_t* data);
 
 void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate);
 void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate);
+void led_mirror_init(void);
 
 #endif /* PIO_TX_RX_DRIVER_H */

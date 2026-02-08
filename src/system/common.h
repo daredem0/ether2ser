@@ -36,13 +36,13 @@ extern log_level_t current_log_level;
 #define LOG_DEBUG(...)                            \
     do                                            \
     {                                             \
-        if (current_log_level <= LOG_LEVEL_DEBUG) \
+        if (current_log_level >= LOG_LEVEL_DEBUG) \
             printf(__VA_ARGS__);                  \
     } while (0)
 #define LOG_INFO(...)                            \
     do                                           \
     {                                            \
-        if (current_log_level <= LOG_LEVEL_INFO) \
+        if (current_log_level >= LOG_LEVEL_INFO) \
             printf(__VA_ARGS__);                 \
     } while (0)
 
