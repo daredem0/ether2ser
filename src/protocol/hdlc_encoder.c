@@ -21,6 +21,7 @@
 
 // Project Headers
 #include "hdlc_common.h"
+#include "system/common.h"
 
 // Generated headers
 
@@ -84,8 +85,8 @@ bool hdlc_encode_byte(const uint8_t* payload, const size_t payload_length, HDLC_
     HDLC_TRY_PUT_BYTE(HDLC_FLAG_BYTE, frame, abort);
     if (frame->length > 0)
     {
-        printf("HDLC ENCODE: len=%zu first=0x%02X last=0x%02X\r\n", frame->length,
-               frame->payload[0], frame->payload[frame->length - 1]);
+        LOG_DEBUG("HDLC ENCODE: len=%zu first=0x%02X last=0x%02X\r\n", frame->length,
+                  frame->payload[0], frame->payload[frame->length - 1]);
     }
     return true;
 abort:
@@ -199,8 +200,8 @@ bool hdlc_encode(const uint8_t* payload, const size_t payload_length, HDLC_FRAME
     HDLC_TRY_PUT_BYTE(HDLC_FLAG_BYTE, frame, abort);
     if (frame->length > 0)
     {
-        printf("HDLC ENCODE(BIT): len=%zu first=0x%02X last=0x%02X\r\n", frame->length,
-               frame->payload[0], frame->payload[frame->length - 1]);
+        LOG_DEBUG("HDLC ENCODE(BIT): len=%zu first=0x%02X last=0x%02X\r\n", frame->length,
+                  frame->payload[0], frame->payload[frame->length - 1]);
     }
     return true;
 abort:

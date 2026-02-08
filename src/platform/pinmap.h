@@ -31,7 +31,7 @@
 #define V24_TXD 14
 // #define V24_TXD     25 // for testing led pin
 #define V24_DTR 15
-#define V24_TX_ACTIVE 25
+#define V24_TX_ACTIVE 1
 #define V24_STATUS_LED 25
 
 typedef enum

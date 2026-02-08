@@ -60,8 +60,8 @@ e2s_error_t poll_queue_stats(TX_QUEUE_T* queue)
     }
     if (queue->queue_touched || (uint32_t)(now_ms - last_print_ms) >= 15000u)
     {
-        LOG_DEBUG("TX Queue Stats: %zu / %zu frames used\r\n", queue->queue_buffer.count,
-                  queue->queue_buffer.capacity);
+        LOG_INFO("TX Queue Stats: %zu / %zu frames used\r\n", queue->queue_buffer.count,
+                 queue->queue_buffer.capacity);
         queue->queue_touched = false;
         last_print_ms        = now_ms;
     }
@@ -149,7 +149,7 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain)
         {
             return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
         }
-        printf("TX FRAME COMPLETE: offset=%zu length=%zu\n", completed_offset, completed_length);
+        LOG_DEBUG("TX FRAME COMPLETE: offset=%zu length=%zu\n", completed_offset, completed_length);
 
         queue->current_entry.frame.payload  = queue->current_entry.payload;
         queue->current_entry.frame.capacity = sizeof(queue->current_entry.payload);

@@ -1,0 +1,368 @@
+diff --git a/src/drivers/pio_tx_rx_driver.c b/src/drivers/pio_tx_rx_driver.c
+index 00e8b2f..d62e4a1 100644
+--- a/src/drivers/pio_tx_rx_driver.c
++++ b/src/drivers/pio_tx_rx_driver.c
+@@ -19,22 +19,48 @@
+ // Project Headers
+ #include "drivers/gpio_driver.h"
+ #include "hardware/pio.h"
++#include "pico/time.h"
+ #include "pico/types.h"
+ #include "platform/pinmap.h"
++#include "system/common.h"
+ 
+ // Generated headers
+ #include "rck_rxd.pio.h"
+ #include "tck_txd.pio.h"
+ 
++typedef struct
++{
++    uint32_t tx_rts_holdoff_us;
++    bool     rts_set;
++} v24_runtime_t;
++
++// This struct holds the runtime state of the v24 and shall not be exposed
++v24_runtime_t v24_runtime;
++
++// #define TX_RTS_HOLDOFF_US 4220u
++// static bool rts_set = false;
++
+ static float baud_to_clockdiv(V24_BAUDRATE_T baudrate)
+ {
+     return 125000000.0f / (3.0f * (float)baudrate);
+ }
+ 
++void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
++{
++    config->baudrate              = baudrate;
++    uint32_t t_bit_us             = (1000000u + (uint32_t)baudrate - 1u) / (uint32_t)baudrate;
++    v24_runtime.tx_rts_holdoff_us = 41u * t_bit_us; // start conservative
++    if (v24_runtime.tx_rts_holdoff_us < 200u)
++    {
++        v24_runtime.tx_rts_holdoff_us = 200u;
++    }
++    v24_runtime.rts_set = false;
++}
++
+ void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
+ {
+     config->polarities = init_polarities();
+-    config->baudrate   = baudrate;
++    reinit_v24_config(config, baudrate);
+ }
+ 
+ bool rx_get(uint8_t* data)
+@@ -50,12 +76,12 @@ bool rx_get(uint8_t* data)
+ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
+ {
+ 
+-    printf("RXC: init pio%u sm%u pin%u\r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm,
+-           (unsigned)V24_RXC);
++    LOG_INFO("RXC: init pio%u sm%u pin%u\r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm,
++             (unsigned)V24_RXC);
+ 
+     // Load PIO program
+     uint offset = pio_add_program(pio, &rck_rxd_program);
+-    printf("RXC: program offset=%u\r\n", (unsigned)offset);
++    LOG_INFO("RXC: program offset=%u\r\n", (unsigned)offset);
+ 
+     // Route GPIO to PIO
+     pio_gpio_init(pio, V24_RXD);
+@@ -81,33 +107,68 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
+     sm_config_set_in_shift(&config, true, true, 8);
+     pio_sm_init(pio, pio_sm, offset, &config);
+     pio_sm_set_enabled(pio, pio_sm, true);
+-    printf("RXC: enabled\r\n");
++    LOG_INFO("RXC: enabled\r\n");
+ }
+ 
+-static bool rts_set = false;
++static bool tx_can_deassert_rts(void)
++{
++    if (pio0 == NULL)
++    {
++        return false;
++    }
++    return pio_sm_is_tx_fifo_empty(pio0, 0);
++}
+ 
+-bool tx_poll()
++bool tx_poll(void)
+ {
+-    if (pio0->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + 0)))
++    static bool     deassert_pending     = false;
++    static uint64_t deassert_deadline_us = 0;
++
++    if (!v24_runtime.rts_set)
+     {
+-        // RTS deasserted, not ready to send
+-        gpio_put(V24_RTS, 0);
+-        rts_set      = false;
+-        pio0->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + 0));
++        deassert_pending = false;
++        return true;
++    }
++
++    bool fifo_empty        = pio_sm_is_tx_fifo_empty(pio0, 0);
++    bool stalled           = (pio0->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + 0))) != 0;
++    bool ready_to_deassert = (fifo_empty || stalled);
++
++    uint64_t now_us = to_us_since_boot(get_absolute_time());
++
++    if (!ready_to_deassert)
++    {
++        deassert_pending = false;
+         return false;
+     }
++
++    if (!deassert_pending)
++    {
++        deassert_pending     = true;
++        deassert_deadline_us = now_us + v24_runtime.tx_rts_holdoff_us;
++        return false;
++    }
++
++    if (now_us < deassert_deadline_us)
++    {
++        return false;
++    }
++
++    gpio_put(V24_RTS, 0);
++    v24_runtime.rts_set = false;
++    deassert_pending    = false;
+     return true;
+ }
+ 
+ bool tx_put(uint8_t data)
+ {
+-    if (!rts_set)
++    if (!v24_runtime.rts_set)
+     {
+         // Indicate ready to send by setting RTS
+         pio0->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + 0));
+         gpio_set_dir(V24_RTS, GPIO_OUT);
+         gpio_put(V24_RTS, 1);
+-        rts_set = true;
++        v24_runtime.rts_set = true;
+     }
+     if (pio0 == NULL || pio_sm_is_tx_fifo_full(pio0, 0))
+     {
+@@ -121,12 +182,12 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
+ {
+     float clkdiv = baud_to_clockdiv(baudrate);
+ 
+-    printf("TXC: init pio%u sm%u pin%u baud=%u clkdiv=%.6f\r\n", (unsigned)pio_get_index(pio),
+-           (unsigned)pio_sm, (unsigned)V24_TXC_DTE, (unsigned)baudrate, (double)clkdiv);
++    LOG_INFO("TXC: init pio%u sm%u pin%u baud=%u clkdiv=%.6f\r\n", (unsigned)pio_get_index(pio),
++             (unsigned)pio_sm, (unsigned)V24_TXC_DTE, (unsigned)baudrate, (double)clkdiv);
+ 
+     // Load PIO program
+     uint offset = pio_add_program(pio, &tck_txd_program);
+-    printf("TXC: program offset=%u\r\n", (unsigned)offset);
++    LOG_INFO("TXC: program offset=%u\r\n", (unsigned)offset);
+ 
+     // Route GPIO to PIO
+     pio_gpio_init(pio, V24_TXC_DTE);
+@@ -160,5 +221,7 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
+     sm_config_set_clkdiv(&config, clkdiv);
+     pio_sm_init(pio, pio_sm, offset, &config);
+     pio_sm_set_enabled(pio, pio_sm, true);
+-    printf("TXC: enabled\r\n");
++    LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
++
++    LOG_INFO("TXC: enabled\r\n");
+ }
+diff --git a/src/drivers/pio_tx_rx_driver.h b/src/drivers/pio_tx_rx_driver.h
+index d8b8b56..08901b7 100644
+--- a/src/drivers/pio_tx_rx_driver.h
++++ b/src/drivers/pio_tx_rx_driver.h
+@@ -36,5 +36,6 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities);
+ bool rx_get(uint8_t* data);
+ 
+ void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate);
++void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate);
+ 
+ #endif /* PIO_TX_RX_DRIVER_H */
+diff --git a/src/drivers/tx_queue.c b/src/drivers/tx_queue.c
+index 9da28b6..bf0a58b 100644
+--- a/src/drivers/tx_queue.c
++++ b/src/drivers/tx_queue.c
+@@ -39,6 +39,7 @@ e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data)
+ {
+     RbInit(&(queue->queue_buffer), buffer_data, TX_FRAME_QUEUE_SIZE, sizeof(TX_QUEUE_ENTRY_T));
+     queue->queue_touched = false;
++    queue->tx_wire_bytes = 0;
+     return E2S_OK;
+ }
+ 
+@@ -74,7 +75,8 @@ static inline TX_QUEUE_ENTRY_T tx_queue_entry_init(void)
+     return e;
+ }
+ 
+-static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_ENTRY_T* entry, size_t bytes_to_drain)
++static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_T* queue, TX_QUEUE_ENTRY_T* entry,
++                                        size_t bytes_to_drain)
+ {
+     // LOG_DEBUG("TX: Draining up to %zu bytes from entry (length: %zu, offset: %zu)\r\n",
+     //        bytes_to_drain, entry->frame.length, entry->offset);
+@@ -89,11 +91,11 @@ static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_ENTRY_T* entry, size_t bytes_to
+     size_t bytes_drained            = 0;
+     for (size_t i = 0; i < effective_bytes_to_drain; i++)
+     {
+-        // if (pio_sm_is_tx_fifo_full(pio0, 0))
+-        // {
+-        //     // LOG_DEBUG("TX: TX FIFO is full, stopping drain\r\n");
+-        //     break;
+-        // }
++        if (pio_sm_is_tx_fifo_full(pio0, 0))
++        {
++            // LOG_DEBUG("TX: TX FIFO is full, stopping drain\r\n");
++            // break;
++        }
+         if (tx_put(entry->frame.payload[entry->offset + i]))
+         {
+             // LOG_DEBUG("TX: Wrote byte %02X\r\n", entry->frame.payload[entry->offset + i]);
+@@ -107,6 +109,7 @@ static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_ENTRY_T* entry, size_t bytes_to
+         }
+     }
+     entry->offset += bytes_drained;
++    queue->tx_wire_bytes += bytes_drained;
+     // LOG_DEBUG("TX: Drained %zu bytes, new offset is %zu\r\n", bytes_drained, entry->offset);
+     return E2S_OK;
+ }
+@@ -139,15 +142,31 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain)
+     // queue->current_entry = (TX_QUEUE_ENTRY_T){0};
+     if (queue->current_entry.offset >= queue->current_entry.frame.length)
+     {
++        size_t completed_offset = queue->current_entry.offset;
++        size_t completed_length = queue->current_entry.frame.length;
++
+         if (RbPopFront(&(queue->queue_buffer), &queue->current_entry) < 0)
+         {
+             return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
+         }
++        printf("TX FRAME COMPLETE: offset=%zu length=%zu\n", completed_offset, completed_length);
++
+         queue->current_entry.frame.payload  = queue->current_entry.payload;
+         queue->current_entry.frame.capacity = sizeof(queue->current_entry.payload);
+     }
+-    tx_queue_drain_bytes(&queue->current_entry, bytes_to_drain);
+-
++    tx_queue_drain_bytes(queue, &queue->current_entry, bytes_to_drain);
++    if (queue->current_entry.offset > 0 &&
++        queue->current_entry.offset < queue->current_entry.frame.length)
++    {
++        static uint32_t last_log = 0;
++        uint32_t        now      = to_ms_since_boot(get_absolute_time());
++        if (now - last_log > 1000)
++        { // Log once per second
++            printf("TX IN PROGRESS: offset=%zu/%zu\n", queue->current_entry.offset,
++                   queue->current_entry.frame.length);
++            last_log = now;
++        }
++    }
+     return E2S_OK;
+ }
+ 
+diff --git a/src/drivers/tx_queue.h b/src/drivers/tx_queue.h
+index 9a4e12e..c8df922 100644
+--- a/src/drivers/tx_queue.h
++++ b/src/drivers/tx_queue.h
+@@ -16,6 +16,7 @@
+ 
+ // Standard library headers
+ #include <stdbool.h>
++#include <stdint.h>
+ 
+ // Project Headers
+ #include "drivers/w5500_driver.h"
+@@ -46,6 +47,7 @@ typedef struct
+     TX_QUEUE_ENTRY_T current_entry;
+     Ringbuffer       queue_buffer;
+     bool             queue_touched;
++    uint64_t         tx_wire_bytes;
+ } TX_QUEUE_T;
+ 
+ e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, UDP_FRAME_T* frame);
+diff --git a/src/drivers/v24_config.h b/src/drivers/v24_config.h
+index 1d2d106..c7e0f6d 100644
+--- a/src/drivers/v24_config.h
++++ b/src/drivers/v24_config.h
+@@ -2,6 +2,7 @@
+ 
+ #ifndef V24_CONFIG_H
+ #define V24_CONFIG_H
++#include <stdint.h>
+ 
+ typedef enum
+ {
+@@ -42,6 +43,8 @@ typedef struct
+ {
+     V24_BAUDRATE_T   baudrate;
+     V24_POLARITIES_T polarities;
++    uint32_t         tx_rts_holdoff_us;
++    bool             rts_set;
+ } V24_CONFIG_T;
+ 
+ #endif /* V24_CONFIG_H */
+diff --git a/src/system/event_dispatch.c b/src/system/event_dispatch.c
+index f996694..052b936 100644
+--- a/src/system/event_dispatch.c
++++ b/src/system/event_dispatch.c
+@@ -288,7 +288,8 @@ static void ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
+     switch (payload->id)
+     {
+     case V24_BAUDRATE:
+-        memcpy(&app->v24_config.baudrate, &payload->value.baudrate, sizeof(V24_BAUDRATE_T));
++        reinit_v24_config(&app->v24_config, payload->value.baudrate);
++        // memcpy(&app->v24_config.baudrate, &payload->value.baudrate, sizeof(V24_BAUDRATE_T));
+         tx_clock_init(pio0, 0, app->v24_config.baudrate,
+                       &(app->v24_config.polarities.tx_polarities));
+         rx_clock_init(pio0, 1, &(app->v24_config.polarities.rx_polarities));
+@@ -347,11 +348,11 @@ void event_dispatch(event_t* event, app_ctx_t* app)
+                app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.hdlc_frame_ready,
+                app->stats.udp_tx_frames);
+         printf("  Decode     : frame_ready=%" PRIu64 " ok=%" PRIu64 " fail=%" PRIu64 "\r\n",
+-               app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok,
+-               app->stats.hdlc_decode_fail);
++               app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok, app->stats.hdlc_decode_fail);
+         printf("  Pipeline   : tx->ready_gap=%" PRIu64 " ready->udp_gap=%" PRIu64 "\r\n", frame_gap,
+                tx_gap);
+         printf("  Serial RX  : bytes=%" PRIu64 "\r\n", app->stats.serial_rx_bytes);
++        printf("  Serial TX  : wire_bytes=%" PRIu64 "\r\n", app->tx_queue.tx_wire_bytes);
+         printf("  Sync Wait  : syncing=%" PRIu64 " synced=%" PRIu64 "\r\n",
+                app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
+         printf("  Sync Maint : consume=%" PRIu64 " hardcap_events=%" PRIu64
+@@ -365,8 +366,10 @@ void event_dispatch(event_t* event, app_ctx_t* app)
+         printf("  Queues     : tx_count=%zu/%zu tx_active=%d recon_len=%zu\r\n",
+                app->tx_queue.queue_buffer.count, app->tx_queue.queue_buffer.capacity,
+                (app->tx_queue.current_entry.offset < app->tx_queue.current_entry.frame.length) ? 1
+-                                                                                                : 0,
++                                                                                               : 0,
+                app->reconstructed_frame.length);
++        printf("PIO SM0 stalled: %d\n", (pio0->fdebug >> PIO_FDEBUG_TXSTALL_LSB) & 1);
++
+         app->need_prompt = true;
+     }
+     break;
+diff --git a/src/system/event_loop.c b/src/system/event_loop.c
+index b84c8fc..f1da511 100644
+--- a/src/system/event_loop.c
++++ b/src/system/event_loop.c
+@@ -22,6 +22,7 @@
+ #include "protocol/hdlc_sync.h"
+ #include "system/app_context.h"
+ #include "system/cli_usb_cdc.h"
++#include "system/common.h"
+ #include "system/error.h"
+ #include "system/event_dispatch.h"
+ #include "system/event_queue.h"
+@@ -34,7 +35,7 @@ static void print_prompt(app_ctx_t* app)
+ {
+     if (app->need_prompt)
+     {
+-        LOG_DEBUG("ether2ser> ");
++        LOG_INFO("ether2ser> ");
+         app->need_prompt = false;
+     }
+ }

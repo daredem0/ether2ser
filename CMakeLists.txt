@@ -231,6 +231,7 @@ else()
         src/protocol/hdlc_decoder.c
         src/protocol/hdlc_sync.c
         src/system/cli_parser.c
+        src/system/log.c
         src/system/event_queue.c
         src/system/ringbuffer.c
     )
