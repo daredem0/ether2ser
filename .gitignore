@@ -83,3 +83,6 @@ openocd.log
 # picotool
 *.bin.elf2uf2
 .claude
+
+# Documentation
+/docs/
