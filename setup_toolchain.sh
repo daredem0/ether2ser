@@ -4,7 +4,7 @@ sudo pacman -Syu --needed \
   git cmake ninja base-devel python \
   arm-none-eabi-gcc arm-none-eabi-newlib \
   openocd gdb \
-  libusb
+  libusb doxygen graphviz
 
 # Clone pico sdk
 mkdir -p ~/pico

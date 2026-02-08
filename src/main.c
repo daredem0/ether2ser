@@ -45,6 +45,7 @@
 #include "system/event_loop.h"
 #include "system/event_queue.h"
 #include "system/persistent_config.h"
+#include "version.h"
 
 // Generated headers
 
@@ -96,6 +97,7 @@ int main(void)
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
     printf("\r\nType 'help' in USB serial.\r\n");
+    printf("Version: %s\r\n", VERSION_STRING);
 
     if (get_loglevel() == LOG_LEVEL_DEBUG)
     {

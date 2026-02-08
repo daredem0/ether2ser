@@ -25,6 +25,38 @@ set(SOURCES
     src/protocol/hdlc_sync.c
 )
 
+# Get version from git
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    if(NOT GIT_VERSION)
+        set(GIT_VERSION "v0.1.0-dev")
+    endif()
+else()
+    set(GIT_VERSION "v0.1.0-dev")
+endif()
+
+# Parse version components
+string(REGEX MATCH "v([0-9]+)\\.([0-9]+)\\.([0-9]+)" _ ${GIT_VERSION})
+set(VERSION_MAJOR ${CMAKE_MATCH_1})
+set(VERSION_MINOR ${CMAKE_MATCH_2})
+set(VERSION_PATCH ${CMAKE_MATCH_3})
+
+# Generate version.h
+configure_file(
+    ${CMAKE_SOURCE_DIR}/src/version.h.in
+    ${CMAKE_BINARY_DIR}/generated/version.h
+)
+
+include_directories(${CMAKE_BINARY_DIR}/generated)
+
+
 if(NOT BUILD_TESTS)
     # WIZnet chip configuration for W55RP20-EVB-PICO
     # This board has an integrated W5500 connected via internal PIO-based SPI
@@ -250,9 +282,16 @@ endif()
 
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
+    # Configure Doxyfile with version
+    configure_file(
+        ${CMAKE_SOURCE_DIR}/Doxyfile.in
+        ${CMAKE_BINARY_DIR}/Doxyfile
+        @ONLY
+    )
+
     add_custom_target(docs
-        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_SOURCE_DIR}/Doxyfile
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "Generating API documentation with Doxygen"
+        COMMENT "Generating API documentation (${GIT_VERSION})"
         VERBATIM)
 endif()

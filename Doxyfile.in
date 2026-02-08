@@ -1831,7 +1831,7 @@ ENUM_VALUES_PER_LINE   = 4
 # enumeration values besides the enumeration mnemonics.
 # The default value is: NO.
 
-SHOW_ENUM_VALUES       = NO
+# SHOW_ENUM_VALUES       = NO
 
 # If the treeview is enabled (see GENERATE_TREEVIEW) then this tag can be used
 # to set the initial width (in pixels) of the frame in which the tree is shown.
@@ -2302,7 +2302,7 @@ RTF_EXTENSIONS_FILE    =
 # available.
 # This tag requires that the tag GENERATE_RTF is set to YES.
 
-RTF_EXTRA_FILES        =
+# RTF_EXTRA_FILES        =
 
 #---------------------------------------------------------------------------
 # Configuration options related to the man page output
@@ -2734,7 +2734,7 @@ UML_LIMIT_NUM_FIELDS   = 10
 # Minimum value: 0, maximum value: 100, default value: 10.
 # This tag requires that the tag UML_LOOK is set to YES.
 
-UML_MAX_EDGE_LABELS    = 10
+# UML_MAX_EDGE_LABELS    = 10
 
 # If the DOT_UML_DETAILS tag is set to NO, Doxygen will show attributes and
 # methods without types and arguments in the UML graphs. If the DOT_UML_DETAILS
@@ -2919,7 +2919,7 @@ PLANTUML_INCLUDE_PATH  =
 # contain PlantUml files that are included in the documentation (see the
 # \plantumlfile command).
 
-PLANTUMLFILE_DIRS      =
+# PLANTUMLFILE_DIRS      =
 
 # The DOT_GRAPH_MAX_NODES tag can be used to set the maximum number of nodes
 # that will be shown in the graph. If the number of nodes in a graph becomes
