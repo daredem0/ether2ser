@@ -8,7 +8,7 @@
  *  - Demonstrates concurrent PIO-driven and CPU-driven GPIO blinking.
  *  - Targets the W55RP20-EVB-PICO (USER LED on GPIO19).
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

@@ -4,7 +4,7 @@
  * File:    src/examples/blink/blink_pio.c
  * Purpose: PIO helper to drive a GPIO blink state machine for the example.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

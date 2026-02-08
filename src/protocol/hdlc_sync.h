@@ -5,7 +5,7 @@
  * File:    src/protocol/hdlc_sync.h
  * Purpose: HDLC sync accumulator interface and constants.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

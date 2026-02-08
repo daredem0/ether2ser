@@ -6,7 +6,7 @@
  * File:    src/drivers/pio_tx_rx_driver.h
  * Purpose: PIO TX clock driver API and baudrate definitions.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

@@ -4,7 +4,7 @@
  * File:    src/system/event_queue.h
  * Purpose: Event queue API with opaque payload pointers.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

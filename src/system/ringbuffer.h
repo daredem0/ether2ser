@@ -4,7 +4,7 @@
  * File:    src/system/ringbuffer.h
  * Purpose: Ring buffer data structure and API.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

@@ -4,7 +4,7 @@
  * File:    src/system/board_pins.h
  * Purpose: GPIO pin definitions for W55RP20-EVB-PICO board
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

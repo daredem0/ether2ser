@@ -5,7 +5,7 @@
  * File:    src/system/common.h
  * Purpose: Shared helpers and logging macros.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

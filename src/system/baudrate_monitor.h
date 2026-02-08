@@ -4,7 +4,7 @@
  * File:    src/system/baudrate_monitor.h
  * Purpose: RXC baudrate estimator interface.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

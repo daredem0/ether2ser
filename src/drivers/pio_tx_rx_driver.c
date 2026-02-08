@@ -4,7 +4,7 @@
  * File:    src/drivers/pio_tx_rx_driver.c
  * Purpose: PIO TX/RX clock driver implementation.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */
@@ -89,8 +89,8 @@ void led_mirror_init(void)
     pio_sm_init(pio, (uint)pio_sm, offset, &cfg);
     pio_sm_set_enabled(pio, (uint)pio_sm, true);
 
-    LOG_INFO("LED mirror: enabled on pio%u sm%d offset=%u\r\n", (unsigned)pio_get_index(pio), pio_sm,
-             (unsigned)offset);
+    LOG_INFO("LED mirror: enabled on pio%u sm%d offset=%u\r\n", (unsigned)pio_get_index(pio),
+             pio_sm, (unsigned)offset);
 }
 #define V24_RTS_MIN_HOLDOFF 200u
 #define V24_RTS_HOLDOFF_MARGIN 41u

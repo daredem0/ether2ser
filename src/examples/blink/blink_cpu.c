@@ -4,7 +4,7 @@
  * File:    src/examples/blink/blink_apu.c
  * Purpose: CPU-side helper to blink a GPIO for the blink example.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

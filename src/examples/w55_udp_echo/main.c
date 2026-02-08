@@ -4,7 +4,7 @@
  * File:    src/examples/w55_udp_echo/main.c
  * Purpose: W5500 UDP echo example.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

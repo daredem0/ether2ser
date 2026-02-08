@@ -1,4 +1,14 @@
 
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/app_init.c
+ * Purpose: Application context initialization and startup defaults.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 // Related headers
 #include "app_context.h"
@@ -14,6 +24,7 @@
 
 // Project Headers
 #include "drivers/pio_tx_rx_driver.h"
+#include "drivers/v24_config.h"
 #include "drivers/w5500_driver.h"
 #include "protocol/hdlc_common.h"
 #include "protocol/hdlc_sync.h"
@@ -37,10 +48,10 @@ void init_app(app_ctx_t* app, config_t* persistent_config)
         memcpy(&app->persistent_config, persistent_config, sizeof(config_t));
         set_loglevel(app->persistent_config.log_level);
 
-        app->local_config       = (UDP_CONFIG_T)app->persistent_config.local_config;
-        app->destination_config = (UDP_CONFIG_T)app->persistent_config.remote_config;
-        app->v24_config         = (V24_CONFIG_T)app->persistent_config.v24_config;
-        app->net_config         = (NETWORK_CONFIG_T)app->persistent_config.net_config;
+        app->local_config       = app->persistent_config.local_config;
+        app->destination_config = app->persistent_config.remote_config;
+        app->v24_config         = app->persistent_config.v24_config;
+        app->net_config         = app->persistent_config.net_config;
         w5500_set_network(&app->net_config);
         init_v24_config(&app->v24_config, app->v24_config.baudrate);
     }

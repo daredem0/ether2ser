@@ -1,4 +1,14 @@
 
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/app_context.h
+ * Purpose: Central application context and shared runtime state types.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef APP_CONTEXT_H
 #define APP_CONTEXT_H

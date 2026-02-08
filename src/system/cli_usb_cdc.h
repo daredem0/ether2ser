@@ -4,7 +4,7 @@
  * File:    src/system/cli_usb_cdc.h
  * Purpose: Interface for USB CDC CLI polling and line handling.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

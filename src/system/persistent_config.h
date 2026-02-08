@@ -1,4 +1,14 @@
 
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/persistent_config.h
+ * Purpose: Persistent configuration data model and flash persistence API.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef PERSISTENT_CONFIG_H
 #define PERSISTENT_CONFIG_H

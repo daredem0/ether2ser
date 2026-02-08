@@ -1,3 +1,14 @@
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/persistent_config.c
+ * Purpose: Flash-backed persistent configuration and memory usage reporting.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
+
 // Related headers
 #include "persistent_config.h"
 
@@ -14,7 +25,6 @@
 #include "hardware/flash.h"
 #include "hardware/regs/addressmap.h"
 #include "hardware/sync.h"
-#include "pico/stdlib.h"
 
 // Project Headers
 #include "system/common.h"

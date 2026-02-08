@@ -4,7 +4,7 @@
  * File:    src/examples/blink/blink.h
  * Purpose: Interfaces for the blink example (PIO and APU helpers).
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

@@ -4,7 +4,7 @@
  * File:    src/system/event_queue.c
  * Purpose: Opaque event queue storage and operations.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

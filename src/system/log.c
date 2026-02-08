@@ -4,7 +4,7 @@
  * File:    src/system/log.c
  * Purpose: Log level state and configuration.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

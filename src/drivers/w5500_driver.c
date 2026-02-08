@@ -4,7 +4,7 @@
  * File:    src/drivers/w5500_driver.c
  * Purpose: W5500 driver implementation and helpers.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

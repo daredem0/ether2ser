@@ -1,4 +1,14 @@
 
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/system/event_dispatch.h
+ * Purpose: Event dispatcher API for control-plane event handling.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef EVENT_DISPATCH_H
 #define EVENT_DISPATCH_H

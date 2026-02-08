@@ -1,8 +1,29 @@
 
+/*
+ * ether2ser - Ethernet <-> synchronous V.24 (RS-232/V.28) bridge
+ *
+ * File:    src/drivers/v24_config.h
+ * Purpose: V.24 configuration types (baudrate, line polarities, runtime TX state).
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Copyright (c) 2026 Florian <f.leuze@outlook.de>
+ */
 
 #ifndef V24_CONFIG_H
 #define V24_CONFIG_H
+
+// Related headers
+
+// Standard library headers
+#include <stdbool.h>
 #include <stdint.h>
+
+// Library Headers
+
+// Project Headers
+
+// Generated headers
 
 typedef enum
 {

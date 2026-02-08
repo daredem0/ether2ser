@@ -13,7 +13,7 @@
  *  - USB CDC is used for a simple CLI and status output.
  *  - PIO programs live in /pio (top-level); PIO C glue lives in src/pio/.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

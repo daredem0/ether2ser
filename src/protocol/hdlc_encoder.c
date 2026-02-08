@@ -4,7 +4,7 @@
  * File:    src/protocol/hdlc_encoder.c
  * Purpose: HDLC encoder (framing, escaping, and CRC append).
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */

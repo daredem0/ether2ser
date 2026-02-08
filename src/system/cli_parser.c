@@ -4,7 +4,7 @@
  * File:    src/system/cli_parser.c
  * Purpose: CLI line parsing and pin lookup.
  *
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2026 Florian <f.leuze@outlook.de>
  */
