@@ -16,6 +16,8 @@
 // Related headers
 
 // Standard library headers
+#include <sys/types.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -31,6 +33,22 @@
 // Important: Keep this up with reality. It has to match the actual amount
 // of cycles used in the pio program, otherwise the clock will be off
 #define TX_PIO_CYCLES_PER_BIT 3U
+
+/*
+ * Some arm-none-eabi/newlib combinations may miss PRI* macros unless the
+ * headers line up exactly. Provide conservative fallbacks when absent.
+ */
+#ifndef PRIu32
+#define PRIu32 "u"
+#endif
+
+#ifndef PRIX32
+#define PRIX32 "X"
+#endif
+
+#ifndef PRIu64
+#define PRIu64 "llu"
+#endif
 
 typedef enum
 {
