@@ -36,5 +36,6 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities);
 bool rx_get(uint8_t* data);
 
 void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate);
+void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate);
 
 #endif /* PIO_TX_RX_DRIVER_H */

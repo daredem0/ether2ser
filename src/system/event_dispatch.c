@@ -288,7 +288,8 @@ static void ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
     switch (payload->id)
     {
     case V24_BAUDRATE:
-        memcpy(&app->v24_config.baudrate, &payload->value.baudrate, sizeof(V24_BAUDRATE_T));
+        reinit_v24_config(&app->v24_config, payload->value.baudrate);
+        // memcpy(&app->v24_config.baudrate, &payload->value.baudrate, sizeof(V24_BAUDRATE_T));
         tx_clock_init(pio0, 0, app->v24_config.baudrate,
                       &(app->v24_config.polarities.tx_polarities));
         rx_clock_init(pio0, 1, &(app->v24_config.polarities.rx_polarities));
@@ -347,11 +348,11 @@ void event_dispatch(event_t* event, app_ctx_t* app)
                app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.hdlc_frame_ready,
                app->stats.udp_tx_frames);
         printf("  Decode     : frame_ready=%" PRIu64 " ok=%" PRIu64 " fail=%" PRIu64 "\r\n",
-               app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok,
-               app->stats.hdlc_decode_fail);
+               app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok, app->stats.hdlc_decode_fail);
         printf("  Pipeline   : tx->ready_gap=%" PRIu64 " ready->udp_gap=%" PRIu64 "\r\n", frame_gap,
                tx_gap);
         printf("  Serial RX  : bytes=%" PRIu64 "\r\n", app->stats.serial_rx_bytes);
+        printf("  Serial TX  : wire_bytes=%" PRIu64 "\r\n", app->tx_queue.tx_wire_bytes);
         printf("  Sync Wait  : syncing=%" PRIu64 " synced=%" PRIu64 "\r\n",
                app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
         printf("  Sync Maint : consume=%" PRIu64 " hardcap_events=%" PRIu64
@@ -365,8 +366,10 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         printf("  Queues     : tx_count=%zu/%zu tx_active=%d recon_len=%zu\r\n",
                app->tx_queue.queue_buffer.count, app->tx_queue.queue_buffer.capacity,
                (app->tx_queue.current_entry.offset < app->tx_queue.current_entry.frame.length) ? 1
-                                                                                                : 0,
+                                                                                               : 0,
                app->reconstructed_frame.length);
+        printf("PIO SM0 stalled: %d\n", (pio0->fdebug >> PIO_FDEBUG_TXSTALL_LSB) & 1);
+
         app->need_prompt = true;
     }
     break;

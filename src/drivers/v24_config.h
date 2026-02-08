@@ -2,6 +2,7 @@
 
 #ifndef V24_CONFIG_H
 #define V24_CONFIG_H
+#include <stdint.h>
 
 typedef enum
 {
@@ -42,6 +43,8 @@ typedef struct
 {
     V24_BAUDRATE_T   baudrate;
     V24_POLARITIES_T polarities;
+    uint32_t         tx_rts_holdoff_us;
+    bool             rts_set;
 } V24_CONFIG_T;
 
 #endif /* V24_CONFIG_H */

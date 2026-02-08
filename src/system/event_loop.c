@@ -22,6 +22,7 @@
 #include "protocol/hdlc_sync.h"
 #include "system/app_context.h"
 #include "system/cli_usb_cdc.h"
+#include "system/common.h"
 #include "system/error.h"
 #include "system/event_dispatch.h"
 #include "system/event_queue.h"
@@ -34,7 +35,7 @@ static void print_prompt(app_ctx_t* app)
 {
     if (app->need_prompt)
     {
-        LOG_DEBUG("ether2ser> ");
+        LOG_INFO("ether2ser> ");
         app->need_prompt = false;
     }
 }

@@ -16,6 +16,7 @@
 
 // Standard library headers
 #include <stdbool.h>
+#include <stdint.h>
 
 // Project Headers
 #include "drivers/w5500_driver.h"
@@ -46,6 +47,7 @@ typedef struct
     TX_QUEUE_ENTRY_T current_entry;
     Ringbuffer       queue_buffer;
     bool             queue_touched;
+    uint64_t         tx_wire_bytes;
 } TX_QUEUE_T;
 
 e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, UDP_FRAME_T* frame);
