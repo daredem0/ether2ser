@@ -368,6 +368,8 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         printf("  Reconstructed: len=%zu\r\n", app->reconstructed_frame.length);
         printf("  PIO SM0     : stalled=%d\r\n", (pio0->fdebug >> PIO_FDEBUG_TXSTALL_LSB) & 1);
 
+        print_memory_usage();
+        print_flash_usage();
         app->need_prompt = true;
     }
     break;

@@ -3,6 +3,7 @@
 
 // Standard library headers
 #include <inttypes.h>
+#include <malloc.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -13,6 +14,7 @@
 #include "hardware/flash.h"
 #include "hardware/regs/addressmap.h"
 #include "hardware/sync.h"
+#include "pico/stdlib.h"
 
 // Project Headers
 #include "system/common.h"
@@ -23,6 +25,42 @@
 #define FLASH_TARGET_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
 
 #define CONFIG_MAGIC 0xCAFEBABE
+
+void print_memory_usage(void)
+{
+    extern char __StackLimit, __bss_end__;
+    extern char __heap_start, __heap_end;
+
+    // RAM starts at 0x20000000, ends at 0x20042000 (264KB)
+    uint32_t total_ram = 264 * 1024;
+
+    // Static data (data + bss sections)
+    uint32_t static_used = (uint32_t)&__bss_end__ - 0x20000000;
+
+    // Use mallinfo for accurate heap stats
+    struct mallinfo mi        = mallinfo();
+    uint32_t        heap_used = mi.uordblks; // Bytes allocated
+
+    printf("=== Memory Usage ===\n");
+    printf("Static RAM (data+bss): %lu bytes (%.1f KB)\n", static_used, static_used / 1024.0f);
+    printf("Heap allocated: %lu bytes (%.1f KB)\n", heap_used, heap_used / 1024.0f);
+    printf("Total RAM: %lu bytes (%.1f KB)\n", total_ram, total_ram / 1024.0f);
+    printf("Approx free: %lu bytes (%.1f KB)\n", total_ram - static_used - heap_used,
+           (total_ram - static_used - heap_used) / 1024.0f);
+}
+
+void print_flash_usage(void)
+{
+    extern char __flash_binary_start, __flash_binary_end;
+
+    uint32_t flash_used  = (uint32_t)&__flash_binary_end - (uint32_t)&__flash_binary_start;
+    uint32_t total_flash = 2 * 1024 * 1024; // 2MB on W55RP20
+
+    printf("=== Flash Usage ===\n");
+    printf("Flash used: %lu bytes (%.1f KB)\n", flash_used, flash_used / 1024.0f);
+    printf("Total flash: %lu bytes\n", total_flash);
+    printf("Flash free: %lu bytes\n", total_flash - flash_used);
+}
 
 // Read: just cast the flash address
 static const config_t* nonsafe_config_read(void)
