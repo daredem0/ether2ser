@@ -16,6 +16,7 @@
 // Related headers
 
 // Standard library headers
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -24,6 +25,12 @@
 // Generated headers
 
 #define ARRAY_LEN(a) (sizeof(a) / sizeof((a)[0]))
+
+#define RX_SHIFT_TO_LSB (3U * CHAR_BIT)
+
+// Important: Keep this up with reality. It has to match the actual amount
+// of cycles used in the pio program, otherwise the clock will be off
+#define TX_PIO_CYCLES_PER_BIT 3U
 
 typedef enum
 {

@@ -38,5 +38,8 @@ bool rx_get(uint8_t* data);
 void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate);
 void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate);
 void led_mirror_init(void);
+void tx_clock_update_settings(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate,
+                              V24_TX_POLARITIES_T* polarities);
+void rx_clock_update_settings(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities);
 
 #endif /* PIO_TX_RX_DRIVER_H */

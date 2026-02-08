@@ -13,14 +13,21 @@
 #include "pio_tx_rx_driver.h"
 
 // Standard library headers
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 
-// Project Headers
-#include "drivers/gpio_driver.h"
+// Library Headers
+#include "hardware/gpio.h"
 #include "hardware/pio.h"
+#include "hardware/platform_defs.h"
+#include "hardware/regs/pio.h"
 #include "pico/time.h"
 #include "pico/types.h"
+
+// Project Headers
+#include "drivers/gpio_driver.h"
+#include "drivers/v24_config.h"
 #include "platform/pinmap.h"
 #include "system/common.h"
 
@@ -43,7 +50,7 @@ v24_runtime_t v24_runtime;
 
 static float baud_to_clockdiv(V24_BAUDRATE_T baudrate)
 {
-    return 125000000.0f / (3.0f * (float)baudrate);
+    return SYS_CLK_HZ / (TX_PIO_CYCLES_PER_BIT * (float)baudrate);
 }
 
 #define LED_MIRROR_PIO pio0
@@ -51,19 +58,19 @@ void led_mirror_init(void)
 {
     // For now this cant be used as pin 25 is also the
     // reset signal for w5500
-    PIO pio = LED_MIRROR_PIO; // keep pio1 free for W5500 PIO-SPI
-    int sm  = pio_claim_unused_sm(pio, false);
-    if (sm < 0)
+    PIO pio    = LED_MIRROR_PIO; // keep pio1 free for W5500 PIO-SPI
+    int pio_sm = pio_claim_unused_sm(pio, false);
+    if (pio_sm < 0)
     {
         printf("LED mirror: no free SM on pio0\r\n");
         return;
     }
-    LOG_INFO("LED Mirror: init pio%u sm%u \r\n", (unsigned)pio_get_index(pio), (unsigned)sm);
+    LOG_INFO("LED Mirror: init pio%u sm%u \r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm);
 
     if (!pio_can_add_program(pio, &led_mirror_program))
     {
         printf("LED mirror: no room for program on pio0\r\n");
-        pio_sm_unclaim(pio, (uint)sm);
+        pio_sm_unclaim(pio, (uint)pio_sm);
         return;
     }
 
@@ -73,27 +80,29 @@ void led_mirror_init(void)
     sm_config_set_set_pins(&cfg, V24_STATUS_LED, 1);
     sm_config_set_jmp_pin(&cfg, V24_TXD);
     sm_config_set_in_pins(&cfg, V24_RXD);
-    sm_config_set_in_shift(&cfg, false, false, 32);
+    sm_config_set_in_shift(&cfg, false, false, sizeof(uint32_t) * CHAR_BIT);
 
     pio_gpio_init(pio, V24_STATUS_LED);
-    pio_sm_set_consecutive_pindirs(pio, (uint)sm, V24_STATUS_LED, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, (uint)pio_sm, V24_STATUS_LED, 1, true);
 
     // TXD/RXD stay inputs; no pio_gpio_init needed for read-only pin sampling.
-    pio_sm_init(pio, (uint)sm, offset, &cfg);
-    pio_sm_set_enabled(pio, (uint)sm, true);
+    pio_sm_init(pio, (uint)pio_sm, offset, &cfg);
+    pio_sm_set_enabled(pio, (uint)pio_sm, true);
 
-    printf("LED mirror: enabled on pio%u sm%d offset=%u\r\n", (unsigned)pio_get_index(pio), sm,
+    printf("LED mirror: enabled on pio%u sm%d offset=%u\r\n", (unsigned)pio_get_index(pio), pio_sm,
            (unsigned)offset);
 }
-
+#define V24_RTS_MIN_HOLDOFF 200u
+#define V24_RTS_HOLDOFF_MARGIN 41u
+#define US_PER_SECOND 1000000u
 void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 {
     config->baudrate              = baudrate;
-    uint32_t t_bit_us             = (1000000u + (uint32_t)baudrate - 1u) / (uint32_t)baudrate;
-    v24_runtime.tx_rts_holdoff_us = 41u * t_bit_us; // start conservative
-    if (v24_runtime.tx_rts_holdoff_us < 200u)
+    uint32_t t_bit_us             = (US_PER_SECOND + (uint32_t)baudrate - 1u) / (uint32_t)baudrate;
+    v24_runtime.tx_rts_holdoff_us = V24_RTS_HOLDOFF_MARGIN * t_bit_us; // start conservative
+    if (v24_runtime.tx_rts_holdoff_us < V24_RTS_MIN_HOLDOFF)
     {
-        v24_runtime.tx_rts_holdoff_us = 200u;
+        v24_runtime.tx_rts_holdoff_us = V24_RTS_MIN_HOLDOFF;
     }
     v24_runtime.rts_set = false;
 }
@@ -110,8 +119,22 @@ bool rx_get(uint8_t* data)
     {
         return false;
     }
-    *data = (pio_sm_get(pio0, 1) >> 24);
+    *data = (uint8_t)(pio_sm_get(pio0, 1) >> RX_SHIFT_TO_LSB);
     return true;
+}
+void rx_clock_update_settings(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
+{
+    pio_sm_set_enabled(pio, pio_sm, false);
+
+    if (polarities)
+    {
+        gpio_set_inover(V24_RXC,
+                        polarities->rxc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+        gpio_set_inover(V24_RXD,
+                        polarities->rxd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+    }
+
+    pio_sm_set_enabled(pio, pio_sm, true);
 }
 
 void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
@@ -130,25 +153,16 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_RXD, 1, false);
     pio_gpio_init(pio, V24_RXC);
     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_RXC, 1, false);
-    if (polarities != NULL)
-    {
-        if (polarities->rxc_inverted)
-        {
-            gpio_set_inover(V24_RXC, GPIO_OVERRIDE_INVERT);
-        }
-        if (polarities->rxd_inverted)
-        {
-            gpio_set_inover(V24_RXD, GPIO_OVERRIDE_INVERT);
-        }
-    }
 
     // Configure state machine
     pio_sm_config config = rck_rxd_program_get_default_config(offset);
     sm_config_set_jmp_pin(&config, V24_RXC);
     sm_config_set_in_pins(&config, V24_RXD);
-    sm_config_set_in_shift(&config, true, true, 8);
+    sm_config_set_in_shift(&config, true, true, CHAR_BIT);
     pio_sm_init(pio, pio_sm, offset, &config);
-    pio_sm_set_enabled(pio, pio_sm, true);
+
+    // This implicitly enables the sm
+    rx_clock_update_settings(pio, pio_sm, polarities);
     LOG_INFO("RXC: enabled\r\n");
 }
 
@@ -220,6 +234,27 @@ bool tx_put(uint8_t data)
     return true;
 }
 
+void tx_clock_update_settings(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate,
+                              V24_TX_POLARITIES_T* polarities)
+{
+    float clkdiv = baud_to_clockdiv(baudrate);
+
+    pio_sm_set_enabled(pio, pio_sm, false);
+
+    if (polarities)
+    {
+        gpio_set_outover(V24_TXC_DTE,
+                         polarities->txc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+        gpio_set_outover(V24_TXD,
+                         polarities->txd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+        gpio_set_inover(V24_CTS,
+                        polarities->cts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+    }
+
+    pio_sm_set_clkdiv(pio, pio_sm, clkdiv);
+    pio_sm_set_enabled(pio, pio_sm, true);
+}
+
 void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities)
 {
     float clkdiv = baud_to_clockdiv(baudrate);
@@ -239,31 +274,18 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_TXD, 1, true);
     pio_gpio_init(pio, V24_CTS);
     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_CTS, 1, false);
-    if (polarities != NULL)
-    {
-        if (polarities->txc_inverted)
-        {
-            gpio_set_outover(V24_TXC_DTE, GPIO_OVERRIDE_INVERT);
-        }
-        if (polarities->txd_inverted)
-        {
-            gpio_set_outover(V24_TXD, GPIO_OVERRIDE_INVERT);
-        }
-        if (polarities->cts_inverted)
-        {
-            gpio_set_inover(V24_CTS, GPIO_OVERRIDE_INVERT);
-        }
-    }
 
     // Configure state machine
     pio_sm_config config = tck_txd_program_get_default_config(offset);
     sm_config_set_sideset_pins(&config, V24_TXC_DTE);
     sm_config_set_out_pins(&config, V24_TXD, 1);
     sm_config_set_jmp_pin(&config, V24_CTS);
-    sm_config_set_out_shift(&config, true, true, 8);
-    sm_config_set_clkdiv(&config, clkdiv);
+    sm_config_set_out_shift(&config, true, true, CHAR_BIT);
+
     pio_sm_init(pio, pio_sm, offset, &config);
-    pio_sm_set_enabled(pio, pio_sm, true);
+
+    // This implicitly activates the sm
+    tx_clock_update_settings(pio, pio_sm, baudrate, polarities);
     LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
 
     LOG_INFO("TXC: enabled\r\n");
