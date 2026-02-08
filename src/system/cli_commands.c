@@ -87,6 +87,8 @@ static void cat_net_set(const char* args);
 static void cat_net_get(const char* args);
 static void cat_v24_set(const char* args);
 static void cat_v24_get(const char* args);
+static void cat_loglevel_set(const char* args);
+static void cat_loglevel_get(const char* args);
 static void subcmd_set_ip_local(const char* args);
 static void subcmd_get_ip_local(const char* args);
 static void subcmd_set_ip_remote(const char* args);
@@ -119,7 +121,7 @@ static const category_t categories[] = {
     {"gpio", cat_gpio_set, cat_gpio_get, "GPIO controls and queries"},
     {"net", cat_net_set, cat_net_get, "Network configuration and queries"},
     {"v24", cat_v24_set, cat_v24_get, "V.24 config (inverted pins, baudrate)"},
-};
+    {"loglevel", cat_loglevel_set, cat_loglevel_get, "Runtime logging level"}};
 
 static const subcmd_t net_subcmds[] = {
     {"ip.local", subcmd_set_ip_local, subcmd_get_ip_local, "Local IP address (CIDR)"},
@@ -149,6 +151,18 @@ static const V24_BAUDRATE_T v24_baudrates[] = {
     V24_BAUD_19200, V24_BAUD_38400, V24_BAUD_57600, V24_BAUD_115200,
 };
 #define NUM_V24_BAUDRATES ARRAY_LEN(v24_baudrates)
+
+typedef struct
+{
+    const char* name;
+    log_level_t value;
+} loglevel_entry_t;
+
+static const loglevel_entry_t loglevels[] = {
+    {"error", LOG_LEVEL_ERROR}, {"info", LOG_LEVEL_INFO},    {"debug", LOG_LEVEL_DEBUG},
+    {"trace", LOG_LEVEL_TRACE}, {"tracea", LOG_LEVEL_TRACE},
+};
+#define NUM_LOGLEVELS ARRAY_LEN(loglevels)
 
 static void dispatch_v24_polarities(const V24_POLARITIES_T* polarities)
 {
@@ -274,6 +288,45 @@ static void cat_v24_get(const char* args)
         }
     }
     printf("unknown v24 subcmd: '%s'\r\n", args);
+}
+
+static void cat_loglevel_set(const char* args)
+{
+    if (args == NULL || args[0] == '\0')
+    {
+        printf("usage: set loglevel <error|info|debug|trace>\r\n");
+        return;
+    }
+
+    char level_name[16];
+    if (sscanf(args, "%15s", level_name) != 1)
+    {
+        printf("usage: set loglevel <error|info|debug|trace>\r\n");
+        return;
+    }
+
+    for (size_t i = 0; i < NUM_LOGLEVELS; i++)
+    {
+        if (strcmp(level_name, loglevels[i].name) == 0)
+        {
+            set_loglevel(loglevels[i].value);
+            printf("LOG_LEVEL: %s\r\n", log_level_tag(get_loglevel()));
+            return;
+        }
+    }
+
+    printf("unknown loglevel: '%s'\r\n", level_name);
+    printf("available loglevels: error, info, debug, trace\r\n");
+}
+
+static void cat_loglevel_get(const char* args)
+{
+    if (args != NULL && args[0] != '\0')
+    {
+        printf("usage: get loglevel\r\n");
+        return;
+    }
+    printf("LOG_LEVEL: %s\r\n", log_level_tag(get_loglevel()));
 }
 
 static void cmd_reboot(const char* args)
@@ -605,9 +658,10 @@ static void cmd_get(const char* args)
     for (size_t i = 0; i < NUM_CATEGORIES; i++)
     {
         size_t len = strlen(categories[i].name);
-        if (strncmp(args, categories[i].name, len) == 0 && args[len] == ' ')
+        if (strncmp(args, categories[i].name, len) == 0 && (args[len] == ' ' || args[len] == '\0'))
         {
-            categories[i].get_handler(args + len + 1);
+            const char* cat_args = args[len] == ' ' ? args + len + 1 : "";
+            categories[i].get_handler(cat_args);
             return;
         }
     }
@@ -685,6 +739,9 @@ static void cmd_help(const char* args)
         }
     }
     printf("\r\n");
+
+    printf("\r\nLoglevels:\r\n");
+    printf("  error, info, debug, trace\r\n");
 }
 
 static void cmd_status(const char* args)

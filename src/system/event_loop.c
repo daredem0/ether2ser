@@ -35,7 +35,7 @@ static void print_prompt(app_ctx_t* app)
 {
     if (app->need_prompt)
     {
-        LOG_INFO("ether2ser> ");
+        printf("ether2ser> ");
         app->need_prompt = false;
     }
 }
@@ -58,7 +58,6 @@ void event_loop(app_ctx_t* app)
             }
             memset(app->rx_frame_buffer.payload, 0, app->rx_frame_buffer.length);
             app->rx_frame_buffer.length = 0;
-            app->need_prompt            = true;
         }
         poll_queue_stats(&app->tx_queue);
 
@@ -124,6 +123,10 @@ void event_loop(app_ctx_t* app)
         for (int i = 0; i < 20 && event_queue_pop(&event_item); i++)
         {
             event_dispatch(&event_item, app);
+        }
+        if (log_take_emitted_flag())
+        {
+            app->need_prompt = true;
         }
         print_prompt(app);
         sleep_us(MAIN_LOOP_SLEEP_US);

@@ -16,10 +16,10 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 
 // Project Headers
 #include "hdlc_common.h"
+#include "system/common.h"
 
 // Generated headers
 
@@ -43,7 +43,7 @@ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t 
     if (frame == NULL || payload == NULL || payload_length == NULL || out_capacity == 0 ||
         frame->payload[0] != HDLC_FLAG_BYTE || frame->payload[frame->length - 1] != HDLC_FLAG_BYTE)
     {
-        printf("Invalid frame\r\n");
+        LOG_DEBUG("Invalid frame\r\n");
         goto abort;
     }
 
@@ -58,7 +58,7 @@ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t 
         }
         if (outbyte_ctr >= out_capacity)
         {
-            printf("Payload too long\r\n");
+            LOG_DEBUG("Payload too long\r\n");
             goto abort;
         }
         payload[outbyte_ctr++] = found_escape ? frame->payload[frame_cntr] ^ HDLC_ESCAPE_XOR
@@ -169,7 +169,7 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
         frame->length < 2 || frame->payload[0] != HDLC_FLAG_BYTE ||
         frame->payload[frame->length - 1] != HDLC_FLAG_BYTE)
     {
-        printf("Invalid frame\r\n");
+        LOG_DEBUG("Invalid frame\r\n");
         goto abort;
     }
 
@@ -186,12 +186,12 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
         }
         if (bit_result == HDLC_BIT_ERR)
         {
-            printf("Invalid frame\r\n");
+            LOG_DEBUG("Invalid frame\r\n");
             goto abort;
         }
         if (outbyte_ctr >= out_capacity)
         {
-            printf("Payload too long\r\n");
+            LOG_DEBUG("Payload too long\r\n");
             goto abort;
         }
         payload[outbyte_ctr++] = out_byte;
@@ -209,7 +209,7 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
     uint16_t recovered_crc = hdlc_crc16(payload, *payload_length);
     if (crc16 != recovered_crc)
     {
-        printf("CRC mismatch\r\n");
+        LOG_DEBUG("CRC mismatch\r\n");
         goto abort;
     }
 

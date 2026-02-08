@@ -100,7 +100,7 @@ static void print_net_set_settings_event(const event_t* event)
     {
         if (event->data_len < sizeof(event_queue_data_t))
         {
-            printf("EV_SET_NET_SETTINGS: invalid data_len=%u\r\n", (unsigned)event->data_len);
+            LOG_ERROR("EV_SET_NET_SETTINGS: invalid data_len=%u\r\n", (unsigned)event->data_len);
             return;
         }
         memcpy(&inline_payload, event->data.bytes, sizeof(inline_payload));
@@ -110,33 +110,33 @@ static void print_net_set_settings_event(const event_t* event)
     {
         if (event->data.ptr == NULL || event->data_len < sizeof(event_queue_data_t))
         {
-            printf("EV_SET_NET_SETTINGS: invalid data ptr/len\r\n");
+            LOG_ERROR("EV_SET_NET_SETTINGS: invalid data ptr/len\r\n");
             return;
         }
         payload = (const event_queue_data_t*)event->data.ptr;
     }
 
-    printf("EV_SET_NET_SETTINGS: id=%s\r\n", net_setting_id_name(payload->id));
+    LOG_DEBUG("EV_SET_NET_SETTINGS: id=%s\r\n", net_setting_id_name(payload->id));
     switch (payload->id)
     {
     case NET_IP_REMOTE:
     case NET_IP_LOCAL:
     case NET_IP_GATEWAY:
-        printf("  ip=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
-               payload->value.ip[2], payload->value.ip[3]);
+        LOG_DEBUG("  ip=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
+                  payload->value.ip[2], payload->value.ip[3]);
         break;
     case NET_IP_MASK:
-        printf("  subnetmask=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
-               payload->value.ip[2], payload->value.ip[3]);
+        LOG_DEBUG("  subnetmask=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
+                  payload->value.ip[2], payload->value.ip[3]);
         break;
     case NET_PORT_LOCAL:
     case NET_PORT_REMOTE:
-        printf("  port=%u\r\n", payload->value.port);
+        LOG_DEBUG("  port=%u\r\n", payload->value.port);
         break;
     default:
-        printf("  raw: %02X %02X %02X %02X %02X %02X\r\n", payload->value.ip[0],
-               payload->value.ip[1], payload->value.ip[2], payload->value.ip[3],
-               (uint8_t)(payload->value.port >> 8), (uint8_t)(payload->value.port & 0xFF));
+        LOG_DEBUG("  raw: %02X %02X %02X %02X %02X %02X\r\n", payload->value.ip[0],
+                  payload->value.ip[1], payload->value.ip[2], payload->value.ip[3],
+                  (uint8_t)(payload->value.port >> 8), (uint8_t)(payload->value.port & 0xFF));
         break;
     }
 }
@@ -155,7 +155,7 @@ static void print_net_get_settings_event(const event_t* event)
     {
         if (event->data_len < sizeof(event_queue_data_t))
         {
-            printf("EV_GET_NET_SETTINGS: invalid data_len=%u\r\n", (unsigned)event->data_len);
+            LOG_ERROR("EV_GET_NET_SETTINGS: invalid data_len=%u\r\n", (unsigned)event->data_len);
             return;
         }
         memcpy(&inline_payload, event->data.bytes, sizeof(inline_payload));
@@ -165,29 +165,29 @@ static void print_net_get_settings_event(const event_t* event)
     {
         if (event->data.ptr == NULL || event->data_len < sizeof(event_queue_data_t))
         {
-            printf("EV_GET_NET_SETTINGS: invalid data ptr/len\r\n");
+            LOG_ERROR("EV_GET_NET_SETTINGS: invalid data ptr/len\r\n");
             return;
         }
         payload = (const event_queue_data_t*)event->data.ptr;
     }
 
-    printf("EV_GET_NET_SETTINGS: id=%s\r\n", net_setting_id_name(payload->id));
+    LOG_DEBUG("EV_GET_NET_SETTINGS: id=%s\r\n", net_setting_id_name(payload->id));
     switch (payload->id)
     {
     case NET_IP_REMOTE:
     case NET_IP_LOCAL:
     case NET_IP_GATEWAY:
-        printf("  ip=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
-               payload->value.ip[2], payload->value.ip[3]);
+        LOG_DEBUG("  ip=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
+                  payload->value.ip[2], payload->value.ip[3]);
         break;
     case NET_PORT_LOCAL:
     case NET_PORT_REMOTE:
-        printf("  port=%u\r\n", payload->value.port);
+        LOG_DEBUG("  port=%u\r\n", payload->value.port);
         break;
     default:
-        printf("  raw: %02X %02X %02X %02X %02X %02X\r\n", payload->value.ip[0],
-               payload->value.ip[1], payload->value.ip[2], payload->value.ip[3],
-               (uint8_t)(payload->value.port >> 8), (uint8_t)(payload->value.port & 0xFF));
+        LOG_DEBUG("  raw: %02X %02X %02X %02X %02X %02X\r\n", payload->value.ip[0],
+                  payload->value.ip[1], payload->value.ip[2], payload->value.ip[3],
+                  (uint8_t)(payload->value.port >> 8), (uint8_t)(payload->value.port & 0xFF));
         break;
     }
 }
@@ -419,28 +419,28 @@ void event_dispatch(event_t* event, app_ctx_t* app)
         break;
     }
     case EV_SAVE_CONFIG:
-        LOG_INFO("Storing persistent config in flash.\r\n");
+        printf("Storing persistent config in flash.\r\n");
         wizchip_getnetinfo(&(app->net_config.net_info));
-        app->persistent_config.log_level     = current_log_level;
+        app->persistent_config.log_level     = get_loglevel();
         app->persistent_config.v24_config    = app->v24_config;
         app->persistent_config.net_config    = app->net_config;
         app->persistent_config.local_config  = app->local_config;
         app->persistent_config.remote_config = app->destination_config;
         config_write(&app->persistent_config);
-        LOG_INFO("Config stored. Dumping for checking:\r\n");
+        printf("Config stored. Dumping for checking:\r\n");
         dump_config();
         printf("\r\n> ");
         break;
     case EV_WIPE_CONFIG:
-        LOG_INFO("Wiping persistent config in flash.\r\n");
+        printf("Wiping persistent config in flash.\r\n");
         config_wipe();
-        LOG_INFO("Config wiped. Dumping for checking:\r\n");
+        printf("Config wiped. Dumping for checking:\r\n");
         dump_config();
         printf("\r\n> ");
         break;
     case EV_SET_NET_SETTINGS:
     {
-        if (current_log_level == LOG_LEVEL_DEBUG)
+        if (get_loglevel() == LOG_LEVEL_DEBUG)
         {
             print_net_set_settings_event(event);
         }
@@ -457,7 +457,7 @@ void event_dispatch(event_t* event, app_ctx_t* app)
     }
     case EV_GET_NET_SETTINGS:
     {
-        if (current_log_level == LOG_LEVEL_DEBUG)
+        if (get_loglevel() == LOG_LEVEL_DEBUG)
         {
             print_net_get_settings_event(event);
         }

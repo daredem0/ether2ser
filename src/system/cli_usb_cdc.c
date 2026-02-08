@@ -24,6 +24,7 @@
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
+#include "system/common.h"
 #include "system/event_queue.h"
 
 // Generated headers
@@ -57,13 +58,13 @@ void cli_poll(void)
             int   written   = snprintf(line_slot, CLI_BUFFER_SIZE, "%s", line_buffer);
             if (written < 0)
             {
-                printf("[WARN] failed to format CLI line\r\n");
+                LOG_ERROR("[WARN] failed to format CLI line\r\n");
                 buffer_len = 0;
                 continue;
             }
             if (written >= CLI_BUFFER_SIZE)
             {
-                printf("[WARN] CLI line truncated (len=%d)\r\n", written);
+                LOG_ERROR("[WARN] CLI line truncated (len=%d)\r\n", written);
                 buffer_len = 0;
                 continue;
             }
@@ -80,7 +81,7 @@ void cli_poll(void)
             }
             else
             {
-                printf("[WARN] event queue full, dropping line\r\n");
+                LOG_ERROR("[WARN] event queue full, dropping line\r\n");
             }
 
             buffer_len = 0;
@@ -104,7 +105,7 @@ void cli_poll(void)
         }
         else
         {
-            printf("[DEBUG] Ignoring char: 0x%02X\r\n", input_char);
+            LOG_DEBUG("[DEBUG] Ignoring char: 0x%02X\r\n", input_char);
         }
     }
 }

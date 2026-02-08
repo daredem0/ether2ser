@@ -58,10 +58,19 @@ e2s_error_t poll_queue_stats(TX_QUEUE_T* queue)
         timer_init    = true;
         last_print_ms = now_ms;
     }
-    if (queue->queue_touched || (uint32_t)(now_ms - last_print_ms) >= 15000u)
+    bool queue_filling_up = (queue->queue_buffer.capacity - queue->queue_buffer.count < 5);
+    if (queue->queue_touched || queue_filling_up)
     {
-        LOG_INFO("TX Queue Stats: %zu / %zu frames used\r\n", queue->queue_buffer.count,
-                 queue->queue_buffer.capacity);
+        if (queue_filling_up)
+        {
+            LOG_ERROR("TX Queue Stats: %zu / %zu frames used\r\n", queue->queue_buffer.count,
+                      queue->queue_buffer.capacity);
+        }
+        else
+        {
+            LOG_INFO("TX Queue Stats: %zu / %zu frames used\r\n", queue->queue_buffer.count,
+                     queue->queue_buffer.capacity);
+        }
         queue->queue_touched = false;
         last_print_ms        = now_ms;
     }
@@ -162,8 +171,8 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain)
         uint32_t        now      = to_ms_since_boot(get_absolute_time());
         if (now - last_log > 1000)
         { // Log once per second
-            printf("TX IN PROGRESS: offset=%zu/%zu\n", queue->current_entry.offset,
-                   queue->current_entry.frame.length);
+            LOG_TRACE("TX IN PROGRESS: offset=%zu/%zu\r\n", queue->current_entry.offset,
+                      queue->current_entry.frame.length);
             last_log = now;
         }
     }

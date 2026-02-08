@@ -62,14 +62,14 @@ void led_mirror_init(void)
     int pio_sm = pio_claim_unused_sm(pio, false);
     if (pio_sm < 0)
     {
-        printf("LED mirror: no free SM on pio0\r\n");
+        LOG_ERROR("LED mirror: no free SM on pio0\r\n");
         return;
     }
     LOG_INFO("LED Mirror: init pio%u sm%u \r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm);
 
     if (!pio_can_add_program(pio, &led_mirror_program))
     {
-        printf("LED mirror: no room for program on pio0\r\n");
+        LOG_ERROR("LED mirror: no room for program on pio0\r\n");
         pio_sm_unclaim(pio, (uint)pio_sm);
         return;
     }
@@ -89,8 +89,8 @@ void led_mirror_init(void)
     pio_sm_init(pio, (uint)pio_sm, offset, &cfg);
     pio_sm_set_enabled(pio, (uint)pio_sm, true);
 
-    printf("LED mirror: enabled on pio%u sm%d offset=%u\r\n", (unsigned)pio_get_index(pio), pio_sm,
-           (unsigned)offset);
+    LOG_INFO("LED mirror: enabled on pio%u sm%d offset=%u\r\n", (unsigned)pio_get_index(pio), pio_sm,
+             (unsigned)offset);
 }
 #define V24_RTS_MIN_HOLDOFF 200u
 #define V24_RTS_HOLDOFF_MARGIN 41u

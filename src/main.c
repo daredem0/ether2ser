@@ -95,9 +95,9 @@ int main(void)
     baudrate_estimator_init(V24_RXC);
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
-    printf("\r\nType 'help' in USB serial.\r\n> ");
+    printf("\r\nType 'help' in USB serial.\r\n");
 
-    if (current_log_level == LOG_LEVEL_DEBUG)
+    if (get_loglevel() == LOG_LEVEL_DEBUG)
     {
         printf("\r\nDebug logging enabled.\r\n> ");
         dump_config();
