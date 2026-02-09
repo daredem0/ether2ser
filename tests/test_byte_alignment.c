@@ -223,3 +223,146 @@ void test_hdlc_sync_accumulator_overflow_rejected(void)
     }
     TEST_ASSERT_FALSE(hdlc_sync_acc_process_byte(&accumulator, 0x00));
 }
+
+void test_hdlc_sync_poll_invalid_args_returns_ok(void)
+{
+    HDLC_SYNC_ACCUMULATOR_T accumulator;
+    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+
+    uint8_t frame_buf[8] = {0};
+    HDLC_FRAME_T frame = {
+        .payload = frame_buf,
+        .length = 0,
+        .capacity = sizeof(frame_buf),
+    };
+
+    TEST_ASSERT_EQUAL(E2S_OK, hdlc_sync_acc_poll(NULL, &frame));
+    TEST_ASSERT_EQUAL(E2S_OK, hdlc_sync_acc_poll(&accumulator, NULL));
+
+    frame.payload = NULL;
+    TEST_ASSERT_EQUAL(E2S_OK, hdlc_sync_acc_poll(&accumulator, &frame));
+
+    frame.payload = frame_buf;
+    frame.capacity = 0;
+    TEST_ASSERT_EQUAL(E2S_OK, hdlc_sync_acc_poll(&accumulator, &frame));
+}
+
+void test_hdlc_sync_poll_syncing_waits_for_lookahead(void)
+{
+    HDLC_SYNC_ACCUMULATOR_T accumulator;
+    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+
+    accumulator.state = HDLC_SYNC_STATE_SYNCING;
+    accumulator.bit_offset = 1;
+    accumulator.position = 2;
+    accumulator.processed = 1; // enter syncing with i == position - 1 => needs lookahead
+    accumulator.buffer[0] = 0x12;
+    accumulator.buffer[1] = 0x34;
+
+    uint8_t frame_buf[8] = {0};
+    HDLC_FRAME_T frame = {
+        .payload = frame_buf,
+        .length = 0,
+        .capacity = sizeof(frame_buf),
+    };
+
+    TEST_ASSERT_EQUAL(E2S_OK, hdlc_sync_acc_poll(&accumulator, &frame));
+    TEST_ASSERT_EQUAL_UINT32(1, accumulator.lookahead_wait_syncing);
+}
+
+void test_hdlc_sync_poll_synced_waits_for_lookahead(void)
+{
+    HDLC_SYNC_ACCUMULATOR_T accumulator;
+    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+
+    accumulator.state = HDLC_SYNC_STATE_SYNCED;
+    accumulator.bit_offset = 1;
+    accumulator.position = 2;
+    accumulator.processed = 1; // enter synced with i == position - 1 => needs lookahead
+    accumulator.buffer[0] = 0x56;
+    accumulator.buffer[1] = 0x78;
+
+    uint8_t frame_buf[8] = {0};
+    HDLC_FRAME_T frame = {
+        .payload = frame_buf,
+        .length = 0,
+        .capacity = sizeof(frame_buf),
+    };
+
+    TEST_ASSERT_EQUAL(E2S_OK, hdlc_sync_acc_poll(&accumulator, &frame));
+    TEST_ASSERT_EQUAL_UINT32(1, accumulator.lookahead_wait_synced);
+}
+
+void test_hdlc_sync_poll_overflow_resets_state(void)
+{
+    HDLC_SYNC_ACCUMULATOR_T accumulator;
+    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+
+    accumulator.state = HDLC_SYNC_STATE_SYNCING;
+    accumulator.bit_offset = 0;
+    accumulator.position = 1;
+    accumulator.processed = 0;
+    accumulator.buffer[0] = 0xAB;
+
+    uint8_t frame_buf[1] = {0};
+    HDLC_FRAME_T frame = {
+        .payload = frame_buf,
+        .length = 1, // already full
+        .capacity = sizeof(frame_buf),
+    };
+
+    TEST_ASSERT_EQUAL(E2S_ERR_HDLC_DECODE_PAYLOAD_TOO_LONG,
+                      hdlc_sync_acc_poll(&accumulator, &frame));
+    TEST_ASSERT_EQUAL_UINT(0, frame.length);
+    TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_HUNTING, accumulator.state);
+    TEST_ASSERT_EQUAL_UINT8(0, accumulator.bit_offset);
+}
+
+void test_hdlc_sync_consume_candidate_drops_prefix_and_resets(void)
+{
+    HDLC_SYNC_ACCUMULATOR_T accumulator;
+    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+
+    accumulator.position = 6;
+    for (size_t i = 0; i < accumulator.position; i++)
+    {
+        accumulator.buffer[i] = (uint8_t)(0xA0 + i);
+    }
+    accumulator.candidate_valid = true;
+    accumulator.candidate_end = 3;
+    accumulator.state = HDLC_SYNC_STATE_SYNCED;
+    accumulator.bit_offset = 2;
+    accumulator.resume_pending = true;
+
+    hdlc_sync_acc_consume_candidate(&accumulator, true);
+
+    TEST_ASSERT_EQUAL_UINT(3, accumulator.position);
+    TEST_ASSERT_EQUAL_HEX8(0xA3, accumulator.buffer[0]);
+    TEST_ASSERT_EQUAL_HEX8(0xA4, accumulator.buffer[1]);
+    TEST_ASSERT_EQUAL_HEX8(0xA5, accumulator.buffer[2]);
+    TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_HUNTING, accumulator.state);
+    TEST_ASSERT_FALSE(accumulator.candidate_valid);
+    TEST_ASSERT_EQUAL_UINT8(0, accumulator.bit_offset);
+    TEST_ASSERT_FALSE(accumulator.resume_pending);
+    TEST_ASSERT_EQUAL_UINT32(1, accumulator.consume_count);
+}
+
+void test_hdlc_sync_consume_candidate_applies_hardcap(void)
+{
+    HDLC_SYNC_ACCUMULATOR_T accumulator;
+    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+
+    accumulator.position = RX_HDLC_SYNC_MAX_BUFFER_SIZE - 1;
+    for (size_t i = 0; i < accumulator.position; i++)
+    {
+        accumulator.buffer[i] = (uint8_t)i;
+    }
+    accumulator.candidate_valid = true;
+    accumulator.candidate_end = 0;
+
+    hdlc_sync_acc_consume_candidate(&accumulator, true);
+
+    TEST_ASSERT_EQUAL_UINT(16, accumulator.position);
+    TEST_ASSERT_EQUAL_UINT32(1, accumulator.hardcap_drop_events);
+    TEST_ASSERT_TRUE(accumulator.hardcap_drop_bytes > 0);
+}

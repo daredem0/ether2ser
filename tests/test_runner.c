@@ -126,6 +126,12 @@ extern void test_multiple_bits_shifted_hdlc_frame(void);
 extern void test_hdlc_sync_incomplete_frame_not_ready(void);
 extern void test_hdlc_sync_noise_then_frame(void);
 extern void test_hdlc_sync_accumulator_overflow_rejected(void);
+extern void test_hdlc_sync_poll_invalid_args_returns_ok(void);
+extern void test_hdlc_sync_poll_syncing_waits_for_lookahead(void);
+extern void test_hdlc_sync_poll_synced_waits_for_lookahead(void);
+extern void test_hdlc_sync_poll_overflow_resets_state(void);
+extern void test_hdlc_sync_consume_candidate_drops_prefix_and_resets(void);
+extern void test_hdlc_sync_consume_candidate_applies_hardcap(void);
 
 // Ringbuffer declarations
 extern void test_ringbuffer_init_null_buffer(void);
@@ -277,6 +283,12 @@ int main(void) {
     RUN_TEST(test_hdlc_sync_incomplete_frame_not_ready);
     RUN_TEST(test_hdlc_sync_noise_then_frame);
     RUN_TEST(test_hdlc_sync_accumulator_overflow_rejected);
+    RUN_TEST(test_hdlc_sync_poll_invalid_args_returns_ok);
+    RUN_TEST(test_hdlc_sync_poll_syncing_waits_for_lookahead);
+    RUN_TEST(test_hdlc_sync_poll_synced_waits_for_lookahead);
+    RUN_TEST(test_hdlc_sync_poll_overflow_resets_state);
+    RUN_TEST(test_hdlc_sync_consume_candidate_drops_prefix_and_resets);
+    RUN_TEST(test_hdlc_sync_consume_candidate_applies_hardcap);
 
     // Ringbuffer Tests
     RUN_TEST(test_ringbuffer_init_null_buffer);
