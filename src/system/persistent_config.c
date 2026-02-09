@@ -38,18 +38,20 @@
 
 void print_memory_usage(void)
 {
-    extern char __StackLimit, __bss_end__;
-    extern char __heap_start, __heap_end;
-    (void)__StackLimit;
-    (void)__bss_end__;
-    (void)__heap_start;
-    (void)__heap_end;
+    extern char stack_limit_sym asm("__StackLimit");
+    extern char bss_end_sym asm("__bss_end__");
+    extern char heap_start_sym asm("__heap_start");
+    extern char heap_end_sym asm("__heap_end");
+    (void)stack_limit_sym;
+    (void)bss_end_sym;
+    (void)heap_start_sym;
+    (void)heap_end_sym;
 
     // RAM starts at 0x20000000, ends at 0x20042000 (264KB)
     uint32_t total_ram = 264 * 1024;
 
     // Static data (data + bss sections)
-    uint32_t static_used = (uint32_t)&__bss_end__ - 0x20000000;
+    uint32_t static_used = (uint32_t)&bss_end_sym - 0x20000000U;
 
     // Use mallinfo for accurate heap stats
     struct mallinfo mi        = mallinfo();
@@ -69,10 +71,11 @@ void print_memory_usage(void)
 
 void print_flash_usage(void)
 {
-    extern char __flash_binary_start, __flash_binary_end;
+    extern char flash_binary_start_sym asm("__flash_binary_start");
+    extern char flash_binary_end_sym asm("__flash_binary_end");
 
-    uintptr_t flash_start = (uintptr_t)&__flash_binary_start;
-    uintptr_t flash_end   = (uintptr_t)&__flash_binary_end;
+    uintptr_t flash_start = (uintptr_t)&flash_binary_start_sym;
+    uintptr_t flash_end   = (uintptr_t)&flash_binary_end_sym;
 
     uint32_t flash_used  = (uint32_t)(flash_end - flash_start);
     uint32_t total_flash = 2u * 1024u * 1024u; // 2MB on W55RP20
@@ -167,9 +170,9 @@ void dump_config(void)
 void config_write(const config_t* cfg)
 {
     uint8_t   buf[FLASH_PAGE_SIZE] = {0}; // 256 bytes, pad with zeros
-    config_t* _cfg                 = (config_t*)cfg;
-    _cfg->magic                    = CONFIG_MAGIC;
-    memcpy(buf, _cfg, sizeof(config_t));
+    config_t* cfg_mut              = (config_t*)cfg;
+    cfg_mut->magic                 = CONFIG_MAGIC;
+    memcpy(buf, cfg_mut, sizeof(config_t));
 
     uint32_t ints = save_and_disable_interrupts();
     flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);

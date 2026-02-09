@@ -16,7 +16,6 @@ Checks: >
   -bugprone-assignment-in-if-condition,
   -bugprone-easily-swappable-parameters,
   -bugprone-reserved-identifier,
-  -cert-err34-c
 
 CheckOptions:
   # --- Naming conventions ---
