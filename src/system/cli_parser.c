@@ -37,7 +37,8 @@ static const pin_info_t pin_table[] = {
     {"dcd", V24_DCD, false},      {"tx_active", V24_TX_ACTIVE, true},
     {"led", V24_STATUS_LED, true}};
 
-#define NUM_PINS (sizeof(pin_table) / sizeof(pin_table[0]))
+#define NUM_PINS ARRAY_LEN(pin_table)
+#define DECIMAL_BASE 10U
 
 size_t get_num_pins(void)
 {
@@ -68,7 +69,7 @@ static bool parse_u32_strict(const char* input_str, uint32_t* output_value)
 
     errno                      = 0;
     char*         end_ptr      = NULL;
-    unsigned long parsed_value = strtoul(input_str, &end_ptr, 10);
+    unsigned long parsed_value = strtoul(input_str, &end_ptr, DECIMAL_BASE);
     if (errno == ERANGE || end_ptr == input_str || *end_ptr != '\0' || parsed_value > UINT32_MAX)
     {
         return false;
@@ -87,7 +88,7 @@ static bool parse_i32_strict(const char* input_str, int32_t* output_value)
 
     errno              = 0;
     char* end_ptr      = NULL;
-    long  parsed_value = strtol(input_str, &end_ptr, 10);
+    long  parsed_value = strtol(input_str, &end_ptr, DECIMAL_BASE);
     if (errno == ERANGE || end_ptr == input_str || *end_ptr != '\0' || parsed_value < INT32_MIN ||
         parsed_value > INT32_MAX)
     {
@@ -115,7 +116,7 @@ static bool parse_ipv4_strict(const char* input_str, uint8_t ip_addr[4])
 
         errno                     = 0;
         char*         end_ptr     = NULL;
-        unsigned long octet_value = strtoul(cursor, &end_ptr, 10);
+        unsigned long octet_value = strtoul(cursor, &end_ptr, DECIMAL_BASE);
         if (errno == ERANGE || end_ptr == cursor || octet_value > UINT8_MAX)
         {
             return false;

@@ -33,6 +33,8 @@
 
 // Generated headers
 
+#define TX_QUEUE_TX_INPROG_MS 1000U
+
 e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data)
 {
     RbInit(&(queue->queue_buffer), buffer_data, TX_FRAME_QUEUE_SIZE, sizeof(TX_QUEUE_ENTRY_T));
@@ -44,11 +46,13 @@ e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data)
 #include "pico/time.h"
 e2s_error_t poll_queue_stats(TX_QUEUE_T* queue)
 {
+#define QUEUE_FILLING_UP_THRESHOLD 5U
     if (!queue)
     {
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
     }
-    bool queue_filling_up = (queue->queue_buffer.capacity - queue->queue_buffer.count < 5);
+    bool queue_filling_up =
+        (queue->queue_buffer.capacity - queue->queue_buffer.count < QUEUE_FILLING_UP_THRESHOLD);
     if (queue->queue_touched || queue_filling_up)
     {
         if (queue_filling_up)
@@ -126,11 +130,6 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain)
     {
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
     }
-    // if (pio_sm_is_tx_fifo_full(pio0, 0))
-    // {
-    //     return E2S_OK; // TX FIFO is full, cannot drain now
-    // }
-    // queue->current_entry = (TX_QUEUE_ENTRY_T){0};
     if (queue->current_entry.offset >= queue->current_entry.frame.length)
     {
         size_t completed_offset = queue->current_entry.offset;
@@ -152,7 +151,7 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain)
     {
         static uint32_t last_log = 0;
         uint32_t        now      = to_ms_since_boot(get_absolute_time());
-        if (now - last_log > 1000)
+        if (now - last_log > TX_QUEUE_TX_INPROG_MS)
         { // Log once per second
             LOG_TRACE("TX IN PROGRESS: offset=%zu/%zu\r\n", queue->current_entry.offset,
                       queue->current_entry.frame.length);

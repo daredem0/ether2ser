@@ -59,8 +59,8 @@ void print_memory_usage(void)
     uint32_t static_used = (uint32_t)&bss_end_sym - RAM_BASE_ADDRESS;
 
     // Use mallinfo for accurate heap stats
-    struct mallinfo mi        = mallinfo();
-    uint32_t        heap_used = mi.uordblks; // Bytes allocated
+    struct mallinfo current_mallinfo = mallinfo();
+    uint32_t        heap_used        = current_mallinfo.uordblks; // Bytes allocated
 
     printf("=== Memory Usage ===\n");
     printf("Static RAM (data+bss): %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)static_used,

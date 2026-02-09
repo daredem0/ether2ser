@@ -80,17 +80,17 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
         return E2S_OK;
     }
 
-    e2s_error_t result  = E2S_OK;
-    size_t      i       = accumulator->processed;
-    uint8_t     aligned = 0;
-    for (; i < accumulator->position; i++)
+    e2s_error_t result     = E2S_OK;
+    size_t      scan_index = accumulator->processed;
+    uint8_t     aligned    = 0;
+    for (; scan_index < accumulator->position; scan_index++)
     {
         switch (accumulator->state)
         {
         case HDLC_SYNC_STATE_HUNTING:
             accumulator->sync_accumulator =
-                (accumulator->sync_accumulator << 8) | accumulator->buffer[i];
-            if (i >= 1 && (i + 1) < accumulator->position)
+                (accumulator->sync_accumulator << 8) | accumulator->buffer[scan_index];
+            if (scan_index >= 1 && (scan_index + 1) < accumulator->position)
             {
                 for (size_t bit_pos = 0; bit_pos < 8; bit_pos++)
                 {
@@ -99,8 +99,8 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
                     {
                         accumulator->state             = HDLC_SYNC_STATE_SYNCING;
                         accumulator->bit_offset        = bit_pos;
-                        accumulator->candidate_start   = i - 1;
-                        accumulator->candidate_i       = i;
+                        accumulator->candidate_start   = scan_index - 1;
+                        accumulator->candidate_i       = scan_index;
                         accumulator->candidate_bit_pos = (uint8_t)bit_pos;
                         out_frame->length              = 0;
                         for (size_t j = 0; j < sizeof(accumulator->sync_accumulator); j++)
@@ -113,33 +113,35 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
                                 return E2S_ERR_HDLC_DECODE_PAYLOAD_TOO_LONG;
                             }
                             out_frame->payload[out_frame->length++] =
-                                (accumulator->buffer[i - 1 + j] << accumulator->bit_offset) |
-                                (accumulator->buffer[i + j] >> (8 - accumulator->bit_offset));
+                                (accumulator->buffer[scan_index - 1 + j]
+                                 << accumulator->bit_offset) |
+                                (accumulator->buffer[scan_index + j] >>
+                                 (8 - accumulator->bit_offset));
                         }
                         break;
                     }
                 }
             }
-            else if ((i + 1) >= accumulator->position)
+            else if ((scan_index + 1) >= accumulator->position)
             {
-                i++;
+                scan_index++;
                 goto out;
             }
             break;
         case HDLC_SYNC_STATE_SYNCING:
-            if (accumulator->bit_offset != 0 && (i + 1) >= accumulator->position)
+            if (accumulator->bit_offset != 0 && (scan_index + 1) >= accumulator->position)
             {
                 accumulator->lookahead_wait_syncing++;
                 goto out;
             }
             if (accumulator->bit_offset == 0)
             {
-                aligned = accumulator->buffer[i];
+                aligned = accumulator->buffer[scan_index];
             }
             else
             {
-                aligned = (accumulator->buffer[i] << accumulator->bit_offset) |
-                          (accumulator->buffer[i + 1] >> (8 - accumulator->bit_offset));
+                aligned = (accumulator->buffer[scan_index] << accumulator->bit_offset) |
+                          (accumulator->buffer[scan_index + 1] >> (8 - accumulator->bit_offset));
             }
             if (out_frame->length >= out_frame->capacity)
             {
@@ -152,19 +154,19 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
             accumulator->state                      = HDLC_SYNC_STATE_SYNCED;
             break;
         case HDLC_SYNC_STATE_SYNCED:
-            if (accumulator->bit_offset != 0 && (i + 1) >= accumulator->position)
+            if (accumulator->bit_offset != 0 && (scan_index + 1) >= accumulator->position)
             {
                 accumulator->lookahead_wait_synced++;
                 goto out;
             }
             if (accumulator->bit_offset == 0)
             {
-                aligned = accumulator->buffer[i];
+                aligned = accumulator->buffer[scan_index];
             }
             else
             {
-                aligned = (accumulator->buffer[i] << accumulator->bit_offset) |
-                          (accumulator->buffer[i + 1] >> (8 - accumulator->bit_offset));
+                aligned = (accumulator->buffer[scan_index] << accumulator->bit_offset) |
+                          (accumulator->buffer[scan_index + 1] >> (8 - accumulator->bit_offset));
             }
             if (out_frame->length >= out_frame->capacity)
             {
@@ -179,10 +181,10 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
                 accumulator->frame_ready_count++;
                 accumulator->state            = HDLC_SYNC_STATE_HUNTING;
                 accumulator->sync_accumulator = 0;
-                accumulator->candidate_end    = i + 1;
+                accumulator->candidate_end    = scan_index + 1;
                 accumulator->candidate_valid  = true;
                 result                        = E2S_ERR_HDLC_ACC_FRAME_READY;
-                i++;
+                scan_index++;
                 goto out;
             }
             break;
@@ -192,7 +194,7 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
     }
 
 out:
-    accumulator->processed = i;
+    accumulator->processed = scan_index;
     if (result == E2S_ERR_HDLC_ACC_FRAME_READY)
     {
         accumulator->processed = 0;

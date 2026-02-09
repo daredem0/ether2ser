@@ -48,6 +48,11 @@
  */
 #define US_PER_SECOND 1000000U
 
+/**
+ * @brief Time to wait before rebooting to allow the logs to flush
+ */
+#define FLUSH_LOG_BEFORE_REBOOT_MS 200U
+
 /*
  * Some arm-none-eabi/newlib combinations may miss PRI* macros unless the
  * headers line up exactly. Provide conservative fallbacks when absent.

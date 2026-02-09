@@ -24,6 +24,8 @@
 
 // Generated headers
 
+#define HDLC_BIT_STUFF_ONES_LIMIT 5U
+
 typedef struct
 {
     uint8_t ones_run;
@@ -127,7 +129,7 @@ static hdlc_decoder_bit_type_t hdlc_get_bit(hdlc_decoder_t* decoder, const HDLC_
         *out_bit = raw_bit;
         if (raw_bit)
         {
-            if ((++decoder->ones_run) == 5)
+            if ((++decoder->ones_run) == HDLC_BIT_STUFF_ONES_LIMIT)
             {
                 decoder->skip_next_zero = true;
             }
@@ -154,7 +156,7 @@ static hdlc_decoder_bit_type_t hdlc_get_byte(hdlc_decoder_t* decoder, const HDLC
         {
             return bit_result;
         }
-        bit_position = decoder->lsb_first ? i : (7 - i);
+        bit_position = decoder->lsb_first ? i : (CHAR_BIT - 1U - i);
         *byte |= bit << bit_position;
     }
     return HDLC_BIT_OK;

@@ -41,9 +41,9 @@
 
 // Generated headers
 
-static void print_v24_polarities(const V24_POLARITIES_T* p)
+static void print_v24_polarities(const V24_POLARITIES_T* polarities)
 {
-    if (p == NULL)
+    if (polarities == NULL)
     {
         printf("polarities: <null>\r\n");
         return;
@@ -61,14 +61,14 @@ static void print_v24_polarities(const V24_POLARITIES_T* p)
         }                                           \
     } while (0)
 
-    ADD("txd", p->tx_polarities.txd_inverted);
-    ADD("txc", p->tx_polarities.txc_inverted);
-    ADD("cts", p->tx_polarities.cts_inverted);
-    ADD("rts", p->tx_polarities.rts_inverted);
-    ADD("dtr", p->tx_polarities.dtr_inverted);
-    ADD("rxd", p->rx_polarities.rxd_inverted);
-    ADD("rxc", p->rx_polarities.rxc_inverted);
-    ADD("dcd", p->rx_polarities.dcd_inverted);
+    ADD("txd", polarities->tx_polarities.txd_inverted);
+    ADD("txc", polarities->tx_polarities.txc_inverted);
+    ADD("cts", polarities->tx_polarities.cts_inverted);
+    ADD("rts", polarities->tx_polarities.rts_inverted);
+    ADD("dtr", polarities->tx_polarities.dtr_inverted);
+    ADD("rxd", polarities->rx_polarities.rxd_inverted);
+    ADD("rxc", polarities->rx_polarities.rxc_inverted);
+    ADD("dcd", polarities->rx_polarities.dcd_inverted);
 
     if (first)
     {
@@ -77,9 +77,9 @@ static void print_v24_polarities(const V24_POLARITIES_T* p)
     printf("\r\n");
 }
 
-static const char* net_setting_id_name(event_queue_data_types_t id)
+static const char* net_setting_id_name(event_queue_data_types_t event_id)
 {
-    switch (id)
+    switch (event_id)
     {
     case NET_IP_REMOTE:
         return "NET_IP_REMOTE";
