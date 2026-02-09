@@ -383,12 +383,50 @@ if(CLANG_TIDY_EXE)
         list(APPEND CLANG_TIDY_EXTRA_ARGS --extra-arg=--target=arm-none-eabi)
         if(ARM_NONE_EABI_SYSROOT)
             list(APPEND CLANG_TIDY_EXTRA_ARGS --extra-arg=--sysroot=${ARM_NONE_EABI_SYSROOT})
-            if(EXISTS "${ARM_NONE_EABI_SYSROOT}/include")
-                # Some CI setups still miss newlib headers unless include is explicit.
-                list(APPEND CLANG_TIDY_EXTRA_ARGS --extra-arg=-isystem
-                                                  --extra-arg=${ARM_NONE_EABI_SYSROOT}/include)
+        endif()
+
+        execute_process(
+            COMMAND ${ARM_NONE_EABI_GCC_EXE} -print-file-name=include
+            OUTPUT_VARIABLE ARM_NONE_EABI_GCC_INCLUDE
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+
+        set(CLANG_TIDY_C_INCLUDE_DIRS)
+        if(ARM_NONE_EABI_GCC_INCLUDE AND EXISTS "${ARM_NONE_EABI_GCC_INCLUDE}")
+            list(APPEND CLANG_TIDY_C_INCLUDE_DIRS "${ARM_NONE_EABI_GCC_INCLUDE}")
+
+            get_filename_component(ARM_NONE_EABI_GCC_INCLUDE_PARENT
+                                   "${ARM_NONE_EABI_GCC_INCLUDE}" DIRECTORY)
+            set(ARM_NONE_EABI_GCC_INCLUDE_FIXED
+                "${ARM_NONE_EABI_GCC_INCLUDE_PARENT}/include-fixed")
+            if(EXISTS "${ARM_NONE_EABI_GCC_INCLUDE_FIXED}")
+                list(APPEND CLANG_TIDY_C_INCLUDE_DIRS "${ARM_NONE_EABI_GCC_INCLUDE_FIXED}")
             endif()
         endif()
+
+        if(ARM_NONE_EABI_SYSROOT AND EXISTS "${ARM_NONE_EABI_SYSROOT}/include")
+            list(APPEND CLANG_TIDY_C_INCLUDE_DIRS "${ARM_NONE_EABI_SYSROOT}/include")
+        endif()
+
+        # CI fallback include paths used by distro arm-none-eabi packages.
+        if(EXISTS "/usr/arm-none-eabi/include")
+            list(APPEND CLANG_TIDY_C_INCLUDE_DIRS "/usr/arm-none-eabi/include")
+        endif()
+        if(EXISTS "/usr/lib/arm-none-eabi/include")
+            list(APPEND CLANG_TIDY_C_INCLUDE_DIRS "/usr/lib/arm-none-eabi/include")
+        endif()
+        file(GLOB ARM_NONE_EABI_GCC_INCLUDE_GLOB "/usr/lib/gcc/arm-none-eabi/*/include")
+        list(APPEND CLANG_TIDY_C_INCLUDE_DIRS ${ARM_NONE_EABI_GCC_INCLUDE_GLOB})
+        file(GLOB ARM_NONE_EABI_GCC_INCLUDE_FIXED_GLOB "/usr/lib/gcc/arm-none-eabi/*/include-fixed")
+        list(APPEND CLANG_TIDY_C_INCLUDE_DIRS ${ARM_NONE_EABI_GCC_INCLUDE_FIXED_GLOB})
+
+        list(REMOVE_DUPLICATES CLANG_TIDY_C_INCLUDE_DIRS)
+
+        foreach(CLANG_TIDY_INC_DIR IN LISTS CLANG_TIDY_C_INCLUDE_DIRS)
+            list(APPEND CLANG_TIDY_EXTRA_ARGS --extra-arg=-isystem
+                                              --extra-arg=${CLANG_TIDY_INC_DIR})
+        endforeach()
     endif()
 
     add_custom_target(check_clang_tidy

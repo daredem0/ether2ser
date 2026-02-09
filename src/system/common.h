@@ -70,7 +70,7 @@
 #endif
 #endif
 
-#define UINT32_ALL_ONES (~UINT32_C(0))
+#define UINT32_ALL_ONES UINT32_MAX
 
 /**
  * @brief Log verbosity levels.
