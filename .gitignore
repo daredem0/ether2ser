@@ -1,6 +1,7 @@
 # Build directories
 build/
 build-tests/
+build-cov/
 cmake-build-*/
 
 # CMake

@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 option(BUILD_TESTS "Build unit tests." OFF)
+option(ENABLE_COVERAGE "Enable coverage for unit tests" OFF)
 
 set(SOURCES
     src/system/app_init.c
@@ -275,6 +276,10 @@ else()
     )
 
     target_link_libraries(unit_tests unity)
+    if(ENABLE_COVERAGE AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(unit_tests PRIVATE -O0 -g --coverage)
+        target_link_options(unit_tests PRIVATE --coverage)
+    endif()
 
     add_test(NAME unit_tests COMMAND unit_tests)
 endif()
@@ -289,10 +294,42 @@ if(DOXYGEN_FOUND)
         @ONLY
     )
 
-    add_custom_target(docs
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/docs/doxygen
-        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "Generating API documentation (${GIT_VERSION})"
-        VERBATIM)
+    set(DOXYGEN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/docs/doxygen)
+    set(DOXYGEN_HTML_DIR ${DOXYGEN_OUTPUT_DIR}/html)
+
+    if(BUILD_TESTS AND ENABLE_COVERAGE)
+        find_program(GCOVR_EXECUTABLE gcovr)
+        if(GCOVR_EXECUTABLE)
+            add_custom_target(docs
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${DOXYGEN_OUTPUT_DIR}
+                COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
+                COMMAND $<TARGET_FILE:unit_tests>
+                COMMAND ${GCOVR_EXECUTABLE}
+                        -r ${CMAKE_SOURCE_DIR}
+                        --object-directory ${CMAKE_BINARY_DIR}
+                        --exclude external/
+                        --exclude tests/
+                        --html-details
+                        -o ${DOXYGEN_HTML_DIR}/coverage.html
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                DEPENDS unit_tests
+                COMMENT "Generating API documentation + coverage report (${GIT_VERSION})"
+                VERBATIM)
+        else()
+            message(WARNING "gcovr not found; docs target will be generated without coverage report.")
+            add_custom_target(docs
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${DOXYGEN_OUTPUT_DIR}
+                COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                COMMENT "Generating API documentation (${GIT_VERSION})"
+                VERBATIM)
+        endif()
+    else()
+        add_custom_target(docs
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${DOXYGEN_OUTPUT_DIR}
+            COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            COMMENT "Generating API documentation (${GIT_VERSION})"
+            VERBATIM)
+    endif()
 endif()

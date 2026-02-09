@@ -24,7 +24,8 @@ jobs:
             libnewlib-arm-none-eabi \
             git \
             doxygen \
-            graphviz
+            graphviz \
+            gcovr
 
       - name: Fetch Pico SDK
         run: |
@@ -43,14 +44,17 @@ jobs:
         env:
           PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
         run: |
-          cmake --build build --target docs
+          cmake -S . -B build-tests -DBUILD_TESTS=ON -DENABLE_COVERAGE=ON
+          cmake --build build-tests --target docs
 
       - name: Prepare docs artifact
         run: |
           set -euo pipefail
           mkdir -p docs-site
 
-          if [ -d "build/docs/doxygen/html" ]; then
+          if [ -d "build-tests/docs/doxygen/html" ]; then
+            cp -a build-tests/docs/doxygen/html/. docs-site/
+          elif [ -d "build/docs/doxygen/html" ]; then
             cp -a build/docs/doxygen/html/. docs-site/
           elif [ -d "docs/doxygen/html" ]; then
             cp -a docs/doxygen/html/. docs-site/
@@ -71,7 +75,6 @@ jobs:
 
       - name: Build tests
         run: |
-          cmake -S . -B build-tests -DBUILD_TESTS=ON
           cmake --build build-tests
 
       - name: Run tests

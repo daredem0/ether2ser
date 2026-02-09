@@ -77,5 +77,22 @@ cmake --build build-tests
 ctest --test-dir build-tests
 ```
 
+**Documentation (Doxygen)**
+```bash
+cmake -S . -B build
+cmake --build build --target docs
+```
+- HTML entry point: `build/docs/doxygen/html/index.html`
+
+**Coverage + Documentation**
+```bash
+cmake -S . -B build-tests -DBUILD_TESTS=ON -DENABLE_COVERAGE=ON
+cmake --build build-tests --target docs
+```
+- Doxygen HTML: `build-tests/docs/doxygen/html/index.html`
+- Coverage report: `build-tests/docs/doxygen/html/coverage.html`
+- In Doxygen landing page (`index.html`), use the **Related Pages** entry
+  **Coverage Report** (or open `coverage.html` directly).
+
 **License**
 MIT (see `LICENSE`).
