@@ -24,6 +24,7 @@
 // Project Headers
 #include "drivers/v24_config.h"
 #include "platform/pinmap.h"
+#include "system/common.h"
 #include "system/error.h"
 
 // Generated headers
@@ -49,7 +50,7 @@ static bool prefix_to_mask(uint8_t prefix, uint8_t netmask[4])
     {
         return false;
     }
-    uint32_t mask_word = prefix == 0 ? 0 : 0xFFFFFFFFU << (32 - prefix);
+    uint32_t mask_word = prefix == 0 ? 0 : UINT32_ALL_ONES << (32 - prefix);
     netmask[0]         = (mask_word >> 24) & 0xFF;
     netmask[1]         = (mask_word >> 16) & 0xFF;
     netmask[2]         = (mask_word >> 8) & 0xFF;

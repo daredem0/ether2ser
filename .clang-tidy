@@ -30,8 +30,8 @@ CheckOptions:
   - key: readability-identifier-naming.MacroDefinitionCase
     value: UPPER_CASE
   # --- Magic number suppression ---
-  - key: readability-magic-numbers.IgnoredValues
-    value: '0,1,-1,2,3,4,8,16,32,64,128,256,512,1024,0xFF'
+  - key: readability-magic-numbers.IgnoredIntegerValues
+    value: '0;1;-1;2;3;4;8;16;24;32;64;128;255;256;512;1024'
   # --- Function size limit ---
   # --- Braces around statements ---
   - key: readability-braces-around-statements.ShortStatementLines

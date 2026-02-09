@@ -20,7 +20,7 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
+#include <stdint.h>
 
 // Project Headers
 
@@ -69,6 +69,8 @@
 #error "Unsupported uint64_t format"
 #endif
 #endif
+
+#define UINT32_ALL_ONES (~UINT32_C(0))
 
 /**
  * @brief Log verbosity levels.
