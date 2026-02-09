@@ -42,6 +42,10 @@
 
 #define TX_QUEUE_DRAIN_CHUNK_SIZE 32
 #define EVENT_LOOP_MAX_EVENTS_AT_ONCE 20
+#define EVENT_LOOP_MAX_EVENTS_WHILE_TX_ACTIVE 2
+#define HDLC_DECODE_FAIL_STREAK_LIMIT 4U
+#define HDLC_SYNC_IDLE_TIMEOUT_US 20000U
+#define HDLC_SYNC_NO_PROGRESS_MAX_BYTES 2048U
 
 static void print_prompt(app_ctx_t* app)
 {
@@ -54,7 +58,10 @@ static void print_prompt(app_ctx_t* app)
 
 void event_loop(app_ctx_t* app)
 {
-    static uint8_t rx_byte = 0;
+    static uint8_t  rx_byte                 = 0;
+    static uint8_t  hdlc_decode_fail_streak = 0;
+    static uint64_t last_rx_byte_us         = 0U;
+    static uint64_t last_frame_ready_bytes  = 0U;
     while (true)
     {
         watchdog_update();
@@ -102,6 +109,24 @@ void event_loop(app_ctx_t* app)
             hdlc_sync_acc_process_byte(&app->accumulator, rx_byte);
         }
         app->stats.serial_rx_bytes += rx_drained;
+        uint64_t now_us = to_us_since_boot(get_absolute_time());
+        if (rx_drained > 0U)
+        {
+            last_rx_byte_us = now_us;
+        }
+
+        bool frame_in_progress = (app->accumulator.state != HDLC_SYNC_STATE_HUNTING) ||
+                                 (app->accumulator.position > 0U) ||
+                                 (app->reconstructed_frame.length > 0U);
+        if (frame_in_progress && last_rx_byte_us != 0U &&
+            (now_us - last_rx_byte_us) > HDLC_SYNC_IDLE_TIMEOUT_US)
+        {
+            LOG_DEBUG("HDLC idle timeout resync\r\n");
+            hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
+            hdlc_decode_fail_streak = 0U;
+            memset(app->reconstructed_frame.payload, 0, app->reconstructed_frame.length);
+            app->reconstructed_frame.length = 0U;
+        }
 
         // Try to extract all complete HDLC frames currently buffered.
         while (true)
@@ -111,11 +136,13 @@ void event_loop(app_ctx_t* app)
             if (acc_result == E2S_ERR_HDLC_ACC_FRAME_READY)
             {
                 app->stats.hdlc_frame_ready++;
+                last_frame_ready_bytes = app->stats.serial_rx_bytes;
                 app->tx_frame_buffer.length = 0;
                 if (hdlc_decode(&app->reconstructed_frame, app->tx_frame_buffer.payload,
                                 TX_BUF_SIZE, &app->tx_frame_buffer.length, true))
                 {
                     app->stats.hdlc_decode_ok++;
+                    hdlc_decode_fail_streak = 0;
                     w5500_udp_tx(&app->destination_config, &app->tx_frame_buffer);
                     app->stats.udp_tx_frames++;
                     hdlc_sync_acc_consume_candidate(&app->accumulator, true);
@@ -124,6 +151,17 @@ void event_loop(app_ctx_t* app)
                 {
                     app->stats.hdlc_decode_fail++;
                     hdlc_sync_acc_consume_candidate(&app->accumulator, false);
+                    if (hdlc_decode_fail_streak < UINT8_MAX)
+                    {
+                        hdlc_decode_fail_streak++;
+                    }
+                    if (hdlc_decode_fail_streak >= HDLC_DECODE_FAIL_STREAK_LIMIT)
+                    {
+                        LOG_DEBUG("HDLC hard resync after %u decode fails\r\n",
+                                  (unsigned)hdlc_decode_fail_streak);
+                        hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
+                        hdlc_decode_fail_streak = 0;
+                    }
                 }
                 memset(app->reconstructed_frame.payload, 0, app->reconstructed_frame.length);
                 app->reconstructed_frame.length = 0;
@@ -136,6 +174,28 @@ void event_loop(app_ctx_t* app)
             }
             break;
         }
+        if ((app->stats.serial_rx_bytes > last_frame_ready_bytes) &&
+            ((app->stats.serial_rx_bytes - last_frame_ready_bytes) >
+             HDLC_SYNC_NO_PROGRESS_MAX_BYTES))
+        {
+            LOG_DEBUG("HDLC no-progress resync after %" PRIu64 " bytes\r\n",
+                      (app->stats.serial_rx_bytes - last_frame_ready_bytes));
+            hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
+            hdlc_decode_fail_streak = 0U;
+            memset(app->reconstructed_frame.payload, 0, app->reconstructed_frame.length);
+            app->reconstructed_frame.length = 0U;
+            last_frame_ready_bytes          = app->stats.serial_rx_bytes;
+
+            const v24_runtime_t* v24_runtime = get_v24_runtime();
+            if (v24_runtime->rx_pio != NULL)
+            {
+                pio_sm_set_enabled(v24_runtime->rx_pio, v24_runtime->rx_sm, false);
+                pio_sm_clear_fifos(v24_runtime->rx_pio, v24_runtime->rx_sm);
+                pio_sm_restart(v24_runtime->rx_pio, v24_runtime->rx_sm);
+                pio_sm_clkdiv_restart(v24_runtime->rx_pio, v24_runtime->rx_sm);
+                pio_sm_set_enabled(v24_runtime->rx_pio, v24_runtime->rx_sm, true);
+            }
+        }
 
         app->stats.sync_lookahead_wait_syncing = app->accumulator.lookahead_wait_syncing;
         app->stats.sync_lookahead_wait_synced  = app->accumulator.lookahead_wait_synced;
@@ -143,8 +203,12 @@ void event_loop(app_ctx_t* app)
         app->stats.sync_hardcap_drop_events    = app->accumulator.hardcap_drop_events;
         app->stats.sync_hardcap_drop_bytes     = app->accumulator.hardcap_drop_bytes;
 
+        bool tx_active = !tx_queue_is_empty(&app->tx_queue);
+        int  max_events_per_iteration =
+            tx_active ? EVENT_LOOP_MAX_EVENTS_WHILE_TX_ACTIVE : EVENT_LOOP_MAX_EVENTS_AT_ONCE;
+
         event_t event_item;
-        for (int i = 0; i < EVENT_LOOP_MAX_EVENTS_AT_ONCE && event_queue_pop(&event_item); i++)
+        for (int i = 0; i < max_events_per_iteration && event_queue_pop(&event_item); i++)
         {
             event_dispatch(&event_item, app);
         }

@@ -98,6 +98,21 @@ static const char* net_setting_id_name(event_queue_data_types_t event_id)
     }
 }
 
+static const char* hdlc_sync_state_name(HDLC_SYNC_STATE_T state)
+{
+    switch (state)
+    {
+    case HDLC_SYNC_STATE_HUNTING:
+        return "HUNTING";
+    case HDLC_SYNC_STATE_SYNCING:
+        return "SYNCING";
+    case HDLC_SYNC_STATE_SYNCED:
+        return "SYNCED";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 static void print_net_set_settings_event(const event_t* event)
 {
     if (event == NULL)
@@ -383,6 +398,7 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
             app->accumulator.position, app->accumulator.processed, (int)app->accumulator.state,
             app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
             app->accumulator.candidate_end);
+        printf("  Sync State  : %s\r\n", hdlc_sync_state_name(app->accumulator.state));
         printf("  Reconstructed: len=%zu\r\n", app->reconstructed_frame.length);
         const v24_runtime_t* v24_runtime = get_v24_runtime();
         printf(
@@ -392,11 +408,14 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
                     (PIO_FDEBUG_TXSTALL_LSB + v24_runtime->tx_sm)) & // NOLINT(misc-include-cleaner)
                    1U)
                 : 0);
-        print_memory_usage();
-        print_flash_usage();
         app->need_prompt = true;
     }
     break;
+    case EV_MEM:
+        print_memory_usage();
+        print_flash_usage();
+        app->need_prompt = true;
+        break;
     case EV_CLI_LINE:
     {
         const char* cli_line = NULL;

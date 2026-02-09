@@ -35,6 +35,7 @@
 #define ASCII_DELETE 0x7F
 #define ASCII_FIRST_PRINTABLE 32
 #define ASCII_LAST_PRINTABLE 126
+#define CLI_MAX_CHARS_PER_POLL 16U
 
 void cli_poll(void)
 {
@@ -44,8 +45,11 @@ void cli_poll(void)
     static uint8_t cli_line_pool_write = 0;
 
     int input_char;
-    while ((input_char = getchar_timeout_us(0)) != PICO_ERROR_TIMEOUT)
+    uint32_t processed_chars = 0U;
+    while (processed_chars < CLI_MAX_CHARS_PER_POLL &&
+           (input_char = getchar_timeout_us(0)) != PICO_ERROR_TIMEOUT)
     {
+        processed_chars++;
 
         if (input_char == '\n' || input_char == '\r')
         {

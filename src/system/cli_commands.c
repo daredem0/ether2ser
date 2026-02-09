@@ -75,6 +75,7 @@ typedef struct
 // Forward declarations for lookup tables
 static void cmd_help(const char* args);
 static void cmd_status(const char* args);
+static void cmd_mem(const char* args);
 static void cmd_net(const char* args);
 static void cmd_set(const char* args);
 static void cmd_get(const char* args);
@@ -109,6 +110,7 @@ static void subcmd_get_v24_inverted(const char* args);
 static const command_t commands[] = {
     {"help", cmd_help, "Show available commands"},
     {"status", cmd_status, "Show system status and RXC estimate"},
+    {"mem", cmd_mem, "Show RAM/flash memory usage"},
     {"save", cmd_save, "Persist current configuration to flash"},
     {"wipe", cmd_wipe, "Erase persistent configuration from flash"},
     {"net", cmd_net, "Show current network status (W5500)"},
@@ -761,6 +763,17 @@ static void cmd_status(const char* args)
            baudrate_estimator_get_current_estimation(V24_RXC));
     event_t status_event = {.type = EV_STATUS, .data.ptr = NULL, .data_len = 0, .is_inline = false};
     event_queue_push(&status_event);
+}
+
+static void cmd_mem(const char* args)
+{
+    if (args != NULL && args[0] != '\0')
+    {
+        printf("usage: mem\r\n");
+        return;
+    }
+    event_t mem_event = {.type = EV_MEM, .data.ptr = NULL, .data_len = 0, .is_inline = false};
+    event_queue_push(&mem_event);
 }
 
 static void cmd_net(const char* args)

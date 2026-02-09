@@ -40,6 +40,7 @@ typedef enum
     EV_HDLC_DECODE,
     EV_SAVE_CONFIG,
     EV_STATUS,
+    EV_MEM,
     EV_WIPE_CONFIG,
     EV_SET_NET_SETTINGS,
     EV_GET_NET_SETTINGS,
