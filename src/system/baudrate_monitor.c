@@ -20,12 +20,15 @@
 // Library Headers
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
+#include "hardware/timer.h"
 #include "pico/time.h"
-#include "wizchip_conf.h"
+#include "pico/types.h"
+#include "wizchip_conf.h" // NOLINT(misc-include-cleaner) required include order for WIZnet SDK
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "platform/pinmap.h"
+#include "system/common.h"
 
 // Generated headers
 
@@ -35,11 +38,11 @@
 // Short sampling period to quickly react to bursts.
 #define BAUD_TIMER_MS 20
 // EMA smoothing for burst-to-burst stability.
-#define BAUD_EMA_ALPHA 0.2f
+#define BAUD_EMA_ALPHA 0.2F
 static volatile uint32_t edge_count[PIN_COUNT] = {0};
 static repeating_timer_t baud_timer;
 static volatile bool     baud_ready[PIN_COUNT] = {false};
-static volatile float    baud_hz[PIN_COUNT]    = {0.0f};
+static volatile float    baud_hz[PIN_COUNT]    = {0.0F};
 // First/last edge timestamps within the current sample window.
 static volatile uint64_t first_edge_time_us[PIN_COUNT] = {0};
 static volatile uint64_t last_edge_time_us[PIN_COUNT]  = {0};
@@ -64,9 +67,9 @@ float baudrate_estimator_get_current_estimation(V24_PIN_T pin)
     return baud_hz[pin];
 }
 
-static bool baud_timer_cb(repeating_timer_t* t)
+static bool baud_timer_cb(repeating_timer_t* timer)
 {
-    (void)t;
+    (void)timer;
 
     uint64_t now_us = time_us_64();
     uint32_t edges  = __atomic_exchange_n(&edge_count[V24_RXC], 0, __ATOMIC_RELAXED);
@@ -81,8 +84,8 @@ static bool baud_timer_cb(repeating_timer_t* t)
         if (last_us > first_us)
         {
             uint64_t elapsed_us = last_us - first_us;
-            float    inst_hz    = ((float)(edges - 1) * 1000000.0f) / (float)elapsed_us;
-            if (baud_hz[V24_RXC] <= 0.0f)
+            float    inst_hz    = ((float)(edges - 1) * (float)US_PER_SECOND) / (float)elapsed_us;
+            if (baud_hz[V24_RXC] <= 0.0F)
             {
                 baud_hz[V24_RXC] = inst_hz;
             }
@@ -90,7 +93,7 @@ static bool baud_timer_cb(repeating_timer_t* t)
             {
                 // Smooth bursts with a simple EMA.
                 baud_hz[V24_RXC] =
-                    (BAUD_EMA_ALPHA * inst_hz) + ((1.0f - BAUD_EMA_ALPHA) * baud_hz[V24_RXC]);
+                    (BAUD_EMA_ALPHA * inst_hz) + ((1.0F - BAUD_EMA_ALPHA) * baud_hz[V24_RXC]);
             }
             baud_ready[V24_RXC] = true;
         }

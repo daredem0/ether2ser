@@ -43,6 +43,11 @@
  */
 #define TX_PIO_CYCLES_PER_BIT 3U
 
+/**
+ * @brief The number of microseconds per second
+ */
+#define US_PER_SECOND 1000000U
+
 /*
  * Some arm-none-eabi/newlib combinations may miss PRI* macros unless the
  * headers line up exactly. Provide conservative fallbacks when absent.

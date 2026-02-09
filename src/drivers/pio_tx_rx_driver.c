@@ -47,10 +47,6 @@
  * This value was empirically determined to be the most stable for this system.
  */
 #define V24_RTS_HOLDOFF_MARGIN 41U
-/**
- * @brief The number of microseconds per second
- */
-#define US_PER_SECOND 1000000U
 
 // This struct holds the runtime state of the v24 and shall not be exposed
 v24_runtime_t v24_runtime;
@@ -125,7 +121,7 @@ void led_mirror_init(void)
 void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 {
     config->baudrate              = (baudrate >= V24_BAUD_1200) ? baudrate : V24_BAUD_1200;
-    uint32_t t_bit_us             = (US_PER_SECOND + (uint32_t)baudrate - 1u) / (uint32_t)baudrate;
+    uint32_t t_bit_us             = (US_PER_SECOND + (uint32_t)baudrate - 1U) / (uint32_t)baudrate;
     v24_runtime.tx_rts_holdoff_us = V24_RTS_HOLDOFF_MARGIN * t_bit_us; // start conservative
     if (v24_runtime.tx_rts_holdoff_us < V24_RTS_MIN_HOLDOFF)
     {
@@ -210,7 +206,7 @@ bool tx_poll(void)
 
     bool fifo_empty = pio_sm_is_tx_fifo_empty(v24_runtime.tx_pio, v24_runtime.tx_sm);
     bool stalled =
-        (v24_runtime.tx_pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm))) != 0;
+        (v24_runtime.tx_pio->fdebug & (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm))) != 0;
     bool ready_to_deassert = (fifo_empty || stalled);
 
     uint64_t now_us = to_us_since_boot(get_absolute_time());
@@ -239,7 +235,7 @@ bool tx_poll(void)
 
     // AFTER RTS is deasserted we turn of the clock. Until then, we
     // have to keep clocking. To do that we temporarily take control over the pin
-    gpio_set_function(V24_TXC_DTE, GPIO_FUNC_SIO);
+    gpio_set_function(V24_TXC_DTE, GPIO_FUNC_SIO); // NOLINT(misc-include-cleaner)
     gpio_set_dir(V24_TXC_DTE, GPIO_OUT);
     gpio_put(V24_TXC_DTE, 0);
 
@@ -259,7 +255,7 @@ bool tx_put(uint8_t data)
     if (!v24_runtime.rts_set)
     {
         // Indicate ready to send by setting RTS
-        v24_runtime.tx_pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
+        v24_runtime.tx_pio->fdebug = (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
         gpio_set_dir(V24_RTS, GPIO_OUT);
         gpio_put(V24_RTS, 1);
         v24_runtime.rts_set = true;

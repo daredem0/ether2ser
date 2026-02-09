@@ -19,6 +19,7 @@
 #include <string.h>
 
 // Library Headers
+#include "hardware/pio.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 
@@ -383,11 +384,13 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
             app->accumulator.candidate_end);
         printf("  Reconstructed: len=%zu\r\n", app->reconstructed_frame.length);
         const v24_runtime_t* v24_runtime = get_v24_runtime();
-        printf("  PIO TX     : stalled=%ld\r\n",
-               v24_runtime->tx_pio ? ((v24_runtime->tx_pio->fdebug >>
-                                       (PIO_FDEBUG_TXSTALL_LSB + v24_runtime->tx_sm)) &
-                                      1U)
-                                   : 0);
+        printf(
+            "  PIO TX     : stalled=%" PRIu32 "\r\n",
+            (v24_runtime->tx_pio)
+                ? ((v24_runtime->tx_pio->fdebug >>
+                    (PIO_FDEBUG_TXSTALL_LSB + v24_runtime->tx_sm)) & // NOLINT(misc-include-cleaner)
+                   1U)
+                : 0);
         print_memory_usage();
         print_flash_usage();
         app->need_prompt = true;

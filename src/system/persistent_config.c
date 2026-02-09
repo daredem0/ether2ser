@@ -78,7 +78,7 @@ void print_flash_usage(void)
     uintptr_t flash_end   = (uintptr_t)&flash_binary_end_sym;
 
     uint32_t flash_used  = (uint32_t)(flash_end - flash_start);
-    uint32_t total_flash = 2u * 1024u * 1024u; // 2MB on W55RP20
+    uint32_t total_flash = 2U * 1024U * 1024U; // 2MB on W55RP20
     uint32_t flash_free  = total_flash - flash_used;
 
     printf("=== Flash Usage ===\n");
