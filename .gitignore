@@ -87,3 +87,6 @@ openocd.log
 
 # Documentation
 /docs/
+
+# Code
+.vscode/settings.json
