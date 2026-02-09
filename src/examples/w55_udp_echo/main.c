@@ -51,7 +51,7 @@ static void w5500_init_no_linkwait(void)
 
     if (ctlwizchip(CW_INIT_WIZCHIP, (void*)memsize) == -1)
     {
-        printf("W5500 init failed (CW_INIT_WIZCHIP)\r\n");
+        LOG_PLAIN("W5500 init failed (CW_INIT_WIZCHIP)\r\n");
     }
 }
 
@@ -73,7 +73,7 @@ static void run_udp_echo_server(void)
 {
     // Create a UDP socket bound to our chosen port. This socket will listen for
     // incoming UDP packets and can send responses back to the source address/port.
-    printf("Starting UDP echo on port %u...\r\n", (unsigned)UDP_PORT);
+    LOG_PLAIN("Starting UDP echo on port %u...\r\n", (unsigned)UDP_PORT);
 
     // socket() allocates one of the W5500's 8 hardware sockets
     // Parameters: socket_number, protocol_mode, local_port, flags
@@ -81,20 +81,20 @@ static void run_udp_echo_server(void)
     int8_t ret = socket(UDP_SOCK, Sn_MR_UDP, UDP_PORT, 0);
     if (ret != UDP_SOCK)
     {
-        printf("socket() failed, ret=%d\r\n", (int)ret);
+        LOG_PLAIN("socket() failed, ret=%d\r\n", (int)ret);
         while (true)
         {
             sleep_ms(1000);
         }
     }
-    printf("Socket opened successfully in blocking mode\r\n");
+    LOG_PLAIN("Socket opened successfully in blocking mode\r\n");
 
     // Allocate buffers for UDP packet data and sender information
     uint8_t  recv_buf[2048]; // Payload buffer (max UDP payload in W5500)
     uint8_t  remote_ip[4];   // Remote (sender) IP address
     uint16_t remote_port;    // Remote (sender) port number
 
-    printf("Entering main echo loop (blocking mode)...\r\n");
+    LOG_PLAIN("Entering main echo loop (blocking mode)...\r\n");
 
     // Main echo loop: receive packets and send them back to the sender
     while (true)
@@ -107,8 +107,8 @@ static void run_udp_echo_server(void)
         if (recv_len > 0)
         {
             // Packet received - log the sender and byte count
-            printf("RX %ld bytes from %u.%u.%u.%u:%u\r\n", (long)recv_len, remote_ip[0],
-                   remote_ip[1], remote_ip[2], remote_ip[3], remote_port);
+            LOG_PLAIN("RX %ld bytes from %u.%u.%u.%u:%u\r\n", (long)recv_len, remote_ip[0],
+                      remote_ip[1], remote_ip[2], remote_ip[3], remote_port);
 
             // Echo the packet back to the sender
             // Parameters: socket_number, data_buffer, data_length, dest_ip, dest_port
@@ -116,13 +116,13 @@ static void run_udp_echo_server(void)
                 sendto(UDP_SOCK, recv_buf, (uint16_t)recv_len, remote_ip, remote_port);
             if (sent_len < 0)
             {
-                printf("sendto() error %ld\r\n", (long)sent_len);
+                LOG_PLAIN("sendto() error %ld\r\n", (long)sent_len);
             }
         }
         else
         {
             // Error occurred during receive
-            printf("recvfrom() error %ld\r\n", (long)recv_len);
+            LOG_PLAIN("recvfrom() error %ld\r\n", (long)recv_len);
         }
     }
 }
@@ -132,28 +132,28 @@ int main(void)
     stdio_init_all();
     sleep_ms(2000);
 
-    printf("==========================================================\r\n");
-    printf("W55RP20-EVB-PICO W5500 Initialization Test\r\n");
-    printf("==========================================================\r\n");
+    LOG_PLAIN("==========================================================\r\n");
+    LOG_PLAIN("W55RP20-EVB-PICO W5500 Initialization Test\r\n");
+    LOG_PLAIN("==========================================================\r\n");
 
     // Initialize W5500 with more verbose debugging
-    printf("Step 1: Init PIO SPI...\r\n");
+    LOG_PLAIN("Step 1: Init PIO SPI...\r\n");
     wizchip_spi_initialize();
 
-    printf("Step 2: Init critical section...\r\n");
+    LOG_PLAIN("Step 2: Init critical section...\r\n");
     wizchip_cris_initialize();
 
-    printf("Step 3: Reset W5500...\r\n");
+    LOG_PLAIN("Step 3: Reset W5500...\r\n");
     wizchip_reset();
 
-    printf("Step 4: Call wizchip_initialize...\r\n");
+    LOG_PLAIN("Step 4: Call wizchip_initialize...\r\n");
     // w5500_init_no_linkwait(); // use this for skip
     wizchip_initialize();
 
-    printf("Step 5: Verify chip version...\r\n");
+    LOG_PLAIN("Step 5: Verify chip version...\r\n");
     wizchip_check();
 
-    printf("W5500 initialization successful!\r\n");
+    LOG_PLAIN("W5500 initialization successful!\r\n");
 
     configure_network();
 

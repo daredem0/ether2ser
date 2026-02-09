@@ -85,10 +85,12 @@
  */
 typedef enum
 {
+    LOG_LEVEL_PLAIN,
     LOG_LEVEL_ERROR,
     LOG_LEVEL_INFO,
     LOG_LEVEL_DEBUG,
-    LOG_LEVEL_TRACE
+    LOG_LEVEL_TRACE,
+
 } log_level_t;
 
 /**
@@ -131,6 +133,8 @@ static inline const char* log_level_tag(log_level_t level)
         return "DEBUG";
     case LOG_LEVEL_TRACE:
         return "TRACE";
+    case LOG_LEVEL_PLAIN:
+        return "";
     default:
         return "LOG";
     }
@@ -139,7 +143,7 @@ static inline const char* log_level_tag(log_level_t level)
 /**
  * @brief Emit one formatted log message if level is enabled.
  * @param level Message level.
- * @param fmt `printf`-style format string.
+ * @param fmt `LOG_PLAIN`-style format string.
  * @param ... Format arguments.
  */
 void log_write(log_level_t level, const char* fmt, ...);
@@ -149,15 +153,11 @@ void log_write(log_level_t level, const char* fmt, ...);
         log_write((level), (fmt), ##__VA_ARGS__); \
     } while (0)
 
+#define LOG_PLAIN(...) LOG(LOG_LEVEL_PLAIN, __VA_ARGS__)
 #define LOG_ERROR(...) LOG(LOG_LEVEL_ERROR, __VA_ARGS__)
 #define LOG_INFO(...) LOG(LOG_LEVEL_INFO, __VA_ARGS__)
 #define LOG_DEBUG(...) LOG(LOG_LEVEL_DEBUG, __VA_ARGS__)
 #define LOG_TRACE(...) LOG(LOG_LEVEL_TRACE, __VA_ARGS__)
-#define LOG_PLAIN(fmt, ...)                \
-    do                                     \
-    {                                      \
-        log_write(, (fmt), ##__VA_ARGS__); \
-    } while (0)
 
 #define PRINT_FRAME_HEX(label, payload_ptr, length)          \
     do                                                       \

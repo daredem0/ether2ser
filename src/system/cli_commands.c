@@ -198,7 +198,7 @@ static void subcmd_set_v24_inverted(const char* args)
     V24_POLARITIES_T polarities;
     if (parse_set_v24_polarities(args, &polarities) != E2S_OK)
     {
-        printf("usage: set v24 polarities txd,rxd,rts\r\n");
+        LOG_PLAIN("usage: set v24 polarities txd,rxd,rts\r\n");
         return;
     }
     dispatch_v24_polarities(&polarities);
@@ -229,7 +229,7 @@ static void subcmd_set_v24_baudrate(const char* args)
     V24_BAUDRATE_T baudrate;
     if (parse_set_v24_baudrate(args, &baudrate) != E2S_OK)
     {
-        printf("usage: set v24 baudrate 9600\r\n");
+        LOG_PLAIN("usage: set v24 baudrate 9600\r\n");
         return;
     }
     dispatch_v24_baudrate(&baudrate);
@@ -246,11 +246,11 @@ static void cat_v24_set(const char* args)
     LOG_DEBUG("set v24: args='%s'\r\n", args);
     if (args == NULL || args[0] == '\0')
     {
-        printf("usage: set v24 <subcmd> <args>\r\n");
-        printf("available v24 subcmds:\r\n");
+        LOG_PLAIN("usage: set v24 <subcmd> <args>\r\n");
+        LOG_PLAIN("available v24 subcmds:\r\n");
         for (size_t i = 0; i < NUM_V24_SUBCMDS; i++)
         {
-            printf("  %s  - %s\r\n", v24_subcmds[i].name, v24_subcmds[i].help);
+            LOG_PLAIN("  %s  - %s\r\n", v24_subcmds[i].name, v24_subcmds[i].help);
         }
         return;
     }
@@ -264,7 +264,7 @@ static void cat_v24_set(const char* args)
             return;
         }
     }
-    printf("unknown v24 subcmd: '%s'\r\n", args);
+    LOG_PLAIN("unknown v24 subcmd: '%s'\r\n", args);
 }
 
 static void cat_v24_get(const char* args)
@@ -272,11 +272,11 @@ static void cat_v24_get(const char* args)
     LOG_DEBUG("get v24: args='%s'\r\n", args);
     if (args == NULL || args[0] == '\0')
     {
-        printf("usage: get v24 <subcmd>\r\n");
-        printf("available v24 subcmds:\r\n");
+        LOG_PLAIN("usage: get v24 <subcmd>\r\n");
+        LOG_PLAIN("available v24 subcmds:\r\n");
         for (size_t i = 0; i < NUM_V24_SUBCMDS; i++)
         {
-            printf("  %s  - %s\r\n", v24_subcmds[i].name, v24_subcmds[i].help);
+            LOG_PLAIN("  %s  - %s\r\n", v24_subcmds[i].name, v24_subcmds[i].help);
         }
         return;
     }
@@ -290,21 +290,21 @@ static void cat_v24_get(const char* args)
             return;
         }
     }
-    printf("unknown v24 subcmd: '%s'\r\n", args);
+    LOG_PLAIN("unknown v24 subcmd: '%s'\r\n", args);
 }
 
 static void cat_loglevel_set(const char* args)
 {
     if (args == NULL || args[0] == '\0')
     {
-        printf("usage: set loglevel <error|info|debug|trace>\r\n");
+        LOG_PLAIN("usage: set loglevel <error|info|debug|trace>\r\n");
         return;
     }
 
     char level_name[16];
     if (sscanf(args, "%15s", level_name) != 1)
     {
-        printf("usage: set loglevel <error|info|debug|trace>\r\n");
+        LOG_PLAIN("usage: set loglevel <error|info|debug|trace>\r\n");
         return;
     }
 
@@ -313,30 +313,30 @@ static void cat_loglevel_set(const char* args)
         if (strcmp(level_name, loglevels[i].name) == 0)
         {
             set_loglevel(loglevels[i].value);
-            printf("LOG_LEVEL: %s\r\n", log_level_tag(get_loglevel()));
+            LOG_PLAIN("LOG_LEVEL: %s\r\n", log_level_tag(get_loglevel()));
             return;
         }
     }
 
-    printf("unknown loglevel: '%s'\r\n", level_name);
-    printf("available loglevels: error, info, debug, trace\r\n");
+    LOG_PLAIN("unknown loglevel: '%s'\r\n", level_name);
+    LOG_PLAIN("available loglevels: error, info, debug, trace\r\n");
 }
 
 static void cat_loglevel_get(const char* args)
 {
     if (args != NULL && args[0] != '\0')
     {
-        printf("usage: get loglevel\r\n");
+        LOG_PLAIN("usage: get loglevel\r\n");
         return;
     }
-    printf("LOG_LEVEL: %s\r\n", log_level_tag(get_loglevel()));
+    LOG_PLAIN("LOG_LEVEL: %s\r\n", log_level_tag(get_loglevel()));
 }
 
 static void cmd_reboot(const char* args)
 {
     (void)args;
-    printf("Rebooting...\r\n");
-    watchdog_reboot(0, 0, FLUSH_LOG_BEFORE_REBOOT_MS); // small delay to let printf flush
+    LOG_PLAIN("Rebooting...\r\n");
+    watchdog_reboot(0, 0, FLUSH_LOG_BEFORE_REBOOT_MS); // small delay to let LOG_PLAIN flush
     // Do not return to the main loop; it calls watchdog_update() and would
     // keep postponing the reboot forever.
     while (true)
@@ -363,7 +363,7 @@ static void subcmd_get_ip_local(const char* args)
 {
     if (args != NULL && args[0] != '\0')
     {
-        printf("usage: get net ip.local\r\n");
+        LOG_PLAIN("usage: get net ip.local\r\n");
         return;
     }
     dispatch_get_request(NET_IP_LOCAL, EV_GET_NET_SETTINGS);
@@ -375,7 +375,7 @@ static void subcmd_set_ip_local(const char* args)
     uint8_t mask[4];
     if (parse_set_ip_args(args, ip_addr, mask) != E2S_OK)
     {
-        printf("usage: set net ip 192.168.29.2/24\r\n");
+        LOG_PLAIN("usage: set net ip 192.168.29.2/24\r\n");
         return;
     }
     dispatch_ip(ip_addr, NET_IP_LOCAL);
@@ -386,7 +386,7 @@ static void subcmd_get_ip_remote(const char* args)
 {
     if (args != NULL && args[0] != '\0')
     {
-        printf("usage: get net ip.remote\r\n");
+        LOG_PLAIN("usage: get net ip.remote\r\n");
         return;
     }
     dispatch_get_request(NET_IP_REMOTE, EV_GET_NET_SETTINGS);
@@ -397,7 +397,7 @@ static void subcmd_set_ip_remote(const char* args)
     uint8_t ip_addr[4];
     if (parse_set_ip_remote_args(args, ip_addr) != E2S_OK)
     {
-        printf("usage: set net ip.remote 192.168.29.2\r\n");
+        LOG_PLAIN("usage: set net ip.remote 192.168.29.2\r\n");
         return;
     }
     dispatch_ip(ip_addr, NET_IP_REMOTE);
@@ -407,7 +407,7 @@ static void subcmd_get_ip_gateway(const char* args)
 {
     if (args != NULL && args[0] != '\0')
     {
-        printf("usage: get net ip.gateway\r\n");
+        LOG_PLAIN("usage: get net ip.gateway\r\n");
         return;
     }
     dispatch_get_request(NET_IP_GATEWAY, EV_GET_NET_SETTINGS);
@@ -418,7 +418,7 @@ static void subcmd_set_ip_gateway(const char* args)
     uint8_t ip_addr[4];
     if (parse_set_ip_remote_args(args, ip_addr) != E2S_OK)
     {
-        printf("usage: set net ip.gateway 192.168.29.1\r\n");
+        LOG_PLAIN("usage: set net ip.gateway 192.168.29.1\r\n");
         return;
     }
     dispatch_ip(ip_addr, NET_IP_GATEWAY);
@@ -454,7 +454,7 @@ static void subcmd_get_udp_port_local(const char* args)
 {
     if (args != NULL && args[0] != '\0')
     {
-        printf("usage: get net udp.port.local\r\n");
+        LOG_PLAIN("usage: get net udp.port.local\r\n");
         return;
     }
     dispatch_get_udp_port(NET_PORT_LOCAL);
@@ -465,7 +465,7 @@ static void subcmd_set_udp_port_local(const char* args)
     uint16_t port = 0;
     if (parse_set_udp_port_local_args(args, &port) != E2S_OK)
     {
-        printf("usage: set net udp.port.local 6969\r\n");
+        LOG_PLAIN("usage: set net udp.port.local 6969\r\n");
         return;
     }
     dispatch_set_udp_port(NET_PORT_LOCAL, port);
@@ -475,7 +475,7 @@ static void subcmd_get_udp_port_remote(const char* args)
 {
     if (args != NULL && args[0] != '\0')
     {
-        printf("usage: get net udp.port.remote\r\n");
+        LOG_PLAIN("usage: get net udp.port.remote\r\n");
         return;
     }
 
@@ -487,7 +487,7 @@ static void subcmd_set_udp_port_remote(const char* args)
     uint16_t port = 0;
     if (parse_set_udp_port_remote_args(args, &port) != E2S_OK)
     {
-        printf("usage: set net udp.port.remote 6969\r\n");
+        LOG_PLAIN("usage: set net udp.port.remote 6969\r\n");
         return;
     }
     dispatch_set_udp_port(NET_PORT_REMOTE, port);
@@ -498,11 +498,11 @@ static void cat_net_get(const char* args)
     LOG_DEBUG("get net: args='%s'\r\n", args);
     if (args == NULL || args[0] == '\0')
     {
-        printf("usage: get net <subcmd>\r\n");
-        printf("available net subcmds:\r\n");
+        LOG_PLAIN("usage: get net <subcmd>\r\n");
+        LOG_PLAIN("available net subcmds:\r\n");
         for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
         {
-            printf("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
+            LOG_PLAIN("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
         }
         return;
     }
@@ -516,7 +516,7 @@ static void cat_net_get(const char* args)
             return;
         }
     }
-    printf("unknown net subcmd: '%s'\r\n", args);
+    LOG_PLAIN("unknown net subcmd: '%s'\r\n", args);
 }
 
 static void cat_gpio_set(const char* args)
@@ -529,14 +529,14 @@ static void cat_gpio_set(const char* args)
     switch (parser_result)
     {
     case E2S_ERR_CLI_USAGE_SET:
-        printf("usage:\r\n");
-        printf("  set gpio <pin> <0|1>\r\n");
+        LOG_PLAIN("usage:\r\n");
+        LOG_PLAIN("  set gpio <pin> <0|1>\r\n");
         return;
     case E2S_ERR_CLI_UNKNOWN_PIN:
-        printf("unknown pin: '%s'\r\n", pin_name);
+        LOG_PLAIN("unknown pin: '%s'\r\n", pin_name);
         return;
     case E2S_ERR_CLI_PIN_INPUT_ONLY:
-        printf("pin '%s' is input-only\r\n", pin_name);
+        LOG_PLAIN("pin '%s' is input-only\r\n", pin_name);
         return;
     case E2S_OK:
         break;
@@ -554,18 +554,18 @@ static void cat_gpio_set(const char* args)
     gpio_set_dir(pin->gpio_num, GPIO_OUT);
     gpio_put(pin->gpio_num, value);
 
-    printf("set %s (pin %u) = %d\r\n", pin_name, pin->gpio_num, value);
+    LOG_PLAIN("set %s (pin %u) = %d\r\n", pin_name, pin->gpio_num, value);
 }
 
 static void cat_net_set(const char* args)
 {
     if (args == NULL || args[0] == '\0')
     {
-        printf("usage: set net <subcmd> <args>\r\n");
-        printf("available net subcmds:\r\n");
+        LOG_PLAIN("usage: set net <subcmd> <args>\r\n");
+        LOG_PLAIN("available net subcmds:\r\n");
         for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
         {
-            printf("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
+            LOG_PLAIN("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
         }
         return;
     }
@@ -579,7 +579,7 @@ static void cat_net_set(const char* args)
             return;
         }
     }
-    printf("unknown net subcmd: '%s'\r\n", args);
+    LOG_PLAIN("unknown net subcmd: '%s'\r\n", args);
 }
 
 static void cat_gpio_get(const char* args)
@@ -592,10 +592,10 @@ static void cat_gpio_get(const char* args)
     switch (parser_result)
     {
     case E2S_ERR_CLI_USAGE_GET:
-        printf("usage: get <pin>\r\n");
+        LOG_PLAIN("usage: get <pin>\r\n");
         return;
     case E2S_ERR_CLI_UNKNOWN_PIN:
-        printf("unknown pin: '%s'\r\n", pin_name);
+        LOG_PLAIN("unknown pin: '%s'\r\n", pin_name);
         return;
     case E2S_OK:
         break;
@@ -624,19 +624,19 @@ static void cat_gpio_get(const char* args)
     int  value     = gpio_get(pin->gpio_num);
     bool is_output = gpio_is_dir_out(pin->gpio_num);
 
-    printf("get %s (pin %u) = %d [%s]\r\n", pin_name, pin->gpio_num, value,
-           is_output ? "OUT" : "IN");
+    LOG_PLAIN("get %s (pin %u) = %d [%s]\r\n", pin_name, pin->gpio_num, value,
+              is_output ? "OUT" : "IN");
 }
 
 static void cmd_set(const char* args)
 {
     if (args == NULL || args[0] == '\0')
     {
-        printf("usage: set <category> <args>\r\n");
-        printf("available categories:\r\n");
+        LOG_PLAIN("usage: set <category> <args>\r\n");
+        LOG_PLAIN("available categories:\r\n");
         for (size_t i = 0; i < NUM_CATEGORIES; i++)
         {
-            printf("  %s  - %s\r\n", categories[i].name, categories[i].help);
+            LOG_PLAIN("  %s  - %s\r\n", categories[i].name, categories[i].help);
         }
         return;
     }
@@ -649,18 +649,18 @@ static void cmd_set(const char* args)
             return;
         }
     }
-    printf("unknown set category: '%s'\r\n", args);
+    LOG_PLAIN("unknown set category: '%s'\r\n", args);
 }
 
 static void cmd_get(const char* args)
 {
     if (args == NULL || args[0] == '\0')
     {
-        printf("usage: get <category> <args>\r\n");
-        printf("available categories:\r\n");
+        LOG_PLAIN("usage: get <category> <args>\r\n");
+        LOG_PLAIN("available categories:\r\n");
         for (size_t i = 0; i < NUM_CATEGORIES; i++)
         {
-            printf("  %s  - %s\r\n", categories[i].name, categories[i].help);
+            LOG_PLAIN("  %s  - %s\r\n", categories[i].name, categories[i].help);
         }
         return;
     }
@@ -674,7 +674,7 @@ static void cmd_get(const char* args)
             return;
         }
     }
-    printf("unknown get category: '%s'\r\n", args);
+    LOG_PLAIN("unknown get category: '%s'\r\n", args);
 }
 
 static void cmd_wipe(const char* args)
@@ -708,59 +708,59 @@ static void cmd_help(const char* args)
         }
     }
 
-    printf("\r\nCommands:\r\n");
+    LOG_PLAIN("\r\nCommands:\r\n");
     for (size_t i = 0; i < NUM_COMMANDS; i++)
     {
-        printf("  %-*s  %s\r\n", (int)max_cmd, commands[i].name, commands[i].help);
+        LOG_PLAIN("  %-*s  %s\r\n", (int)max_cmd, commands[i].name, commands[i].help);
     }
 
-    printf("\r\nSet/Get Categories:\r\n");
+    LOG_PLAIN("\r\nSet/Get Categories:\r\n");
     for (size_t i = 0; i < NUM_CATEGORIES; i++)
     {
-        printf("  %s  - %s\r\n", categories[i].name, categories[i].help);
+        LOG_PLAIN("  %s  - %s\r\n", categories[i].name, categories[i].help);
     }
 
-    printf("\r\nNet Subcommands:\r\n");
+    LOG_PLAIN("\r\nNet Subcommands:\r\n");
     for (size_t i = 0; i < NUM_NET_SUBCMDS; i++)
     {
-        printf("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
+        LOG_PLAIN("  %s  - %s\r\n", net_subcmds[i].name, net_subcmds[i].help);
     }
 
-    printf("\r\nV24 Subcommands:\r\n");
+    LOG_PLAIN("\r\nV24 Subcommands:\r\n");
     for (size_t i = 0; i < NUM_V24_SUBCMDS; i++)
     {
-        printf("  %s  - %s\r\n", v24_subcmds[i].name, v24_subcmds[i].help);
+        LOG_PLAIN("  %s  - %s\r\n", v24_subcmds[i].name, v24_subcmds[i].help);
     }
 
-    printf("\r\nPins:\r\n");
+    LOG_PLAIN("\r\nPins:\r\n");
     const pin_info_t* pin_table = get_pin_table();
     for (size_t i = 0; i < NUM_PINS; i++)
     {
-        printf("  %-10s  %s\r\n", pin_table[i].name, pin_table[i].is_output ? "OUT" : "IN");
+        LOG_PLAIN("  %-10s  %s\r\n", pin_table[i].name, pin_table[i].is_output ? "OUT" : "IN");
     }
 
-    printf("\r\nBaudrates:\r\n");
-    printf("  ");
+    LOG_PLAIN("\r\nBaudrates:\r\n");
+    LOG_PLAIN("  ");
     for (size_t i = 0; i < NUM_V24_BAUDRATES; i++)
     {
-        printf("%u", (unsigned)v24_baudrates[i]);
+        LOG_PLAIN("%u", (unsigned)v24_baudrates[i]);
         if (i < NUM_V24_BAUDRATES - 1)
         {
-            printf(", ");
+            LOG_PLAIN(", ");
         }
     }
-    printf("\r\n");
+    LOG_PLAIN("\r\n");
 
-    printf("\r\nLoglevels:\r\n");
-    printf("  error, info, debug, trace\r\n");
+    LOG_PLAIN("\r\nLoglevels:\r\n");
+    LOG_PLAIN("  error, info, debug, trace\r\n");
 }
 
 static void cmd_status(const char* args)
 {
     (void)args;
-    printf("status: ok\r\n");
-    printf("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
-           baudrate_estimator_get_current_estimation(V24_RXC));
+    LOG_PLAIN("status: ok\r\n");
+    LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
+              baudrate_estimator_get_current_estimation(V24_RXC));
     event_t status_event = {.type = EV_STATUS, .data.ptr = NULL, .data_len = 0, .is_inline = false};
     event_queue_push(&status_event);
 }
@@ -769,7 +769,7 @@ static void cmd_mem(const char* args)
 {
     if (args != NULL && args[0] != '\0')
     {
-        printf("usage: mem\r\n");
+        LOG_PLAIN("usage: mem\r\n");
         return;
     }
     event_t mem_event = {.type = EV_MEM, .data.ptr = NULL, .data_len = 0, .is_inline = false};
@@ -780,13 +780,13 @@ static void cmd_net(const char* args)
 {
     if (args != NULL && args[0] != '\0')
     {
-        printf("usage: net\r\n");
+        LOG_PLAIN("usage: net\r\n");
         return;
     }
     wiz_NetInfo net_info;
     wizchip_getnetinfo(&net_info);
-    printf("ip=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1], net_info.ip[2],
-           net_info.ip[3], net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
+    LOG_PLAIN("ip=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1], net_info.ip[2],
+              net_info.ip[3], net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
 }
 
 static void cmd_pininfo(const char* args)
@@ -795,14 +795,14 @@ static void cmd_pininfo(const char* args)
 
     if (sscanf(args, "%15s", pin_name) != 1)
     {
-        printf("usage: pininfo <pin>\r\n");
+        LOG_PLAIN("usage: pininfo <pin>\r\n");
         return;
     }
 
     const pin_info_t* pin = find_pin(pin_name);
     if (!pin)
     {
-        printf("unknown pin: '%s'\r\n", pin_name);
+        LOG_PLAIN("unknown pin: '%s'\r\n", pin_name);
         return;
     }
 
@@ -810,10 +810,10 @@ static void cmd_pininfo(const char* args)
     bool    is_output = gpio_is_dir_out(gpio_num);
     int     value     = gpio_get(gpio_num);
 
-    printf("Pin %s (GPIO %u):\r\n", pin_name, gpio_num);
-    printf("  Direction: %s\r\n", is_output ? "OUTPUT" : "INPUT");
-    printf("  Value: %d\r\n", value);
-    printf("  Function: %d\r\n", gpio_get_function(gpio_num));
+    LOG_PLAIN("Pin %s (GPIO %u):\r\n", pin_name, gpio_num);
+    LOG_PLAIN("  Direction: %s\r\n", is_output ? "OUTPUT" : "INPUT");
+    LOG_PLAIN("  Value: %d\r\n", value);
+    LOG_PLAIN("  Function: %d\r\n", gpio_get_function(gpio_num));
 }
 
 const char* get_command_name(int index)
@@ -833,12 +833,12 @@ void handle_cli_line(const char* line)
     }
     if (parse_result == E2S_ERR_CLI_LINE_TRUNCATED)
     {
-        printf("error: command too long\r\n");
+        LOG_PLAIN("error: command too long\r\n");
         return;
     }
     if (parse_result != E2S_OK)
     {
-        printf("error: invalid command line\r\n");
+        LOG_PLAIN("error: invalid command line\r\n");
         return;
     }
 
@@ -851,5 +851,5 @@ void handle_cli_line(const char* line)
         }
     }
 
-    printf("unknown: '%s' (try 'help')\r\n", cmd);
+    LOG_PLAIN("unknown: '%s' (try 'help')\r\n", cmd);
 }

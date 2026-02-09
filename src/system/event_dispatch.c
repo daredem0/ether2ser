@@ -45,20 +45,20 @@ static void print_v24_polarities(const V24_POLARITIES_T* polarities)
 {
     if (polarities == NULL)
     {
-        printf("polarities: <null>\r\n");
+        LOG_PLAIN("polarities: <null>\r\n");
         return;
     }
 
-    printf("polarities: ");
+    LOG_PLAIN("polarities: ");
     bool first = true;
-#define ADD(name, flag)                             \
-    do                                              \
-    {                                               \
-        if (flag)                                   \
-        {                                           \
-            printf("%s%s", first ? "" : ",", name); \
-            first = false;                          \
-        }                                           \
+#define ADD(name, flag)                                \
+    do                                                 \
+    {                                                  \
+        if (flag)                                      \
+        {                                              \
+            LOG_PLAIN("%s%s", first ? "" : ",", name); \
+            first = false;                             \
+        }                                              \
     } while (0)
 
     ADD("txd", polarities->tx_polarities.txd_inverted);
@@ -72,9 +72,9 @@ static void print_v24_polarities(const V24_POLARITIES_T* polarities)
 
     if (first)
     {
-        printf("<none>");
+        LOG_PLAIN("<none>");
     }
-    printf("\r\n");
+    LOG_PLAIN("\r\n");
 }
 
 static const char* net_setting_id_name(event_queue_data_types_t event_id)
@@ -290,9 +290,9 @@ static void ev_get_net_settings(const event_queue_data_t* payload, const app_ctx
     switch (payload->id)
     {
     case NET_IP_REMOTE:
-        printf("NET_IP_REMOTE: %d.%d.%d.%d\r\n", app->destination_config.ip_address[0],
-               app->destination_config.ip_address[1], app->destination_config.ip_address[2],
-               app->destination_config.ip_address[3]);
+        LOG_PLAIN("NET_IP_REMOTE: %d.%d.%d.%d\r\n", app->destination_config.ip_address[0],
+                  app->destination_config.ip_address[1], app->destination_config.ip_address[2],
+                  app->destination_config.ip_address[3]);
         break;
     case NET_IP_LOCAL:
     case NET_IP_MASK:
@@ -300,16 +300,17 @@ static void ev_get_net_settings(const event_queue_data_t* payload, const app_ctx
     {
         wiz_NetInfo net_info;
         wizchip_getnetinfo(&net_info);
-        printf("ip=%u.%u.%u.%u sn=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1],
-               net_info.ip[2], net_info.ip[3], net_info.sn[0], net_info.sn[1], net_info.sn[2],
-               net_info.sn[3], net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
+        LOG_PLAIN("ip=%u.%u.%u.%u sn=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0],
+                  net_info.ip[1], net_info.ip[2], net_info.ip[3], net_info.sn[0], net_info.sn[1],
+                  net_info.sn[2], net_info.sn[3], net_info.gw[0], net_info.gw[1], net_info.gw[2],
+                  net_info.gw[3]);
         break;
     }
     case NET_PORT_LOCAL:
-        printf("NET_PORT_LOCAL: %d\r\n", app->local_config.port);
+        LOG_PLAIN("NET_PORT_LOCAL: %d\r\n", app->local_config.port);
         break;
     case NET_PORT_REMOTE:
-        printf("NET_PORT_REMOTE: %d\r\n", app->destination_config.port);
+        LOG_PLAIN("NET_PORT_REMOTE: %d\r\n", app->destination_config.port);
         break;
     default:
         break;
@@ -343,7 +344,7 @@ static void ev_get_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
     switch (payload->id)
     {
     case V24_BAUDRATE:
-        printf("V24_BAUDRATE: %d\r\n", app->v24_config.baudrate);
+        LOG_PLAIN("V24_BAUDRATE: %d\r\n", app->v24_config.baudrate);
         app->need_prompt = true;
         break;
     case V24_POLARITIES:
@@ -372,36 +373,38 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
             tx_gap = app->stats.hdlc_frame_ready - app->stats.udp_tx_frames;
         }
 
-        printf("PIPE STATS\r\n");
-        printf("  RX/TX       : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
-               "  udp_tx=%" PRIu64 "\r\n",
-               app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.hdlc_frame_ready,
-               app->stats.udp_tx_frames);
-        printf("  Decode      : frame_ready=%" PRIu64 "  ok=%" PRIu64 "  fail=%" PRIu64 "\r\n",
-               app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok, app->stats.hdlc_decode_fail);
-        printf("  Pipeline    : tx->ready_gap=%" PRIu64 "  ready->udp_gap=%" PRIu64 "\r\n",
-               frame_gap, tx_gap);
-        printf("  TX Queue    : used=%zu/%zu  active=%d\r\n", app->tx_queue.queue_buffer.count,
-               app->tx_queue.queue_buffer.capacity,
-               (app->tx_queue.current_entry.offset < app->tx_queue.current_entry.frame.length) ? 1
-                                                                                               : 0);
-        printf("  Serial RX   : bytes=%" PRIu64 "\r\n", app->stats.serial_rx_bytes);
-        printf("  Serial TX   : wire_bytes=%" PRIu64 "\r\n", app->tx_queue.tx_wire_bytes);
-        printf("  Sync Wait   : syncing=%" PRIu64 "  synced=%" PRIu64 "\r\n",
-               app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
-        printf("  Sync Maint  : consume=%" PRIu64 "  hardcap_events=%" PRIu64
-               "  hardcap_bytes=%" PRIu64 "\r\n",
-               app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
-               app->stats.sync_hardcap_drop_bytes);
-        printf(
+        LOG_PLAIN("PIPE STATS\r\n");
+        LOG_PLAIN("  RX/TX       : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
+                  "  udp_tx=%" PRIu64 "\r\n",
+                  app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.hdlc_frame_ready,
+                  app->stats.udp_tx_frames);
+        LOG_PLAIN("  Decode      : frame_ready=%" PRIu64 "  ok=%" PRIu64 "  fail=%" PRIu64 "\r\n",
+                  app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok,
+                  app->stats.hdlc_decode_fail);
+        LOG_PLAIN("  Pipeline    : tx->ready_gap=%" PRIu64 "  ready->udp_gap=%" PRIu64 "\r\n",
+                  frame_gap, tx_gap);
+        LOG_PLAIN("  TX Queue    : used=%zu/%zu  active=%d\r\n", app->tx_queue.queue_buffer.count,
+                  app->tx_queue.queue_buffer.capacity,
+                  (app->tx_queue.current_entry.offset < app->tx_queue.current_entry.frame.length)
+                      ? 1
+                      : 0);
+        LOG_PLAIN("  Serial RX   : bytes=%" PRIu64 "\r\n", app->stats.serial_rx_bytes);
+        LOG_PLAIN("  Serial TX   : wire_bytes=%" PRIu64 "\r\n", app->tx_queue.tx_wire_bytes);
+        LOG_PLAIN("  Sync Wait   : syncing=%" PRIu64 "  synced=%" PRIu64 "\r\n",
+                  app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
+        LOG_PLAIN("  Sync Maint  : consume=%" PRIu64 "  hardcap_events=%" PRIu64
+                  "  hardcap_bytes=%" PRIu64 "\r\n",
+                  app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
+                  app->stats.sync_hardcap_drop_bytes);
+        LOG_PLAIN(
             "  Accumulator : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
             app->accumulator.position, app->accumulator.processed, (int)app->accumulator.state,
             app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
             app->accumulator.candidate_end);
-        printf("  Sync State  : %s\r\n", hdlc_sync_state_name(app->accumulator.state));
-        printf("  Reconstructed: len=%zu\r\n", app->reconstructed_frame.length);
+        LOG_PLAIN("  Sync State  : %s\r\n", hdlc_sync_state_name(app->accumulator.state));
+        LOG_PLAIN("  Reconstructed: len=%zu\r\n", app->reconstructed_frame.length);
         const v24_runtime_t* v24_runtime = get_v24_runtime();
-        printf(
+        LOG_PLAIN(
             "  PIO TX     : stalled=%" PRIu32 "\r\n",
             (v24_runtime->tx_pio)
                 ? ((v24_runtime->tx_pio->fdebug >>
@@ -464,7 +467,7 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
         break;
     }
     case EV_SAVE_CONFIG:
-        printf("Storing persistent config in flash.\r\n");
+        LOG_PLAIN("Storing persistent config in flash.\r\n");
         wizchip_getnetinfo(&(app->net_config.net_info));
         app->persistent_config.log_level     = get_loglevel();
         app->persistent_config.v24_config    = app->v24_config;
@@ -472,16 +475,16 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
         app->persistent_config.local_config  = app->local_config;
         app->persistent_config.remote_config = app->destination_config;
         config_write(&app->persistent_config);
-        printf("Config stored. Dumping for checking:\r\n");
+        LOG_PLAIN("Config stored. Dumping for checking:\r\n");
         dump_config();
-        printf("\r\n> ");
+        LOG_PLAIN("\r\n> ");
         break;
     case EV_WIPE_CONFIG:
-        printf("Wiping persistent config in flash.\r\n");
+        LOG_PLAIN("Wiping persistent config in flash.\r\n");
         config_wipe();
-        printf("Config wiped. Dumping for checking:\r\n");
+        LOG_PLAIN("Config wiped. Dumping for checking:\r\n");
         dump_config();
-        printf("\r\n> ");
+        LOG_PLAIN("\r\n> ");
         break;
     case EV_SET_NET_SETTINGS:
     {

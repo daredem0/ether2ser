@@ -75,20 +75,28 @@ void log_write(log_level_t level, const char* fmt, ...)
 
     memcpy(global_logstate.queue[head].line, line, LOG_LINE_MAX);
     __dmb(); // publish data before index update
-    global_logstate.head        = next;
-    global_logstate.log_emitted = true;
+    global_logstate.head = next;
+    if (level > LOG_LEVEL_PLAIN)
+    {
+        global_logstate.log_emitted = true;
+    }
     __sev(); // wake core1 if sleeping
 }
 
 void log_core1_drain(void)
 {
+    bool wrote = false;
     while (global_logstate.tail != global_logstate.head)
     {
         uint16_t tail = global_logstate.tail;
-        __dmb(); // ensure we see line after head observation
-        fputs("[C1] ", stdout);
+        __dmb();
         fputs(global_logstate.queue[tail].line, stdout);
         global_logstate.tail = (uint16_t)((tail + 1U) & LOG_QUEUE_MASK);
+        wrote                = true;
+    }
+    if (wrote)
+    {
+        fflush(stdout);
     }
 }
 

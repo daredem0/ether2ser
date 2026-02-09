@@ -44,7 +44,7 @@ void cli_poll(void)
     static char    cli_line_pool[CLI_EVENT_POOL_SIZE][CLI_BUFFER_SIZE];
     static uint8_t cli_line_pool_write = 0;
 
-    int input_char;
+    int      input_char;
     uint32_t processed_chars = 0U;
     while (processed_chars < CLI_MAX_CHARS_PER_POLL &&
            (input_char = getchar_timeout_us(0)) != PICO_ERROR_TIMEOUT)
@@ -54,7 +54,7 @@ void cli_poll(void)
         if (input_char == '\n' || input_char == '\r')
         {
             // add new line before processing command
-            printf("\r\n");
+            LOG_PLAIN("\r\n");
             line_buffer[buffer_len] = '\0';
 
             char* line_slot = cli_line_pool[cli_line_pool_write];
@@ -91,7 +91,7 @@ void cli_poll(void)
         }
         else if (input_char == ASCII_BACKSPACE || input_char == ASCII_DELETE)
         { // backspace
-            printf("\b \b");
+            LOG_PLAIN("\b \b");
             if (buffer_len)
             {
                 buffer_len--;
@@ -102,7 +102,7 @@ void cli_poll(void)
             if (buffer_len < sizeof(line_buffer) - 1)
             {
                 // Echo character back and sore it in buffer
-                printf("%c", (char)input_char);
+                LOG_PLAIN("%c", (char)input_char);
                 line_buffer[buffer_len++] = (char)input_char;
             }
         }

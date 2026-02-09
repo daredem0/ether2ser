@@ -51,7 +51,7 @@ static void print_prompt(app_ctx_t* app)
 {
     if (app->need_prompt)
     {
-        printf("ether2ser> ");
+        LOG_PLAIN("ether2ser> ");
         app->need_prompt = false;
     }
 }

@@ -118,13 +118,13 @@ int main(void)
     // Enable watchdog, 5s timeout, disabled in debugging
     watchdog_enable(GLOBAL_WATCHDOG_TIMEOUT_MS, WATCHDOG_DISABLED_FOR_DEBUGGING);
 
-    printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
-    printf("\r\nType 'help' in USB serial.\r\n");
-    printf("Version: %s\r\n", VERSION_STRING);
+    LOG_PLAIN("\r\nv24-eth-bridge: hello from RP2040\r\n");
+    LOG_PLAIN("\r\nType 'help' in USB serial.\r\n");
+    LOG_PLAIN("Version: %s\r\n", VERSION_STRING);
 
     if (get_loglevel() == LOG_LEVEL_DEBUG)
     {
-        printf("\r\nDebug logging enabled.\r\n> ");
+        LOG_PLAIN("\r\nDebug logging enabled.\r\n> ");
         dump_config();
         app_context.need_prompt = true;
     }

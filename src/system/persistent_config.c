@@ -62,17 +62,17 @@ void print_memory_usage(void)
     struct mallinfo current_mallinfo = mallinfo();
     uint32_t        heap_used        = current_mallinfo.uordblks; // Bytes allocated
 
-    printf("=== Memory Usage ===\n");
-    printf("Static RAM (data+bss): %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)static_used,
-           (double)static_used / (double)BYTES_PER_KIBIBYTE);
-    printf("Heap allocated: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)heap_used,
-           (double)heap_used / (double)BYTES_PER_KIBIBYTE);
-    printf("Total RAM: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)total_ram,
-           (double)total_ram / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("=== Memory Usage ===\n");
+    LOG_PLAIN("Static RAM (data+bss): %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)static_used,
+              (double)static_used / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("Heap allocated: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)heap_used,
+              (double)heap_used / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("Total RAM: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)total_ram,
+              (double)total_ram / (double)BYTES_PER_KIBIBYTE);
 
     uint32_t free_ram = (uint32_t)(total_ram - static_used - heap_used);
-    printf("Approx free: %" PRIu32 " bytes (%.1f KB)\n", free_ram,
-           (double)free_ram / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("Approx free: %" PRIu32 " bytes (%.1f KB)\n", free_ram,
+              (double)free_ram / (double)BYTES_PER_KIBIBYTE);
 }
 
 void print_flash_usage(void)
@@ -87,11 +87,11 @@ void print_flash_usage(void)
     uint32_t total_flash = W55RP20_FLASH_TOTAL_BYTES;
     uint32_t flash_free  = total_flash - flash_used;
 
-    printf("=== Flash Usage ===\n");
-    printf("Flash used: %" PRIu32 " bytes (%.1f KB)\n", flash_used,
-           (double)flash_used / (double)BYTES_PER_KIBIBYTE);
-    printf("Total flash: %" PRIu32 " bytes\n", total_flash);
-    printf("Flash free: %" PRIu32 " bytes\n", flash_free);
+    LOG_PLAIN("=== Flash Usage ===\n");
+    LOG_PLAIN("Flash used: %" PRIu32 " bytes (%.1f KB)\n", flash_used,
+              (double)flash_used / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("Total flash: %" PRIu32 " bytes\n", total_flash);
+    LOG_PLAIN("Flash free: %" PRIu32 " bytes\n", flash_free);
 }
 
 // Read: just cast the flash address
