@@ -35,6 +35,8 @@
         (frame)->payload[(frame)->length++] = byte;    \
     } while (0)
 
+#define HDLC_BIT_STUFF_ONES_LIMIT 5U
+
 static bool hdlc_escape_if_needed(uint8_t byte, HDLC_FRAME_T* frame)
 {
     if (byte == HDLC_FLAG_BYTE || byte == HDLC_ESCAPE_BYTE)
@@ -138,7 +140,7 @@ static bool hdlc_put_bit(hdlc_encoder_t* encoder, bool bit, HDLC_FRAME_T* frame)
         SHIFT_IN_BIT(encoder->out_byte, encoder->lsb_first, bitmask, encoder->out_bits_used);
 
     ENCODER_TRY_FLUSH_BYTE_OUT(encoder, frame, abort);
-    if (encoder->ones_run == 5)
+    if (encoder->ones_run == HDLC_BIT_STUFF_ONES_LIMIT)
     {
         encoder->out_byte =
             SHIFT_IN_BIT(encoder->out_byte, encoder->lsb_first, 0, encoder->out_bits_used);

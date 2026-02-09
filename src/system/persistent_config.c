@@ -36,6 +36,10 @@
 #define FLASH_TARGET_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
 
 #define CONFIG_MAGIC 0xCAFEBABE
+#define BYTES_PER_KIBIBYTE 1024U
+#define RAM_TOTAL_KIBIBYTES 264U
+#define RAM_BASE_ADDRESS 0x20000000U
+#define W55RP20_FLASH_TOTAL_BYTES (2U * BYTES_PER_KIBIBYTE * BYTES_PER_KIBIBYTE)
 
 void print_memory_usage(void)
 {
@@ -48,11 +52,11 @@ void print_memory_usage(void)
     (void)heap_start_sym;
     (void)heap_end_sym;
 
-    // RAM starts at 0x20000000, ends at 0x20042000 (264KB)
-    uint32_t total_ram = 264 * 1024;
+    // RAM starts at RAM_BASE_ADDRESS and spans RAM_TOTAL_KIBIBYTES KiB.
+    uint32_t total_ram = RAM_TOTAL_KIBIBYTES * BYTES_PER_KIBIBYTE;
 
     // Static data (data + bss sections)
-    uint32_t static_used = (uint32_t)&bss_end_sym - 0x20000000U;
+    uint32_t static_used = (uint32_t)&bss_end_sym - RAM_BASE_ADDRESS;
 
     // Use mallinfo for accurate heap stats
     struct mallinfo mi        = mallinfo();
@@ -60,14 +64,15 @@ void print_memory_usage(void)
 
     printf("=== Memory Usage ===\n");
     printf("Static RAM (data+bss): %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)static_used,
-           (double)static_used / 1024.0);
+           (double)static_used / (double)BYTES_PER_KIBIBYTE);
     printf("Heap allocated: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)heap_used,
-           (double)heap_used / 1024.0);
+           (double)heap_used / (double)BYTES_PER_KIBIBYTE);
     printf("Total RAM: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)total_ram,
-           (double)total_ram / 1024.0);
+           (double)total_ram / (double)BYTES_PER_KIBIBYTE);
 
     uint32_t free_ram = (uint32_t)(total_ram - static_used - heap_used);
-    printf("Approx free: %" PRIu32 " bytes (%.1f KB)\n", free_ram, (double)free_ram / 1024.0);
+    printf("Approx free: %" PRIu32 " bytes (%.1f KB)\n", free_ram,
+           (double)free_ram / (double)BYTES_PER_KIBIBYTE);
 }
 
 void print_flash_usage(void)
@@ -79,11 +84,12 @@ void print_flash_usage(void)
     uintptr_t flash_end   = (uintptr_t)&flash_binary_end_sym;
 
     uint32_t flash_used  = (uint32_t)(flash_end - flash_start);
-    uint32_t total_flash = 2U * 1024U * 1024U; // 2MB on W55RP20
+    uint32_t total_flash = W55RP20_FLASH_TOTAL_BYTES;
     uint32_t flash_free  = total_flash - flash_used;
 
     printf("=== Flash Usage ===\n");
-    printf("Flash used: %" PRIu32 " bytes (%.1f KB)\n", flash_used, (double)flash_used / 1024.0);
+    printf("Flash used: %" PRIu32 " bytes (%.1f KB)\n", flash_used,
+           (double)flash_used / (double)BYTES_PER_KIBIBYTE);
     printf("Total flash: %" PRIu32 " bytes\n", total_flash);
     printf("Flash free: %" PRIu32 " bytes\n", flash_free);
 }

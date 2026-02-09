@@ -76,13 +76,13 @@ const pin_info_t* find_pin(const char* name);
 const pin_info_t* get_pin_table(void);
 
 /**
- * @brief Parse IP and optional mask values.
+ * @brief Parse ip_addr and optional netmask values.
  * @param args Argument string.
- * @param ip Output IPv4 address.
- * @param mask Output subnet mask.
+ * @param ip_addr Output ip_addrv4 address.
+ * @param netmask Output subnet netmas.
  * @return Parse status.
  */
-e2s_error_t parse_set_ip_args(const char* args, uint8_t ip[4], uint8_t mask[4]);
+e2s_error_t parse_set_ip_args(const char* args, uint8_t ip_addr[4], uint8_t netmask[4]);
 
 /**
  * @brief Parse GPIO set command arguments.
@@ -96,29 +96,29 @@ e2s_error_t parse_set_gpio_args(const char* args, char* pin_name, int* value,
                                 const pin_info_t** pin);
 
 /**
- * @brief Parse network local IP/subnet arguments.
+ * @brief Parse network local ip_addr/subnet arguments.
  * @param args Argument string.
- * @param ip Output IPv4 address.
- * @param mask Output subnet mask.
+ * @param ip_addr Output ip_addrv4 address.
+ * @param netmask Output subnet netmask.
  * @return Parse status.
  */
-e2s_error_t parse_set_net_ip_args(const char* args, uint8_t ip[4], uint8_t mask[4]);
+e2s_error_t parse_set_net_ip_args(const char* args, uint8_t ip_addr[4], uint8_t netmask[4]);
 
 /**
- * @brief Parse remote IP argument.
+ * @brief Parse remote ip_addr argument.
  * @param args Argument string.
- * @param ip Output IPv4 address.
+ * @param ip_addr Output ip_addrv4 address.
  * @return Parse status.
  */
-e2s_error_t parse_set_ip_remote_args(const char* args, uint8_t ip[4]);
+e2s_error_t parse_set_ip_remote_args(const char* args, uint8_t ip_addr[4]);
 
 /**
- * @brief Parse gateway IP argument.
+ * @brief Parse gateway ip_addr argument.
  * @param args Argument string.
- * @param ip Output IPv4 address.
+ * @param ip_addr Output ip_addrv4 address.
  * @return Parse status.
  */
-e2s_error_t parse_set_gateway_args(const char* args, uint8_t ip[4]);
+e2s_error_t parse_set_gateway_args(const char* args, uint8_t ip_addr[4]);
 
 /**
  * @brief Parse local UDP port argument.

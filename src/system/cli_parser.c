@@ -241,10 +241,10 @@ e2s_error_t parse_set_gpio_args(const char* args, char* pin_name, int* value,
     }
     memcpy(buf, args, len + 1);
 
-    char* saveptr   = NULL;
-    char* tok_pin   = strtok_r(buf, " ", &saveptr);
-    char* tok_val   = strtok_r(NULL, " ", &saveptr);
-    char* tok_extra = strtok_r(NULL, " ", &saveptr);
+    char*       saveptr   = NULL;
+    char*       tok_pin   = strtok_r(buf, " ", &saveptr);
+    const char* tok_val   = strtok_r(NULL, " ", &saveptr);
+    const char* tok_extra = strtok_r(NULL, " ", &saveptr);
     if (tok_pin == NULL || tok_val == NULL || tok_extra != NULL)
     {
         return E2S_ERR_CLI_USAGE_SET;
