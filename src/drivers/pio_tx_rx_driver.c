@@ -142,9 +142,10 @@ bool rx_get(uint8_t* data)
     *data = (uint8_t)(pio_sm_get(v24_runtime.rx_pio, v24_runtime.rx_sm) >> RX_SHIFT_TO_LSB);
     return true;
 }
-void rx_clock_update_settings(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
+void rx_clock_update_settings(V24_RX_POLARITIES_T* polarities)
 {
-    pio_sm_set_enabled(pio, pio_sm, false);
+    assert(v24_runtime.rx_pio != NULL);
+    pio_sm_set_enabled(v24_runtime.rx_pio, v24_runtime.rx_sm, false);
 
     if (polarities)
     {
@@ -154,12 +155,11 @@ void rx_clock_update_settings(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarit
                         polarities->rxd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
     }
 
-    pio_sm_set_enabled(pio, pio_sm, true);
+    pio_sm_set_enabled(v24_runtime.rx_pio, v24_runtime.rx_sm, true);
 }
 
 void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
 {
-
     LOG_INFO("RXC: init pio%u sm%u pin%u\r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm,
              (unsigned)V24_RXC);
 
@@ -184,7 +184,7 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
     pio_sm_init(pio, pio_sm, offset, &config);
 
     // This implicitly enables the sm
-    rx_clock_update_settings(pio, pio_sm, polarities);
+    rx_clock_update_settings(polarities);
     LOG_INFO("RXC: enabled\r\n");
 }
 
@@ -200,7 +200,8 @@ bool tx_poll(void)
     }
 
     bool fifo_empty = pio_sm_is_tx_fifo_empty(v24_runtime.tx_pio, v24_runtime.tx_sm);
-    bool stalled    = (v24_runtime.tx_pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + 0))) != 0;
+    bool stalled =
+        (v24_runtime.tx_pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm))) != 0;
     bool ready_to_deassert = (fifo_empty || stalled);
 
     uint64_t now_us = to_us_since_boot(get_absolute_time());
@@ -242,28 +243,32 @@ bool tx_poll(void)
 bool tx_put(uint8_t data)
 {
     assert(v24_runtime.tx_pio != NULL);
+    if (v24_runtime.tx_pio == NULL)
+    {
+        return false;
+    }
     if (!v24_runtime.rts_set)
     {
         // Indicate ready to send by setting RTS
-        v24_runtime.tx_pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + 0));
+        v24_runtime.tx_pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
         gpio_set_dir(V24_RTS, GPIO_OUT);
         gpio_put(V24_RTS, 1);
         v24_runtime.rts_set = true;
     }
-    if (v24_runtime.tx_pio == NULL || pio_sm_is_tx_fifo_full(v24_runtime.tx_pio, v24_runtime.tx_sm))
+    if (pio_sm_is_tx_fifo_full(v24_runtime.tx_pio, v24_runtime.tx_sm))
     {
         return false;
     }
-    pio_sm_put(v24_runtime.tx_pio, 0, data);
+    pio_sm_put(v24_runtime.tx_pio, v24_runtime.tx_sm, data);
     return true;
 }
 
-void tx_clock_update_settings(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate,
-                              V24_TX_POLARITIES_T* polarities)
+void tx_clock_update_settings(V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities)
 {
+    assert(v24_runtime.tx_pio != NULL);
     float clkdiv = baud_to_clockdiv(baudrate);
 
-    pio_sm_set_enabled(pio, pio_sm, false);
+    pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, false);
 
     if (polarities)
     {
@@ -275,8 +280,8 @@ void tx_clock_update_settings(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate,
                         polarities->cts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
     }
 
-    pio_sm_set_clkdiv(pio, pio_sm, clkdiv);
-    pio_sm_set_enabled(pio, pio_sm, true);
+    pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, clkdiv);
+    pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, true);
 }
 
 void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities)
@@ -312,7 +317,7 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
     pio_sm_init(pio, pio_sm, offset, &config);
 
     // This implicitly activates the sm
-    tx_clock_update_settings(pio, pio_sm, baudrate, polarities);
+    tx_clock_update_settings(baudrate, polarities);
     LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
     LOG_INFO("TXC: enabled\r\n");
 }

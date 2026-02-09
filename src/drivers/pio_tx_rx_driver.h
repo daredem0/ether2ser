@@ -86,20 +86,19 @@ void led_mirror_init(void);
 
 /**
  * @brief Apply TX runtime settings to an already configured TX PIO SM.
- * @param pio PIO instance.
- * @param pio_sm State machine index.
+ * Take note that this function relies on tx_clock_init being called before.
+ * This is asserted in debug builds but otherwise UB in production.
  * @param baudrate New baudrate.
  * @param polarities TX polarity settings.
  */
-void tx_clock_update_settings(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate,
-                              V24_TX_POLARITIES_T* polarities);
+void tx_clock_update_settings(V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities);
 
 /**
  * @brief Apply RX runtime settings to an already configured RX PIO SM.
- * @param pio PIO instance.
- * @param pio_sm State machine index.
+ * Take note that this function relies on tx_clock_init being called before.
+ * This is asserted in debug builds but otherwise UB in production.
  * @param polarities RX polarity settings.
  */
-void rx_clock_update_settings(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities);
+void rx_clock_update_settings(V24_RX_POLARITIES_T* polarities);
 
 #endif /* PIO_TX_RX_DRIVER_H */

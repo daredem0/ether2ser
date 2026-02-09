@@ -299,15 +299,15 @@ static void ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
     {
     case V24_BAUDRATE:
         reinit_v24_config(&app->v24_config, payload->value.baudrate);
-        tx_clock_update_settings(pio0, 0, app->v24_config.baudrate,
+        tx_clock_update_settings(app->v24_config.baudrate,
                                  &(app->v24_config.polarities.tx_polarities));
         app->need_prompt = true;
         break;
     case V24_POLARITIES:
         memcpy(&app->v24_config.polarities, &payload->value.polarities, sizeof(V24_POLARITIES_T));
-        tx_clock_update_settings(pio0, 0, app->v24_config.baudrate,
+        tx_clock_update_settings(app->v24_config.baudrate,
                                  &(app->v24_config.polarities.tx_polarities));
-        rx_clock_update_settings(pio0, 1, &(app->v24_config.polarities.rx_polarities));
+        rx_clock_update_settings(&(app->v24_config.polarities.rx_polarities));
         app->need_prompt = true;
         break;
     default:

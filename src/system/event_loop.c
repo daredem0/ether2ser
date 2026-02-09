@@ -68,6 +68,7 @@ void event_loop(app_ctx_t* app)
                 tx_queue_enqueue_udp_frame(&app->tx_queue, &app->rx_frame_buffer);
             if (enqueue_result == E2S_OK)
             {
+                LOG_ERROR("TX Queue Enqueue failed.\r\n");
                 app->stats.hdlc_tx_frames++;
             }
             memset(app->rx_frame_buffer.payload, 0, app->rx_frame_buffer.length);
