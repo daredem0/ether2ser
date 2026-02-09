@@ -185,6 +185,7 @@ if(NOT BUILD_TESTS)
         hardware_pio
         hardware_spi
         hardware_dma
+        pico_multicore
     )
 
     # Generate C header from the PIO program(s)

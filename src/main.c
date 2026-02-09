@@ -28,7 +28,9 @@
 // Library Headers
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
+#include "hardware/sync.h"
 #include "hardware/watchdog.h"
+#include "pico/multicore.h"
 #include "pico/stdio.h"
 #include "pico/time.h"
 
@@ -52,6 +54,18 @@
 #define USB_ENUMERATION_DELAY_MS 1500
 #define GLOBAL_WATCHDOG_TIMEOUT_MS 5000
 #define WATCHDOG_DISABLED_FOR_DEBUGGING 1
+
+static void core1_entry(void)
+{
+    __sev();
+    __wfe();
+    __wfe();
+    while (true)
+    {
+        log_core1_drain();
+        __wfe(); // sleep until interrupt/event, minimal contention
+    }
+}
 
 int main(void)
 {
@@ -114,6 +128,7 @@ int main(void)
         dump_config();
         app_context.need_prompt = true;
     }
+    multicore_launch_core1(core1_entry);
 
     // Initialize event queue finally
     event_queue_init();

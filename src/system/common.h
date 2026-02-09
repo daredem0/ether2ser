@@ -109,6 +109,9 @@ log_level_t get_loglevel(void);
  */
 bool log_take_emitted_flag(void);
 
+void     log_core1_drain(void);
+uint32_t log_take_dropped_count(void);
+
 // extern log_level_t current_log_level;
 
 /**
@@ -150,6 +153,11 @@ void log_write(log_level_t level, const char* fmt, ...);
 #define LOG_INFO(...) LOG(LOG_LEVEL_INFO, __VA_ARGS__)
 #define LOG_DEBUG(...) LOG(LOG_LEVEL_DEBUG, __VA_ARGS__)
 #define LOG_TRACE(...) LOG(LOG_LEVEL_TRACE, __VA_ARGS__)
+#define LOG_PLAIN(fmt, ...)                \
+    do                                     \
+    {                                      \
+        log_write(, (fmt), ##__VA_ARGS__); \
+    } while (0)
 
 #define PRINT_FRAME_HEX(label, payload_ptr, length)          \
     do                                                       \

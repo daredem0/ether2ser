@@ -136,7 +136,7 @@ void event_loop(app_ctx_t* app)
             if (acc_result == E2S_ERR_HDLC_ACC_FRAME_READY)
             {
                 app->stats.hdlc_frame_ready++;
-                last_frame_ready_bytes = app->stats.serial_rx_bytes;
+                last_frame_ready_bytes      = app->stats.serial_rx_bytes;
                 app->tx_frame_buffer.length = 0;
                 if (hdlc_decode(&app->reconstructed_frame, app->tx_frame_buffer.payload,
                                 TX_BUF_SIZE, &app->tx_frame_buffer.length, true))
