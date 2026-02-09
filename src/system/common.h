@@ -41,7 +41,10 @@
 /**
  * @brief Number of TX PIO instructions executed per serialized bit.
  */
-#define TX_PIO_CYCLES_PER_BIT 3U
+// #define TX_PIO_CPB_NUM 17.0
+// #define TX_PIO_CPB_DEN 4.0
+// #define TX_PIO_CYCLES_PER_BIT (TX_PIO_CPB_NUM / TX_PIO_CPB_DEN)
+#define TX_PIO_CYCLES_PER_BIT 8U
 
 /**
  * @brief The number of microseconds per second

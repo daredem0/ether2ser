@@ -236,13 +236,15 @@ bool tx_poll(void)
 
     // AFTER RTS is deasserted we turn of the clock. Until then, we
     // have to keep clocking. To do that we temporarily take control over the pin
-    gpio_set_function(V24_TXC_DTE, GPIO_FUNC_SIO); // NOLINT(misc-include-cleaner)
-    gpio_set_dir(V24_TXC_DTE, GPIO_OUT);
-    gpio_put(V24_TXC_DTE, 0);
+    // gpio_set_function(V24_TXC_DTE, GPIO_FUNC_SIO); // NOLINT(misc-include-cleaner)
+    // gpio_set_dir(V24_TXC_DTE, GPIO_OUT);
+    // gpio_put(V24_TXC_DTE, 0);
 
-    // Return control to pio, state machine is stalled, level will remain
-    // until more bytes are pushed
-    gpio_set_function(V24_TXC_DTE, pio_gpio_func(v24_runtime.tx_pio));
+    // pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, false);
+    // pio_sm_set_pins_with_mask(v24_runtime.tx_pio, v24_runtime.tx_sm, 0U, 1U << V24_TXC_DTE);
+    // // Return control to pio, state machine is stalled, level will remain
+    // // until more bytes are pushed
+    // gpio_set_function(V24_TXC_DTE, pio_gpio_func(v24_runtime.tx_pio));
     return true;
 }
 

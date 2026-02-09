@@ -335,6 +335,12 @@ static void cmd_reboot(const char* args)
     (void)args;
     printf("Rebooting...\r\n");
     watchdog_reboot(0, 0, FLUSH_LOG_BEFORE_REBOOT_MS); // small delay to let printf flush
+    // Do not return to the main loop; it calls watchdog_update() and would
+    // keep postponing the reboot forever.
+    while (true)
+    {
+        // wait for watchdog reset
+    }
 }
 
 static void dispatch_ip(const uint8_t* ip_addr, const event_queue_data_types_t type)

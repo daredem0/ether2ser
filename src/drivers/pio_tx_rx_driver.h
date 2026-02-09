@@ -36,6 +36,7 @@ typedef struct
     uint     tx_sm;
     PIO      rx_pio;
     uint     rx_sm;
+    bool     tx_clock_forced_low;
 } v24_runtime_t;
 
 /**
