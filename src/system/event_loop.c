@@ -62,6 +62,7 @@ void event_loop(app_ctx_t* app)
     static uint8_t  hdlc_decode_fail_streak = 0;
     static uint64_t last_rx_byte_us         = 0U;
     static uint64_t last_frame_ready_bytes  = 0U;
+    bool            work_done               = false;
     while (true)
     {
         watchdog_update();
@@ -74,6 +75,7 @@ void event_loop(app_ctx_t* app)
                 tx_queue_enqueue_udp_frame(&app->tx_queue, &app->rx_frame_buffer);
             if (enqueue_result == E2S_OK)
             {
+                work_done = true;
                 app->stats.hdlc_tx_frames++;
             }
             else
@@ -93,6 +95,10 @@ void event_loop(app_ctx_t* app)
         {
             LOG_ERROR("Poll Queue Drain failed.\r\n");
         }
+        else
+        {
+            work_done = true;
+        }
 
         // If the tx queue is empty check if the fifo is empty to and reset rts
         if (tx_queue_is_empty(&app->tx_queue))
@@ -105,6 +111,7 @@ void event_loop(app_ctx_t* app)
         size_t rx_drained = 0;
         while (rx_get(&rx_byte))
         {
+            work_done = true;
             rx_drained++;
             hdlc_sync_acc_process_byte(&app->accumulator, rx_byte);
         }
@@ -113,6 +120,7 @@ void event_loop(app_ctx_t* app)
         if (rx_drained > 0U)
         {
             last_rx_byte_us = now_us;
+            work_done       = true;
         }
 
         bool frame_in_progress = (app->accumulator.state != HDLC_SYNC_STATE_HUNTING) ||
@@ -135,6 +143,7 @@ void event_loop(app_ctx_t* app)
                 hdlc_sync_acc_poll(&app->accumulator, &app->reconstructed_frame);
             if (acc_result == E2S_ERR_HDLC_ACC_FRAME_READY)
             {
+                work_done = true;
                 app->stats.hdlc_frame_ready++;
                 last_frame_ready_bytes      = app->stats.serial_rx_bytes;
                 app->tx_frame_buffer.length = 0;
@@ -217,6 +226,10 @@ void event_loop(app_ctx_t* app)
             app->need_prompt = true;
         }
         print_prompt(app);
-        sleep_us(MAIN_LOOP_SLEEP_US);
+
+        if (!work_done)
+        {
+            sleep_us(MAIN_LOOP_SLEEP_US);
+        }
     }
 }

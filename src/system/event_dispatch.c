@@ -374,38 +374,42 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
         }
 
         LOG_PLAIN("PIPE STATS\r\n");
-        LOG_PLAIN("  RX/TX       : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
+        LOG_PLAIN("  Traffic\r\n");
+        LOG_PLAIN("    Frames    : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
                   "  udp_tx=%" PRIu64 "\r\n",
                   app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.hdlc_frame_ready,
                   app->stats.udp_tx_frames);
-        LOG_PLAIN("  Decode      : frame_ready=%" PRIu64 "  ok=%" PRIu64 "  fail=%" PRIu64 "\r\n",
+        LOG_PLAIN("    Backlog   : tx->ready_gap=%" PRIu64 "  ready->udp_gap=%" PRIu64 "\r\n",
+                  frame_gap, tx_gap);
+        LOG_PLAIN("    Serial    : rx_bytes=%" PRIu64 "  tx_bytes=%" PRIu64 "\r\n",
+                  app->stats.serial_rx_bytes, app->tx_queue.tx_wire_bytes);
+
+        LOG_PLAIN("  Decode / Sync\r\n");
+        LOG_PLAIN("    Decode    : frame_ready=%" PRIu64 "  ok=%" PRIu64 "  fail=%" PRIu64 "\r\n",
                   app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok,
                   app->stats.hdlc_decode_fail);
-        LOG_PLAIN("  Pipeline    : tx->ready_gap=%" PRIu64 "  ready->udp_gap=%" PRIu64 "\r\n",
-                  frame_gap, tx_gap);
-        LOG_PLAIN("  TX Queue    : used=%zu/%zu  active=%d\r\n", app->tx_queue.queue_buffer.count,
+        LOG_PLAIN("    SyncState : %s\r\n", hdlc_sync_state_name(app->accumulator.state));
+        LOG_PLAIN("    SyncWait  : syncing=%" PRIu64 "  synced=%" PRIu64 "\r\n",
+                  app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
+        LOG_PLAIN("    SyncMaint : consume=%" PRIu64 "  hardcap_events=%" PRIu64
+                  "  hardcap_bytes=%" PRIu64 "\r\n",
+                  app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
+                  app->stats.sync_hardcap_drop_bytes);
+        LOG_PLAIN("    Accum     : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
+                  app->accumulator.position, app->accumulator.processed,
+                  (int)app->accumulator.state, app->accumulator.bit_offset,
+                  app->accumulator.candidate_valid ? 1 : 0, app->accumulator.candidate_end);
+
+        LOG_PLAIN("  Buffers\r\n");
+        LOG_PLAIN("    TX Queue  : used=%zu/%zu  active=%d\r\n", app->tx_queue.queue_buffer.count,
                   app->tx_queue.queue_buffer.capacity,
                   (app->tx_queue.current_entry.offset < app->tx_queue.current_entry.frame.length)
                       ? 1
                       : 0);
-        LOG_PLAIN("  Serial RX   : bytes=%" PRIu64 "\r\n", app->stats.serial_rx_bytes);
-        LOG_PLAIN("  Serial TX   : wire_bytes=%" PRIu64 "\r\n", app->tx_queue.tx_wire_bytes);
-        LOG_PLAIN("  Sync Wait   : syncing=%" PRIu64 "  synced=%" PRIu64 "\r\n",
-                  app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
-        LOG_PLAIN("  Sync Maint  : consume=%" PRIu64 "  hardcap_events=%" PRIu64
-                  "  hardcap_bytes=%" PRIu64 "\r\n",
-                  app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
-                  app->stats.sync_hardcap_drop_bytes);
-        LOG_PLAIN(
-            "  Accumulator : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
-            app->accumulator.position, app->accumulator.processed, (int)app->accumulator.state,
-            app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
-            app->accumulator.candidate_end);
-        LOG_PLAIN("  Sync State  : %s\r\n", hdlc_sync_state_name(app->accumulator.state));
-        LOG_PLAIN("  Reconstructed: len=%zu\r\n", app->reconstructed_frame.length);
+        LOG_PLAIN("    Recons    : len=%zu\r\n", app->reconstructed_frame.length);
         const v24_runtime_t* v24_runtime = get_v24_runtime();
         LOG_PLAIN(
-            "  PIO TX     : stalled=%" PRIu32 "\r\n",
+            "    PIO TX    : stalled=%" PRIu32 "\r\n",
             (v24_runtime->tx_pio)
                 ? ((v24_runtime->tx_pio->fdebug >>
                     (PIO_FDEBUG_TXSTALL_LSB + v24_runtime->tx_sm)) & // NOLINT(misc-include-cleaner)
