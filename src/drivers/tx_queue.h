@@ -32,6 +32,16 @@
 #define TX_FRAME_QUEUE_SIZE 32
 
 /**
+ * @brief The maximum size of a hdlc frame in the queue
+ * Max UDP size we accept is 1472 byte, adding 2 CRC frames nd start/end Flags
+ * that gives 1476 byte.
+ * Worst case stuffing approximation would be 1 bit per 5 bits. Together
+ * that gives ~14150 bits per frame ~1769 bytes. To give conservative headroom
+ * we default to 2048
+ */
+#define TX_FRAME_MAX_SIZE_BYTE 2048
+
+/**
  * @brief Convenience macro to declare and initialize a TX queue and backing storage.
  * @param var_name Base variable name for queue and storage symbols.
  */
@@ -49,7 +59,7 @@
 typedef struct
 {
     /** Backing payload storage for the encoded frame. */
-    uint8_t payload[4000];
+    uint8_t payload[TX_FRAME_MAX_SIZE_BYTE]; // TODO: This has to be tested on the target
     /** Encoded frame descriptor. */
     HDLC_FRAME_T frame;
     /** Number of bytes already drained to TX FIFO. */

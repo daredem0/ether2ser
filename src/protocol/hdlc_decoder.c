@@ -108,7 +108,8 @@ static hdlc_decoder_bit_type_t hdlc_get_bit(hdlc_decoder_t* decoder, const HDLC_
     }
     size_t raw_bits_total = (frame->length > 2) ? (frame->length - 2) * CHAR_BIT : 0;
 
-    while (true)
+    // TODO: This has to be tested on target
+    while (decoder->raw_bit_index < raw_bits_total)
     {
         if (raw_bits_total <= decoder->raw_bit_index)
         {

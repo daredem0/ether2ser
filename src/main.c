@@ -59,7 +59,7 @@ int main(void)
     e2s_error_t err;
 
     // Application Context
-    app_ctx_t app_context = {0};
+    static app_ctx_t app_context = {0};
 
     // Config variables
     config_t persistent_config;

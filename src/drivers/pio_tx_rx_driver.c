@@ -37,6 +37,21 @@
 #include "rck_rxd.pio.h"
 #include "tck_txd.pio.h"
 
+/**
+ * @brief Minimum RTS holdoff in microseconds used as a safety floor.
+ */
+#define V24_RTS_MIN_HOLDOFF 200U
+/**
+ * @brief RTS holdoff multiplier in bit-times.
+ * The final holdoff is: tx_rts_holdoff_us = margin * t_bit_us.
+ * This value was empirically determined to be the most stable for this system.
+ */
+#define V24_RTS_HOLDOFF_MARGIN 41U
+/**
+ * @brief The number of microseconds per second
+ */
+#define US_PER_SECOND 1000000U
+
 // This struct holds the runtime state of the v24 and shall not be exposed
 v24_runtime_t v24_runtime;
 
@@ -102,9 +117,7 @@ void led_mirror_init(void)
     LOG_INFO("LED mirror: enabled on pio%u sm%d offset=%u\r\n", (unsigned)pio_get_index(pio),
              pio_sm, (unsigned)offset);
 }
-#define V24_RTS_MIN_HOLDOFF 200u
-#define V24_RTS_HOLDOFF_MARGIN 41u
-#define US_PER_SECOND 1000000u
+
 void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 {
     config->baudrate              = (baudrate >= V24_BAUD_1200) ? baudrate : V24_BAUD_1200;
