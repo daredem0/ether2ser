@@ -25,6 +25,7 @@ typedef struct
     volatile uint16_t head; // producer writes, consumer reads
     volatile uint16_t tail; // consumer writes, producer reads
     volatile uint32_t dropped;
+    volatile uint32_t high_water_mark;
     bool              log_emitted;
     log_entry_t       queue[LOG_QUEUE_DEPTH];
 } global_log_state_t;
@@ -33,6 +34,7 @@ static global_log_state_t global_logstate = {.current_log_level = LOG_LEVEL_INFO
                                              .head              = 0U,
                                              .tail              = 0U,
                                              .dropped           = 0U,
+                                             .high_water_mark   = 0U,
                                              .log_emitted       = false};
 
 log_level_t get_loglevel(void)
@@ -76,6 +78,11 @@ void log_write(log_level_t level, const char* fmt, ...)
     memcpy(global_logstate.queue[head].line, line, LOG_LINE_MAX);
     __dmb(); // publish data before index update
     global_logstate.head = next;
+    uint16_t depth = (uint16_t)((next - global_logstate.tail) & LOG_QUEUE_MASK);
+    if ((uint32_t)depth > global_logstate.high_water_mark)
+    {
+        global_logstate.high_water_mark = depth;
+    }
     if (level > LOG_LEVEL_PLAIN)
     {
         global_logstate.log_emitted = true;
@@ -105,6 +112,11 @@ uint32_t log_take_dropped_count(void)
     uint32_t dropped        = global_logstate.dropped;
     global_logstate.dropped = 0U;
     return dropped;
+}
+
+uint32_t log_get_high_water_mark(void)
+{
+    return global_logstate.high_water_mark;
 }
 
 bool log_take_emitted_flag(void)

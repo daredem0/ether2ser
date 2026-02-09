@@ -62,6 +62,27 @@ typedef struct
     uint64_t sync_hardcap_drop_events;
     uint64_t sync_hardcap_drop_bytes;
 
+    uint64_t decode_fail_invalid_frame;
+    uint64_t decode_fail_too_short;
+    uint64_t decode_fail_payload_too_long;
+    uint64_t decode_fail_unstuff_error;
+    uint64_t decode_fail_crc_mismatch;
+
+    uint64_t resync_idle_timeout_count;
+    uint64_t resync_hard_fail_count;
+    uint64_t resync_no_progress_count;
+
+    uint64_t tx_queue_used_max;
+    uint64_t tx_queue_drop_frames;
+    uint64_t event_queue_used_max;
+    uint64_t event_queue_drop_events;
+    uint64_t log_drop_lines;
+    uint64_t log_queue_used_max;
+
+    uint64_t accumulator_pos_max;
+    uint64_t rx_fifo_stall_events;
+    uint64_t serial_rx_drop_acc_full;
+
     uint32_t last_report_ms;
 } payload_statistics_t;
 

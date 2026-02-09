@@ -25,6 +25,18 @@
 // Generated headers
 
 /**
+ * @brief Cumulative HDLC decode failure reason counters.
+ */
+typedef struct
+{
+    uint64_t invalid_frame;
+    uint64_t too_short;
+    uint64_t payload_too_long;
+    uint64_t unstuff_error;
+    uint64_t crc_mismatch;
+} hdlc_decode_stats_t;
+
+/**
  * @brief Decode an HDLC bit-stuffed frame.
  * @param frame Input HDLC frame.
  * @param payload Output payload buffer.
@@ -46,5 +58,16 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
  */
 bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_capacity,
                       size_t* payload_length);
+
+/**
+ * @brief Copy cumulative HDLC decode statistics.
+ * @param out_stats Destination pointer.
+ */
+void hdlc_decode_stats_snapshot(hdlc_decode_stats_t* out_stats);
+
+/**
+ * @brief Reset cumulative HDLC decode statistics.
+ */
+void hdlc_decode_stats_reset(void);
 
 #endif /* HDLC_DECODER_H */

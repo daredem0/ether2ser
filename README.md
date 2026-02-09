@@ -69,6 +69,86 @@ set v24 polarities txd,rxd,rts
 ```
 - Defaults are defined in `src/drivers/w5500_driver.h`.
 
+**Status Output**
+- The `status` command prints live pipeline diagnostics.
+- Example:
+```text
+ether2ser> status
+status: ok
+Current Baudrate estimation on pin 4: 109010.0 Hz
+PIPE STATS
+  Traffic
+    Frames    : udp_rx=420  hdlc_tx=420  hdlc_rx=420  udp_tx=420
+    Backlog   : tx->ready_gap=0  ready->udp_gap=0
+    Serial    : rx_bytes=630410  tx_bytes=630410
+    Rates     : udp_rx=420000/s  hdlc_rx=420000/s  udp_tx=420000/s  fail=0/s  rx_bytes=630410/s
+  Decode / Sync
+    Decode    : frame_ready=420  ok=420  fail=0
+    FailReason: invalid=0  short=0  long=0  unstuff=0  crc=0
+    SyncState : HUNTING
+    SyncWait  : syncing=0  synced=0
+    SyncMaint : consume=420  hardcap_events=0  hardcap_bytes=0
+    Resync    : idle=0  hard=0  no_progress=0
+    Accum     : pos=0  proc=0  state=0  off=0  cand_valid=0  cand_end=0
+    RX Health : acc_pos_max=4  rx_fifo_stall=0  rx_drop_acc_full=0
+  Buffers
+    TX Queue  : used=0/32  active=0
+    HighWater : tx=0  event=1  log=4
+    Drops     : tx=0  event=0  log=0
+    Recons    : len=0
+    PIO TX    : stalled=1
+```
+- Field meanings
+
+`General`
+
+| Name | Meaning | Debug hint |
+|---|---|---|
+| `Current Baudrate estimation` | Measured RX clock frequency from the `v24_rxc` monitor pin. | If this is far from configured baud, debug physical clock/sampling before protocol logic. |
+
+`Traffic`
+
+| Name | Meaning | Debug hint |
+|---|---|---|
+| `Frames` | Stage counters across the pipeline (`udp_rx`, `hdlc_tx`, `hdlc_rx`, `udp_tx`). | Compare columns to locate where frames are being lost. |
+| `udp_rx` | UDP frames accepted from Ethernet. | If low, issue is upstream/network side. |
+| `hdlc_tx` | Frames encoded and queued to serial TX. | `udp_rx` and `hdlc_tx` should track closely. |
+| `hdlc_rx` | HDLC frame candidates detected on serial RX. | Much larger than `hdlc_tx` usually means desync/false framing. |
+| `udp_tx` | Frames successfully decoded and sent via UDP. | Gap to `hdlc_rx` indicates decode/sync failures. |
+| `Backlog` | Gap metrics between stages. | `tx->ready_gap` grows when RX cannot keep up; `ready->udp_gap` grows on decode failures. |
+| `tx->ready_gap` | `hdlc_tx - hdlc_rx`. | Persistent growth means receive/framing lag. |
+| `ready->udp_gap` | `hdlc_rx - udp_tx`. | Persistent growth points at decode integrity issues. |
+| `Serial` | Cumulative byte counters on wire (`rx_bytes`, `tx_bytes`). | Large divergence indicates one direction not flowing cleanly. |
+| `Rates` | Per-second deltas from previous `status`. | First sample or very short interval can look inflated. |
+
+`Decode / Sync`
+
+| Name | Meaning | Debug hint |
+|---|---|---|
+| `Decode` | Decoder outcomes (`frame_ready`, `ok`, `fail`). | `fail` near zero is expected in stable runs. |
+| `frame_ready` | HDLC candidates emitted by sync layer. | If this overshoots TX by a lot, suspect framing alignment/noise. |
+| `ok` | Successful decode + CRC validation. | Should track `udp_tx`. |
+| `fail` | Failed decode attempts. | Use `FailReason` to identify root cause. |
+| `FailReason` | Breakdown (`invalid`, `short`, `long`, `unstuff`, `crc`). | `unstuff` dominance suggests bitstream corruption/alignment; `crc` points to data corruption after framing. |
+| `SyncState` | Current sync FSM state (`HUNTING`, `SYNCING`, `SYNCED`). | Long time in `SYNCING`/`SYNCED` with low progress can indicate stuck candidate flow. |
+| `SyncWait` | Lookahead waits for cross-byte alignment in `SYNCING`/`SYNCED`. | Fast growth indicates frequent boundary stalls. |
+| `SyncMaint` | Maintenance counters (`consume`, `hardcap_events`, `hardcap_bytes`). | `hardcap_*` should remain near zero in healthy operation. |
+| `Resync` | Recovery reason counters (`idle`, `hard`, `no_progress`). | Spikes indicate unstable decode path or over-aggressive thresholds. |
+| `Accum` | Internal accumulator live state (`pos`, `proc`, `state`, `off`, candidate fields). | Non-zero `pos`/`proc` for long periods without progress indicates parser stall. |
+| `RX Health` | RX path health (`acc_pos_max`, `rx_fifo_stall`, `rx_drop_acc_full`). | Rising `rx_fifo_stall` indicates service starvation; rising `rx_drop_acc_full` means accumulator backpressure. |
+
+`Buffers`
+
+| Name | Meaning | Debug hint |
+|---|---|---|
+| `TX Queue` | Current TX queue occupancy (`used/capacity`, `active`). | `used` near capacity indicates sustained overload. |
+| `used` | Number of queued TX frames. | Trend matters more than instantaneous value. |
+| `active` | `1` if one frame is currently being drained to TX FIFO. | `active=0` with `used>0` indicates drain path issue. |
+| `HighWater` | Peak occupancy since boot (`tx`, `event`, `log`). | Useful to size buffers and detect near-overflow phases. |
+| `Drops` | Cumulative dropped items (`tx`, `event`, `log`). | Any non-zero drop counter indicates data/control loss. |
+| `Recons` | Current reconstructed frame length pending decode. | Large lingering values can indicate stuck/incomplete candidate handling. |
+| `PIO TX` | TX PIO stall flag state. | Sticky hardware indicator; useful to correlate with underfeeding/transmit pacing. |
+
 **Tests**
 ```bash
 mkdir -p build-tests

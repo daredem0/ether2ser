@@ -40,12 +40,15 @@ typedef enum
     HDLC_BIT_ERR
 } hdlc_decoder_bit_type_t;
 
+static hdlc_decode_stats_t hdlc_decode_stats = {0};
+
 bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_capacity,
                       size_t* payload_length)
 {
     if (frame == NULL || payload == NULL || payload_length == NULL || out_capacity == 0 ||
         frame->payload[0] != HDLC_FLAG_BYTE || frame->payload[frame->length - 1] != HDLC_FLAG_BYTE)
     {
+        hdlc_decode_stats.invalid_frame++;
         LOG_DEBUG("Invalid frame\r\n");
         goto abort;
     }
@@ -61,6 +64,7 @@ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t 
         }
         if (outbyte_ctr >= out_capacity)
         {
+            hdlc_decode_stats.payload_too_long++;
             LOG_DEBUG("Payload too long\r\n");
             goto abort;
         }
@@ -71,6 +75,7 @@ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t 
 
     if (outbyte_ctr < 2)
     {
+        hdlc_decode_stats.too_short++;
         goto abort;
     }
 
@@ -81,6 +86,7 @@ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t 
     uint16_t recovered_crc = hdlc_crc16(payload, *payload_length);
     if (crc16 != recovered_crc)
     {
+        hdlc_decode_stats.crc_mismatch++;
         goto abort;
     }
 
@@ -169,6 +175,7 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
         frame->length < 2 || frame->payload[0] != HDLC_FLAG_BYTE ||
         frame->payload[frame->length - 1] != HDLC_FLAG_BYTE)
     {
+        hdlc_decode_stats.invalid_frame++;
         LOG_DEBUG("Invalid frame\r\n");
         goto abort;
     }
@@ -186,11 +193,13 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
         }
         if (bit_result == HDLC_BIT_ERR)
         {
+            hdlc_decode_stats.unstuff_error++;
             LOG_DEBUG("Invalid frame\r\n");
             goto abort;
         }
         if (outbyte_ctr >= out_capacity)
         {
+            hdlc_decode_stats.payload_too_long++;
             LOG_DEBUG("Payload too long\r\n");
             goto abort;
         }
@@ -199,6 +208,7 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
 
     if (outbyte_ctr < 2)
     {
+        hdlc_decode_stats.too_short++;
         goto abort;
     }
 
@@ -209,6 +219,7 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
     uint16_t recovered_crc = hdlc_crc16(payload, *payload_length);
     if (crc16 != recovered_crc)
     {
+        hdlc_decode_stats.crc_mismatch++;
         LOG_DEBUG("CRC mismatch\r\n");
         goto abort;
     }
@@ -221,4 +232,18 @@ abort:
         *payload_length = 0;
     }
     return false;
+}
+
+void hdlc_decode_stats_snapshot(hdlc_decode_stats_t* out_stats)
+{
+    if (out_stats == NULL)
+    {
+        return;
+    }
+    *out_stats = hdlc_decode_stats;
+}
+
+void hdlc_decode_stats_reset(void)
+{
+    hdlc_decode_stats = (hdlc_decode_stats_t){0};
 }

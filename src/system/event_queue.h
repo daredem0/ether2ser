@@ -129,6 +129,24 @@ bool event_queue_is_empty(void);
 bool event_queue_is_full(void);
 
 /**
+ * @brief Get current number of queued events.
+ * @return Queue fill count.
+ */
+size_t event_queue_get_count(void);
+
+/**
+ * @brief Get peak queue fill count observed since init.
+ * @return High-water mark.
+ */
+size_t event_queue_get_high_water_mark(void);
+
+/**
+ * @brief Get cumulative number of dropped push attempts.
+ * @return Drop counter.
+ */
+uint32_t event_queue_get_push_drop_count(void);
+
+/**
  * @brief Resolve payload pointer and validate minimum payload size.
  * @param event Event to inspect.
  * @param required_size Minimum bytes required by caller.

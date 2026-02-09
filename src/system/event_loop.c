@@ -19,6 +19,7 @@
 #include <string.h>
 
 // Library Headers
+#include "hardware/regs/pio.h"
 #include "hardware/watchdog.h"
 #include "pico/time.h"
 
@@ -80,6 +81,10 @@ void event_loop(app_ctx_t* app)
             }
             else
             {
+                if (enqueue_result == E2S_ERR_TX_QUEUE_FULL)
+                {
+                    app->stats.tx_queue_drop_frames++;
+                }
                 LOG_ERROR("TX Queue Enqueue failed: %d.\r\n", enqueue_result);
             }
             memset(app->rx_frame_buffer.payload, 0, app->rx_frame_buffer.length);
@@ -113,9 +118,16 @@ void event_loop(app_ctx_t* app)
         {
             work_done = true;
             rx_drained++;
-            hdlc_sync_acc_process_byte(&app->accumulator, rx_byte);
+            if (!hdlc_sync_acc_process_byte(&app->accumulator, rx_byte))
+            {
+                app->stats.serial_rx_drop_acc_full++;
+            }
         }
         app->stats.serial_rx_bytes += rx_drained;
+        if (app->accumulator.position > app->stats.accumulator_pos_max)
+        {
+            app->stats.accumulator_pos_max = app->accumulator.position;
+        }
         uint64_t now_us = to_us_since_boot(get_absolute_time());
         if (rx_drained > 0U)
         {
@@ -129,6 +141,7 @@ void event_loop(app_ctx_t* app)
         if (frame_in_progress && last_rx_byte_us != 0U &&
             (now_us - last_rx_byte_us) > HDLC_SYNC_IDLE_TIMEOUT_US)
         {
+            app->stats.resync_idle_timeout_count++;
             LOG_DEBUG("HDLC idle timeout resync\r\n");
             hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
             hdlc_decode_fail_streak = 0U;
@@ -166,6 +179,7 @@ void event_loop(app_ctx_t* app)
                     }
                     if (hdlc_decode_fail_streak >= HDLC_DECODE_FAIL_STREAK_LIMIT)
                     {
+                        app->stats.resync_hard_fail_count++;
                         LOG_DEBUG("HDLC hard resync after %u decode fails\r\n",
                                   (unsigned)hdlc_decode_fail_streak);
                         hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
@@ -187,6 +201,7 @@ void event_loop(app_ctx_t* app)
             ((app->stats.serial_rx_bytes - last_frame_ready_bytes) >
              HDLC_SYNC_NO_PROGRESS_MAX_BYTES))
         {
+            app->stats.resync_no_progress_count++;
             LOG_DEBUG("HDLC no-progress resync after %" PRIu64 " bytes\r\n",
                       (app->stats.serial_rx_bytes - last_frame_ready_bytes));
             hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
@@ -211,6 +226,44 @@ void event_loop(app_ctx_t* app)
         app->stats.sync_candidate_consume      = app->accumulator.consume_count;
         app->stats.sync_hardcap_drop_events    = app->accumulator.hardcap_drop_events;
         app->stats.sync_hardcap_drop_bytes     = app->accumulator.hardcap_drop_bytes;
+
+        hdlc_decode_stats_t decode_stats = {0};
+        hdlc_decode_stats_snapshot(&decode_stats);
+        app->stats.decode_fail_invalid_frame   = decode_stats.invalid_frame;
+        app->stats.decode_fail_too_short       = decode_stats.too_short;
+        app->stats.decode_fail_payload_too_long = decode_stats.payload_too_long;
+        app->stats.decode_fail_unstuff_error   = decode_stats.unstuff_error;
+        app->stats.decode_fail_crc_mismatch    = decode_stats.crc_mismatch;
+
+        size_t tx_queue_count = tx_queue_get_count(&app->tx_queue);
+        if (tx_queue_count > app->stats.tx_queue_used_max)
+        {
+            app->stats.tx_queue_used_max = tx_queue_count;
+        }
+        size_t event_queue_count = event_queue_get_count();
+        if (event_queue_count > app->stats.event_queue_used_max)
+        {
+            app->stats.event_queue_used_max = event_queue_count;
+        }
+        size_t event_queue_hwm = event_queue_get_high_water_mark();
+        if (event_queue_hwm > app->stats.event_queue_used_max)
+        {
+            app->stats.event_queue_used_max = event_queue_hwm;
+        }
+        app->stats.event_queue_drop_events = event_queue_get_push_drop_count();
+        app->stats.log_drop_lines += log_take_dropped_count();
+        app->stats.log_queue_used_max = log_get_high_water_mark();
+
+        const v24_runtime_t* v24_runtime = get_v24_runtime();
+        if (v24_runtime->rx_pio != NULL)
+        {
+            uint32_t rx_stall_mask = (1U << (PIO_FDEBUG_RXSTALL_LSB + v24_runtime->rx_sm));
+            if ((v24_runtime->rx_pio->fdebug & rx_stall_mask) != 0U)
+            {
+                app->stats.rx_fifo_stall_events++;
+                v24_runtime->rx_pio->fdebug = rx_stall_mask;
+            }
+        }
 
         bool tx_active = !tx_queue_is_empty(&app->tx_queue);
         int  max_events_per_iteration =
