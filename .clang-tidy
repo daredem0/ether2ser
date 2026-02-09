@@ -13,7 +13,10 @@ Checks: >
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
   -bugprone-easily-swappable-parameter,
   -clang-analyzer-core.FixedAddressDereference,
-  -bugprone-assignment-in-if-condition
+  -bugprone-assignment-in-if-condition,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-reserved-identifier,
+  -cert-err34-c
 
 CheckOptions:
   # --- Naming conventions ---

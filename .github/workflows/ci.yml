@@ -43,7 +43,10 @@ jobs:
           cmake --build build
 
       - name: Run static analysis
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
         run: |
+          cmake -S . -B build
           cmake --build build --target check_clang_tidy
           cmake --build build --target check_cppcheck
 
