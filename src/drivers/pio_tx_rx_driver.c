@@ -15,8 +15,9 @@
 // Standard library headers
 #include <assert.h>
 #include <limits.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 
 // Library Headers
 #include "hardware/gpio.h"

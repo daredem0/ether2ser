@@ -14,12 +14,12 @@
 
 // Standard library headers
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 // Library Headers
-#include "hardware/pio.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 
@@ -35,6 +35,7 @@
 #include "system/cli_commands.h"
 #include "system/cli_usb_cdc.h"
 #include "system/common.h"
+#include "system/error.h"
 #include "system/event_queue.h"
 #include "system/persistent_config.h"
 

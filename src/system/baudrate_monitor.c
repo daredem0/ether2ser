@@ -13,9 +13,9 @@
 #include "baudrate_monitor.h"
 
 // Standard library headers
-#include <inttypes.h>
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 
 // Library Headers
 #include "hardware/gpio.h"
@@ -23,8 +23,6 @@
 #include "hardware/timer.h"
 #include "pico/time.h"
 #include "pico/types.h"
-#include "wizchip_conf.h" // NOLINT(misc-include-cleaner) required include order for WIZnet SDK
-#include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "platform/pinmap.h"

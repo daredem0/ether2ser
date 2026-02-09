@@ -22,8 +22,7 @@
 #include "system/app_context.h"
 
 // Standard library headers
-#include <inttypes.h>
-#include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 // Library Headers
@@ -32,8 +31,6 @@
 #include "hardware/watchdog.h"
 #include "pico/stdio.h"
 #include "pico/time.h"
-#include "wizchip_conf.h" // NOLINT(misc-include-cleaner) required include order for WIZnet SDK
-#include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "drivers/gpio_driver.h"
@@ -53,6 +50,8 @@
 
 // USB CDC enumeration delay in milliseconds
 #define USB_ENUMERATION_DELAY_MS 1500
+#define GLOBAL_WATCHDOG_TIMEOUT_MS 5000
+#define WATCHDOG_DISABLED_FOR_DEBUGGING 1
 
 int main(void)
 {
@@ -103,7 +102,7 @@ int main(void)
     baudrate_estimator_init(V24_RXC);
 
     // Enable watchdog, 5s timeout, disabled in debugging
-    watchdog_enable(5000, 1);
+    watchdog_enable(GLOBAL_WATCHDOG_TIMEOUT_MS, WATCHDOG_DISABLED_FOR_DEBUGGING);
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
     printf("\r\nType 'help' in USB serial.\r\n");

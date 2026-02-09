@@ -25,8 +25,6 @@
 // Library Headers
 #include "pico/stdio.h"
 #include "pico/time.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "drivers/pio_tx_rx_driver.h"

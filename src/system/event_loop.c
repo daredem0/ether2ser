@@ -13,7 +13,7 @@
 #include "system/event_loop.h"
 
 // Standard library headers
-#include <inttypes.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -21,8 +21,6 @@
 // Library Headers
 #include "hardware/watchdog.h"
 #include "pico/time.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "drivers/pio_tx_rx_driver.h"

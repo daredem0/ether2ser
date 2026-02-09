@@ -14,13 +14,10 @@
 #include "app_context.h"
 
 // Standard library headers
-#include <inttypes.h>
-#include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 
 // Library Headers
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "drivers/pio_tx_rx_driver.h"

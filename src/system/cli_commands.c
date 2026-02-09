@@ -14,6 +14,7 @@
 
 // Standard library headers
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -336,10 +337,10 @@ static void cmd_reboot(const char* args)
     watchdog_reboot(0, 0, 100); // small delay to let printf flush
 }
 
-static void dispatch_ip(const uint8_t* ip, const event_queue_data_types_t type)
+static void dispatch_ip(const uint8_t* ip_addr, const event_queue_data_types_t type)
 {
     event_queue_data_t ip_event_data = {.id = type};
-    memcpy(ip_event_data.value.ip, ip, 4); //
+    memcpy(ip_event_data.value.ip, ip_addr, 4); //
 
     event_t ip_event = {
         .type      = EV_SET_NET_SETTINGS,
@@ -362,14 +363,14 @@ static void subcmd_get_ip_local(const char* args)
 
 static void subcmd_set_ip_local(const char* args)
 {
-    uint8_t ip[4];
+    uint8_t ip_addr[4];
     uint8_t mask[4];
-    if (parse_set_ip_args(args, ip, mask) != E2S_OK)
+    if (parse_set_ip_args(args, ip_addr, mask) != E2S_OK)
     {
         printf("usage: set net ip 192.168.29.2/24\r\n");
         return;
     }
-    dispatch_ip(ip, NET_IP_LOCAL);
+    dispatch_ip(ip_addr, NET_IP_LOCAL);
     dispatch_ip(mask, NET_IP_MASK);
 }
 
@@ -385,13 +386,13 @@ static void subcmd_get_ip_remote(const char* args)
 
 static void subcmd_set_ip_remote(const char* args)
 {
-    uint8_t ip[4];
-    if (parse_set_ip_remote_args(args, ip) != E2S_OK)
+    uint8_t ip_addr[4];
+    if (parse_set_ip_remote_args(args, ip_addr) != E2S_OK)
     {
         printf("usage: set net ip.remote 192.168.29.2\r\n");
         return;
     }
-    dispatch_ip(ip, NET_IP_REMOTE);
+    dispatch_ip(ip_addr, NET_IP_REMOTE);
 }
 
 static void subcmd_get_ip_gateway(const char* args)
@@ -406,13 +407,13 @@ static void subcmd_get_ip_gateway(const char* args)
 
 static void subcmd_set_ip_gateway(const char* args)
 {
-    uint8_t ip[4];
-    if (parse_set_ip_remote_args(args, ip) != E2S_OK)
+    uint8_t ip_addr[4];
+    if (parse_set_ip_remote_args(args, ip_addr) != E2S_OK)
     {
         printf("usage: set net ip.gateway 192.168.29.1\r\n");
         return;
     }
-    dispatch_ip(ip, NET_IP_GATEWAY);
+    dispatch_ip(ip_addr, NET_IP_GATEWAY);
 }
 
 static void dispatch_get_udp_port(const event_queue_data_types_t type)

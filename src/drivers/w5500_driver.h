@@ -23,8 +23,6 @@
 #include "socket.h"
 #include "w5500.h"
 #include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
-#include "wizchip_spi.h"
 
 // Project Headers
 #include "system/error.h"

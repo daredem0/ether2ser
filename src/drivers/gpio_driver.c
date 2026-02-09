@@ -13,16 +13,13 @@
 #include "gpio_driver.h"
 
 // Standard library headers
-#include <inttypes.h>
-#include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 // Library Headers
 #include "hardware/gpio.h"
-#include "wizchip_conf.h" // NOLINT(misc-include-cleaner) required include order for WIZnet SDK
-#include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "drivers/v24_config.h"

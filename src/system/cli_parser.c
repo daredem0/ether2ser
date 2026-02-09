@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -330,9 +331,9 @@ e2s_error_t parse_set_v24_polarities(const char* args, V24_POLARITIES_T* polarit
     }
 
     const char* token_list = args;
-    if (strncmp(token_list, "invert ", 7) == 0)
+    if (strncmp(token_list, "invert ", (CHAR_BIT - 1U)) == 0)
     {
-        token_list += 7;
+        token_list += (CHAR_BIT - 1U);
     }
 
     char   token_buf[64];

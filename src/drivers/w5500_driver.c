@@ -13,7 +13,7 @@
 #include "w5500_driver.h"
 
 // Standard library headers
-#include <inttypes.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -37,11 +37,12 @@
 #define IP_SOCKET 0 // Socket number for IPRAW
 #define UDP_SOCKET 1
 
-static void ipv4_calc_broadcast_u8(const uint8_t ip[4], const uint8_t mask[4], uint8_t bcast[4])
+static void ipv4_calc_broadcast_u8(const uint8_t ip_addr[4], const uint8_t mask[4],
+                                   uint8_t bcast[4])
 {
     for (int i = 0; i < 4; i++)
     {
-        bcast[i] = (uint8_t)((ip[i] & mask[i]) | (uint8_t)(~mask[i]));
+        bcast[i] = (uint8_t)((ip_addr[i] & mask[i]) | (uint8_t)(~mask[i]));
     }
 }
 

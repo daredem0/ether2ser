@@ -13,6 +13,7 @@
 #include "cli_usb_cdc.h"
 
 // Standard library headers
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -20,8 +21,6 @@
 // Library Headers
 #include "pico/error.h"
 #include "pico/stdio.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "system/common.h"

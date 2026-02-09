@@ -13,15 +13,12 @@
 #include "error.h"
 
 // Standard library headers
-#include <inttypes.h>
-#include <stdint.h>
+#include <stdbool.h>
 
 // Library Headers
 #include "hardware/watchdog.h"
+#include "pico/platform/common.h"
 #include "pico/time.h"
-#include "socket.h"
-#include "wizchip_conf.h"
-#include "wizchip_qspi_pio.h"
 
 // Project Headers
 #include "system/common.h"
