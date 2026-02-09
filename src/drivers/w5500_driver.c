@@ -19,7 +19,6 @@
 #include <string.h>
 
 // Library Headers
-#include "pico/time.h"
 #include "socket.h"
 #include "w5500.h"
 #include "wizchip_conf.h"

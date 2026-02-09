@@ -32,7 +32,7 @@
 #include "hardware/watchdog.h"
 #include "pico/stdio.h"
 #include "pico/time.h"
-#include "wizchip_conf.h"
+#include "wizchip_conf.h" // NOLINT(misc-include-cleaner) required include order for WIZnet SDK
 #include "wizchip_qspi_pio.h"
 
 // Project Headers

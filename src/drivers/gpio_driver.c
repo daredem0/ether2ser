@@ -21,10 +21,11 @@
 
 // Library Headers
 #include "hardware/gpio.h"
-#include "wizchip_conf.h"
+#include "wizchip_conf.h" // NOLINT(misc-include-cleaner) required include order for WIZnet SDK
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
+#include "drivers/v24_config.h"
 #include "platform/pinmap.h"
 #include "system/common.h"
 

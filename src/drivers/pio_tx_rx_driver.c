@@ -60,6 +60,9 @@ const v24_runtime_t* get_v24_runtime(void)
     return (const v24_runtime_t*)&v24_runtime;
 }
 
+// NOLINTBEGIN(misc-include-cleaner)
+// These are actualy visible and clang-tidy has an issue
+// with the pico-sdk here
 static gpio_function_t pio_gpio_func(PIO pio)
 {
     if (pio == pio0)
@@ -72,6 +75,7 @@ static gpio_function_t pio_gpio_func(PIO pio)
     }
     return GPIO_FUNC_NULL; // or assert(false)
 }
+// NOLINTEND(misc-include-cleaner)
 
 static float baud_to_clockdiv(V24_BAUDRATE_T baudrate)
 {

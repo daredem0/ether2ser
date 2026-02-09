@@ -12,7 +12,8 @@ Checks: >
   misc-unused-parameters,
   -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
   -bugprone-easily-swappable-parameter,
-  -clang-analyzer-core.FixedAddressDereference
+  -clang-analyzer-core.FixedAddressDereference,
+  -bugprone-assignment-in-if-condition
 
 CheckOptions:
   # --- Naming conventions ---

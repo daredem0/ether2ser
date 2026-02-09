@@ -22,7 +22,7 @@
 
 // Library Headers
 #include "hardware/pio.h"
-#include "wizchip_conf.h"
+#include "wizchip_conf.h" // NOLINT(misc-include-cleaner) required include order for WIZnet SDK
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
@@ -66,13 +66,6 @@ e2s_error_t poll_queue_stats(TX_QUEUE_T* queue)
         queue->queue_touched = false;
     }
     return E2S_OK;
-}
-static inline TX_QUEUE_ENTRY_T tx_queue_entry_init(void)
-{
-    TX_QUEUE_ENTRY_T e = {0};
-    e.frame.payload    = e.payload;
-    e.frame.capacity   = sizeof(e.payload);
-    return e;
 }
 
 static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_T* queue, TX_QUEUE_ENTRY_T* entry,
@@ -181,7 +174,9 @@ e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, const UDP_FRAME_T* fra
     {
         return E2S_ERR_TX_QUEUE_FULL;
     }
-    TX_QUEUE_ENTRY_T tx_entry = tx_queue_entry_init();
+    TX_QUEUE_ENTRY_T tx_entry = {0};
+    tx_entry.frame.payload    = tx_entry.payload;
+    tx_entry.frame.capacity   = sizeof(tx_entry.payload);
     tx_entry.frame.payload    = tx_entry.payload; // Fix pointer to point to OUR payload
 
     if (!hdlc_encode(frame->payload, frame->length, &tx_entry.frame, true))
