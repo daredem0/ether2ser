@@ -109,3 +109,52 @@ void test_ringbuffer_push_wrap_overwrites_oldest(void)
     TEST_ASSERT_EQUAL(4, out);
     TEST_ASSERT_EQUAL(-1, RbPopFront(&rb, &out));
 }
+
+void test_ringbuffer_uint16_items_preserve_values_and_wrap(void)
+{
+    Ringbuffer rb = {0};
+    uint16_t storage[3];
+    TEST_ASSERT_EQUAL(0, RbInit(&rb, storage, 3, sizeof(uint16_t)));
+
+    uint16_t v1 = 0x1111;
+    uint16_t v2 = 0x2222;
+    uint16_t v3 = 0x3333;
+    uint16_t v4 = 0x4444;
+
+    TEST_ASSERT_EQUAL(0, RbPushBack(&rb, &v1));
+    TEST_ASSERT_EQUAL(0, RbPushBack(&rb, &v2));
+    TEST_ASSERT_EQUAL(0, RbPushBack(&rb, &v3));
+
+    uint16_t out = 0;
+    TEST_ASSERT_EQUAL(0, RbPopFront(&rb, &out));
+    TEST_ASSERT_EQUAL_HEX16(0x1111, out);
+
+    TEST_ASSERT_EQUAL(0, RbPushBack(&rb, &v4));
+    TEST_ASSERT_EQUAL(0, RbPopFront(&rb, &out));
+    TEST_ASSERT_EQUAL_HEX16(0x2222, out);
+    TEST_ASSERT_EQUAL(0, RbPopFront(&rb, &out));
+    TEST_ASSERT_EQUAL_HEX16(0x3333, out);
+    TEST_ASSERT_EQUAL(0, RbPopFront(&rb, &out));
+    TEST_ASSERT_EQUAL_HEX16(0x4444, out);
+}
+
+void test_ringbuffer_push_wrap_overwrites_oldest_for_uint16_items(void)
+{
+    Ringbuffer rb = {0};
+    uint16_t storage[2];
+    TEST_ASSERT_EQUAL(0, RbInit(&rb, storage, 2, sizeof(uint16_t)));
+
+    uint16_t v1 = 0x00AA;
+    uint16_t v2 = 0x00BB;
+    uint16_t v3 = 0x00CC;
+    RbPushBackWrap(&rb, &v1);
+    RbPushBackWrap(&rb, &v2);
+    RbPushBackWrap(&rb, &v3);
+
+    uint16_t out = 0;
+    TEST_ASSERT_EQUAL(0, RbPopFront(&rb, &out));
+    TEST_ASSERT_EQUAL_HEX16(0x00BB, out);
+    TEST_ASSERT_EQUAL(0, RbPopFront(&rb, &out));
+    TEST_ASSERT_EQUAL_HEX16(0x00CC, out);
+    TEST_ASSERT_EQUAL(-1, RbPopFront(&rb, &out));
+}

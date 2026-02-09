@@ -93,6 +93,19 @@ extern void test_cli_parse_set_args_invalid_value_upper_bound(void);
 extern void test_cli_parse_set_args_invalid_value_lower_bound(void);
 extern void test_cli_parse_set_args_extra_space_at_end(void);
 extern void test_cli_parse_set_args_extra_space_between_pin_and_args(void);
+extern void test_parse_set_ip_args_plain_ok(void);
+extern void test_parse_set_ip_args_with_ip_prefix_ok(void);
+extern void test_parse_set_ip_args_invalid_values_fail(void);
+extern void test_parse_set_net_ip_args_ok_and_prefix_required(void);
+extern void test_parse_set_ip_remote_args_ok_and_fail(void);
+extern void test_parse_set_gateway_args_ok_and_fail(void);
+extern void test_parse_set_udp_port_local_args_ok_and_fail(void);
+extern void test_parse_set_udp_port_remote_args_ok_and_fail(void);
+extern void test_parse_set_v24_polarities_empty_or_null_args_ok(void);
+extern void test_parse_set_v24_polarities_tokens_ok(void);
+extern void test_parse_set_v24_polarities_invalid_token_fails(void);
+extern void test_parse_set_v24_polarities_null_output_fails(void);
+extern void test_parse_set_v24_baudrate_valid_and_invalid(void);
 
 // Event Queue declarations
 extern void test_event_queue_empty_after_init(void);
@@ -100,6 +113,11 @@ extern void test_event_queue_push_pop_single(void);
 extern void test_event_queue_full_when_capacity_reached(void);
 extern void test_event_queue_pop_empty_fails(void);
 extern void test_event_queue_wraparound_preserves_order(void);
+extern void test_event_get_payload_ptr_inline_ok(void);
+extern void test_event_get_payload_ptr_inline_too_small_fails(void);
+extern void test_event_get_payload_ptr_pointer_ok(void);
+extern void test_event_get_payload_ptr_pointer_invalid_fails(void);
+extern void test_event_get_payload_ptr_invalid_args_fail(void);
 
 // Frame Accumulator declarations
 extern void test_byte_aligned_hdlc_frame(void);
@@ -116,6 +134,14 @@ extern void test_ringbuffer_push_pop_order_with_wrap(void);
 extern void test_ringbuffer_push_full_fails(void);
 extern void test_ringbuffer_pop_empty_fails(void);
 extern void test_ringbuffer_push_wrap_overwrites_oldest(void);
+extern void test_ringbuffer_uint16_items_preserve_values_and_wrap(void);
+extern void test_ringbuffer_push_wrap_overwrites_oldest_for_uint16_items(void);
+
+// Log tests
+extern void test_log_set_get_level_roundtrip(void);
+extern void test_log_filtered_message_does_not_set_emitted_flag(void);
+extern void test_log_emitted_message_sets_and_clears_flag(void);
+extern void test_log_trace_visible_only_at_trace_level(void);
 
 
 void setUp(void) {
@@ -218,6 +244,19 @@ int main(void) {
     RUN_TEST(test_cli_parse_set_args_invalid_value_lower_bound);
     RUN_TEST(test_cli_parse_set_args_extra_space_at_end);
     RUN_TEST(test_cli_parse_set_args_extra_space_between_pin_and_args);
+    RUN_TEST(test_parse_set_ip_args_plain_ok);
+    RUN_TEST(test_parse_set_ip_args_with_ip_prefix_ok);
+    RUN_TEST(test_parse_set_ip_args_invalid_values_fail);
+    RUN_TEST(test_parse_set_net_ip_args_ok_and_prefix_required);
+    RUN_TEST(test_parse_set_ip_remote_args_ok_and_fail);
+    RUN_TEST(test_parse_set_gateway_args_ok_and_fail);
+    RUN_TEST(test_parse_set_udp_port_local_args_ok_and_fail);
+    RUN_TEST(test_parse_set_udp_port_remote_args_ok_and_fail);
+    RUN_TEST(test_parse_set_v24_polarities_empty_or_null_args_ok);
+    RUN_TEST(test_parse_set_v24_polarities_tokens_ok);
+    RUN_TEST(test_parse_set_v24_polarities_invalid_token_fails);
+    RUN_TEST(test_parse_set_v24_polarities_null_output_fails);
+    RUN_TEST(test_parse_set_v24_baudrate_valid_and_invalid);
 
     // Event Queue Tests
     RUN_TEST(test_event_queue_empty_after_init);
@@ -225,6 +264,11 @@ int main(void) {
     RUN_TEST(test_event_queue_full_when_capacity_reached);
     RUN_TEST(test_event_queue_pop_empty_fails);
     RUN_TEST(test_event_queue_wraparound_preserves_order);
+    RUN_TEST(test_event_get_payload_ptr_inline_ok);
+    RUN_TEST(test_event_get_payload_ptr_inline_too_small_fails);
+    RUN_TEST(test_event_get_payload_ptr_pointer_ok);
+    RUN_TEST(test_event_get_payload_ptr_pointer_invalid_fails);
+    RUN_TEST(test_event_get_payload_ptr_invalid_args_fail);
 
     // Frame Accumulator Tests
     RUN_TEST(test_byte_aligned_hdlc_frame);
@@ -241,6 +285,14 @@ int main(void) {
     RUN_TEST(test_ringbuffer_push_full_fails);
     RUN_TEST(test_ringbuffer_pop_empty_fails);
     RUN_TEST(test_ringbuffer_push_wrap_overwrites_oldest);
+    RUN_TEST(test_ringbuffer_uint16_items_preserve_values_and_wrap);
+    RUN_TEST(test_ringbuffer_push_wrap_overwrites_oldest_for_uint16_items);
+
+    // Log Tests
+    RUN_TEST(test_log_set_get_level_roundtrip);
+    RUN_TEST(test_log_filtered_message_does_not_set_emitted_flag);
+    RUN_TEST(test_log_emitted_message_sets_and_clears_flag);
+    RUN_TEST(test_log_trace_visible_only_at_trace_level);
 
     return UNITY_END();
 }

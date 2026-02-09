@@ -258,6 +258,7 @@ else()
         tests/test_event_queue.c
         tests/test_byte_alignment.c
         tests/test_ringbuffer.c
+        tests/test_log.c
         src/protocol/hdlc_common.c
         src/protocol/hdlc_encoder.c
         src/protocol/hdlc_decoder.c
