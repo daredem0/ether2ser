@@ -370,6 +370,7 @@ endif()
 # Static analysis targets
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
 if(CLANG_TIDY_EXE)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
     set(CLANG_TIDY_EXTRA_ARGS)
     find_program(ARM_NONE_EABI_GCC_EXE NAMES arm-none-eabi-gcc)
     if(ARM_NONE_EABI_GCC_EXE)
@@ -430,10 +431,16 @@ if(CLANG_TIDY_EXE)
     endif()
 
     add_custom_target(check_clang_tidy
-        COMMAND ${CLANG_TIDY_EXE} -p ${CMAKE_BINARY_DIR} ${CLANG_TIDY_EXTRA_ARGS}
-                ${STATIC_ANALYSIS_SOURCES}
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/tools/run_clang_tidy_with_score.py
+                --clang-tidy ${CLANG_TIDY_EXE}
+                --build-dir ${CMAKE_BINARY_DIR}
+                --source-dir ${CMAKE_SOURCE_DIR}
+                --output ${CMAKE_BINARY_DIR}/linter.txt
+                --score-out ${CMAKE_BINARY_DIR}/clang_tidy_score.txt
+                -- ${CLANG_TIDY_EXTRA_ARGS} ${STATIC_ANALYSIS_SOURCES}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "Running clang-tidy on project sources"
+        COMMENT "Running clang-tidy on project sources (with score)"
         VERBATIM
     )
 else()

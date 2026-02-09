@@ -90,3 +90,6 @@ openocd.log
 
 # Code
 .vscode/settings.json
+
+# Python
+__pycache__
