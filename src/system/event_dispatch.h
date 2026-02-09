@@ -29,6 +29,6 @@
  * @param event Event to process.
  * @param app Application context.
  */
-void event_dispatch(event_t* event, app_ctx_t* app);
+void event_dispatch(const event_t* event, app_ctx_t* app);
 
 #endif /* EVENT_DISPATCH_H */
