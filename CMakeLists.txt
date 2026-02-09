@@ -370,8 +370,30 @@ endif()
 # Static analysis targets
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
 if(CLANG_TIDY_EXE)
+    set(CLANG_TIDY_EXTRA_ARGS)
+    find_program(ARM_NONE_EABI_GCC_EXE NAMES arm-none-eabi-gcc)
+    if(ARM_NONE_EABI_GCC_EXE)
+        execute_process(
+            COMMAND ${ARM_NONE_EABI_GCC_EXE} -print-sysroot
+            OUTPUT_VARIABLE ARM_NONE_EABI_SYSROOT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+
+        list(APPEND CLANG_TIDY_EXTRA_ARGS --extra-arg=--target=arm-none-eabi)
+        if(ARM_NONE_EABI_SYSROOT)
+            list(APPEND CLANG_TIDY_EXTRA_ARGS --extra-arg=--sysroot=${ARM_NONE_EABI_SYSROOT})
+            if(EXISTS "${ARM_NONE_EABI_SYSROOT}/include")
+                # Some CI setups still miss newlib headers unless include is explicit.
+                list(APPEND CLANG_TIDY_EXTRA_ARGS --extra-arg=-isystem
+                                                  --extra-arg=${ARM_NONE_EABI_SYSROOT}/include)
+            endif()
+        endif()
+    endif()
+
     add_custom_target(check_clang_tidy
-        COMMAND ${CLANG_TIDY_EXE} -p ${CMAKE_BINARY_DIR} ${STATIC_ANALYSIS_SOURCES}
+        COMMAND ${CLANG_TIDY_EXE} -p ${CMAKE_BINARY_DIR} ${CLANG_TIDY_EXTRA_ARGS}
+                ${STATIC_ANALYSIS_SOURCES}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Running clang-tidy on project sources"
         VERBATIM
