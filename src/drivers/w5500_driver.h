@@ -27,6 +27,7 @@
 #include "wizchip_spi.h"
 
 // Project Headers
+#include "system/error.h"
 
 // Generated headers
 
@@ -52,7 +53,7 @@ typedef struct
     /** Full WIZnet network information block. */
     wiz_NetInfo net_info;
     /** Derived broadcast address for convenience TX. */
-    uint8_t     broadcast_address[4];
+    uint8_t broadcast_address[4];
 } NETWORK_CONFIG_T;
 
 /**
@@ -61,7 +62,7 @@ typedef struct
 typedef struct
 {
     /** IPv4 address. */
-    uint8_t  ip_address[4];
+    uint8_t ip_address[4];
     /** UDP port in host byte order. */
     uint16_t port;
 } UDP_CONFIG_T;
@@ -74,7 +75,7 @@ typedef struct
     /** Pointer to payload bytes. */
     uint8_t* payload;
     /** Payload length in bytes. */
-    size_t   length;
+    size_t length;
 } UDP_FRAME_T;
 
 /**
@@ -100,19 +101,22 @@ bool w5500_poll_rx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame);
 /**
  * @brief Open configured UDP socket.
  * @param send_config Local endpoint settings.
+ * @return E2S_OK on success, error code otherwise.
  */
-void w5500_open_udp_socket(UDP_CONFIG_T* send_config);
+e2s_error_t w5500_open_udp_socket(UDP_CONFIG_T* send_config);
 
 /**
  * @brief Reconfigure UDP socket with new endpoint settings.
  * @param config Local endpoint settings.
+ * @return E2S_OK on success, error code otherwise.
  */
-void w5500_reconfigure_udp_socket(UDP_CONFIG_T* config);
+e2s_error_t w5500_reconfigure_udp_socket(UDP_CONFIG_T* config);
 
 /**
  * @brief Open IPRAW socket mode.
+ * @return E2S_OK on success, error code otherwise.
  */
-void w5500_open_ipraw_socket(void);
+e2s_error_t w5500_open_ipraw_socket(void);
 
 /**
  * @brief Fill network config with compile-time defaults.

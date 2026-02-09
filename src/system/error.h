@@ -76,4 +76,10 @@ typedef enum
     E2S_ERR_TX_QUEUE_NOT_INITIALIZED
 } e2s_error_t;
 
+/**
+ * @brief Print error message and panic.
+ * @param reason Error code.
+ */
+void fatal_panic(e2s_error_t reason);
+
 #endif /* ERROR_H */

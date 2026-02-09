@@ -43,6 +43,7 @@
 #include "platform/pinmap.h"
 #include "system/baudrate_monitor.h"
 #include "system/common.h"
+#include "system/error.h"
 #include "system/event_loop.h"
 #include "system/event_queue.h"
 #include "system/persistent_config.h"
@@ -55,6 +56,8 @@
 
 int main(void)
 {
+    e2s_error_t err;
+
     // Application Context
     app_ctx_t app_context = {0};
 
@@ -83,7 +86,10 @@ int main(void)
 
     init_app(&app_context, &persistent_config);
 
-    w5500_open_udp_socket(&app_context.local_config);
+    if ((err = w5500_open_udp_socket(&app_context.local_config)) != E2S_OK)
+    {
+        fatal_panic(err);
+    }
     w5500_debug_status();
 
     // Initialize TX Queue

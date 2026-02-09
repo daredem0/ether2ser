@@ -8,6 +8,7 @@ set(SOURCES
     src/system/event_loop.c
     src/system/event_dispatch.c
     src/system/event_queue.c
+    src/system/error.c
     src/system/cli_usb_cdc.c
     src/system/cli_commands.c
     src/system/cli_parser.c

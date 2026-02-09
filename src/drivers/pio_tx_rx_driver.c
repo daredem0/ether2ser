@@ -107,7 +107,7 @@ void led_mirror_init(void)
 #define US_PER_SECOND 1000000u
 void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 {
-    config->baudrate              = baudrate;
+    config->baudrate              = (baudrate >= V24_BAUD_1200) ? baudrate : V24_BAUD_1200;
     uint32_t t_bit_us             = (US_PER_SECOND + (uint32_t)baudrate - 1u) / (uint32_t)baudrate;
     v24_runtime.tx_rts_holdoff_us = V24_RTS_HOLDOFF_MARGIN * t_bit_us; // start conservative
     if (v24_runtime.tx_rts_holdoff_us < V24_RTS_MIN_HOLDOFF)

@@ -215,7 +215,7 @@ static void request_save_config(void)
 
 static void ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* app)
 {
-
+    e2s_error_t err;
     switch (payload->id)
     {
     case NET_IP_REMOTE:
@@ -249,12 +249,18 @@ static void ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* ap
     }
     case NET_PORT_LOCAL:
         app->local_config.port = payload->value.port;
-        w5500_reconfigure_udp_socket(&app->local_config);
+        if (err = w5500_reconfigure_udp_socket(&app->local_config) != E2S_OK)
+        {
+            fatal_panic(err);
+        }
         app->need_prompt = true;
         break;
     case NET_PORT_REMOTE:
         app->destination_config.port = payload->value.port;
-        w5500_reconfigure_udp_socket(&app->destination_config);
+        if (err = w5500_reconfigure_udp_socket(&app->destination_config) != E2S_OK)
+        {
+            fatal_panic(err);
+        }
         app->need_prompt = true;
         break;
     default:

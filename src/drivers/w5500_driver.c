@@ -20,14 +20,15 @@
 
 // Library Headers
 #include "pico/time.h"
+#include "socket.h"
 #include "w5500.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
 #include "wizchip_spi.h"
 
 // Project Headers
-#include "socket.h"
 #include "system/common.h"
+#include "system/error.h"
 
 // Generated headers
 
@@ -98,21 +99,19 @@ bool w5500_poll_rx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame)
     return false;
 }
 
-void w5500_open_ipraw_socket(void)
+e2s_error_t w5500_open_ipraw_socket(void)
 {
     int8_t ret = socket(IP_SOCKET, Sn_MR_IPRAW, 0, 0);
     if (ret != IP_SOCKET)
     {
-        LOG_DEBUG("W5500: socket() failed, ret=%d\r\n", (int)ret);
-        while (true)
-        {
-            sleep_ms(1000);
-        }
+        LOG_ERROR("W5500: socket() failed, ret=%d\r\n", (int)ret);
+        return E2S_ERR_W5500_SOCKET_OPEN_FAILED;
     }
     LOG_DEBUG("W5500: IPRAW Socket opened successfully in blocking mode\r\n");
+    return E2S_OK;
 }
 
-void w5500_open_udp_socket(UDP_CONFIG_T* config)
+e2s_error_t w5500_open_udp_socket(UDP_CONFIG_T* config)
 {
     LOG_DEBUG("Starting UDP echo on port %u...\r\n", config->port);
 
@@ -122,19 +121,17 @@ void w5500_open_udp_socket(UDP_CONFIG_T* config)
     int8_t ret = socket(UDP_SOCKET, Sn_MR_UDP, config->port, SF_IO_NONBLOCK);
     if (ret != UDP_SOCKET)
     {
-        LOG_DEBUG("W5500: socket() failed, ret=%d\r\n", (int)ret);
-        while (true)
-        {
-            sleep_ms(1000);
-        }
+        LOG_ERROR("W5500: socket() failed, ret=%d\r\n", (int)ret);
+        return E2S_ERR_W5500_SOCKET_OPEN_FAILED;
     }
     LOG_DEBUG("W5500: Socket opened successfully in non blocking mode\r\n");
+    return E2S_OK;
 }
-void w5500_reconfigure_udp_socket(UDP_CONFIG_T* config)
+e2s_error_t w5500_reconfigure_udp_socket(UDP_CONFIG_T* config)
 {
     close(UDP_SOCKET);
     LOG_DEBUG("W5500: Socket closed\r\n");
-    w5500_open_udp_socket(config);
+    return w5500_open_udp_socket(config);
 }
 
 void w5500_set_network(NETWORK_CONFIG_T* config)
