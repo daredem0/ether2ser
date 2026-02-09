@@ -40,6 +40,10 @@ void print_memory_usage(void)
 {
     extern char __StackLimit, __bss_end__;
     extern char __heap_start, __heap_end;
+    (void)__StackLimit;
+    (void)__bss_end__;
+    (void)__heap_start;
+    (void)__heap_end;
 
     // RAM starts at 0x20000000, ends at 0x20042000 (264KB)
     uint32_t total_ram = 264 * 1024;
@@ -52,24 +56,32 @@ void print_memory_usage(void)
     uint32_t        heap_used = mi.uordblks; // Bytes allocated
 
     printf("=== Memory Usage ===\n");
-    printf("Static RAM (data+bss): %lu bytes (%.1f KB)\n", static_used, static_used / 1024.0f);
-    printf("Heap allocated: %lu bytes (%.1f KB)\n", heap_used, heap_used / 1024.0f);
-    printf("Total RAM: %lu bytes (%.1f KB)\n", total_ram, total_ram / 1024.0f);
-    printf("Approx free: %lu bytes (%.1f KB)\n", total_ram - static_used - heap_used,
-           (total_ram - static_used - heap_used) / 1024.0f);
+    printf("Static RAM (data+bss): %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)static_used,
+           (double)static_used / 1024.0);
+    printf("Heap allocated: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)heap_used,
+           (double)heap_used / 1024.0);
+    printf("Total RAM: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)total_ram,
+           (double)total_ram / 1024.0);
+
+    uint32_t free_ram = (uint32_t)(total_ram - static_used - heap_used);
+    printf("Approx free: %" PRIu32 " bytes (%.1f KB)\n", free_ram, (double)free_ram / 1024.0);
 }
 
 void print_flash_usage(void)
 {
     extern char __flash_binary_start, __flash_binary_end;
 
-    uint32_t flash_used  = (uint32_t)&__flash_binary_end - (uint32_t)&__flash_binary_start;
-    uint32_t total_flash = 2 * 1024 * 1024; // 2MB on W55RP20
+    uintptr_t flash_start = (uintptr_t)&__flash_binary_start;
+    uintptr_t flash_end   = (uintptr_t)&__flash_binary_end;
+
+    uint32_t flash_used  = (uint32_t)(flash_end - flash_start);
+    uint32_t total_flash = 2u * 1024u * 1024u; // 2MB on W55RP20
+    uint32_t flash_free  = total_flash - flash_used;
 
     printf("=== Flash Usage ===\n");
-    printf("Flash used: %lu bytes (%.1f KB)\n", flash_used, flash_used / 1024.0f);
-    printf("Total flash: %lu bytes\n", total_flash);
-    printf("Flash free: %lu bytes\n", total_flash - flash_used);
+    printf("Flash used: %" PRIu32 " bytes (%.1f KB)\n", flash_used, (double)flash_used / 1024.0);
+    printf("Total flash: %" PRIu32 " bytes\n", total_flash);
+    printf("Flash free: %" PRIu32 " bytes\n", flash_free);
 }
 
 // Read: just cast the flash address

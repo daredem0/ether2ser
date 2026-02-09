@@ -50,14 +50,6 @@ e2s_error_t poll_queue_stats(TX_QUEUE_T* queue)
     {
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
     }
-    static bool     timer_init    = false;
-    static uint32_t last_print_ms = 0;
-    uint32_t        now_ms        = to_ms_since_boot(get_absolute_time());
-    if (!timer_init)
-    {
-        timer_init    = true;
-        last_print_ms = now_ms;
-    }
     bool queue_filling_up = (queue->queue_buffer.capacity - queue->queue_buffer.count < 5);
     if (queue->queue_touched || queue_filling_up)
     {
@@ -72,7 +64,6 @@ e2s_error_t poll_queue_stats(TX_QUEUE_T* queue)
                      queue->queue_buffer.capacity);
         }
         queue->queue_touched = false;
-        last_print_ms        = now_ms;
     }
     return E2S_OK;
 }
@@ -156,7 +147,8 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain)
 
         if (RbPopFront(&(queue->queue_buffer), &queue->current_entry) < 0)
         {
-            return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
+            // TODO: This has to be tested on target
+            return E2S_OK;
         }
         LOG_DEBUG("TX FRAME COMPLETE: offset=%zu length=%zu\n", completed_offset, completed_length);
 
@@ -179,7 +171,7 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain)
     return E2S_OK;
 }
 
-e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, UDP_FRAME_T* frame)
+e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, const UDP_FRAME_T* frame)
 {
     if (!queue || !frame)
     {

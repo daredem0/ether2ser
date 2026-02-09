@@ -103,7 +103,7 @@ typedef struct
  * @param app Application context to initialize.
  * @param persistent_config Source configuration (used when marked valid).
  */
-void init_app(app_ctx_t* app, config_t* persistent_config);
+void init_app(app_ctx_t* app, const config_t* persistent_config);
 
 /**
  * @brief Get access to the app context. This context is owned by main, app_init

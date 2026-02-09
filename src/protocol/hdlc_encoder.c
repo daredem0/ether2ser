@@ -154,8 +154,10 @@ static bool hdlc_put_byte(hdlc_encoder_t* encoder, uint8_t byte, HDLC_FRAME_T* f
 {
     for (uint8_t i = 0; i < CHAR_BIT; i++)
     {
-        uint8_t bit_pos = encoder->lsb_first ? i : (7 - i);
-        if (!hdlc_put_bit(encoder, byte & (1 << bit_pos), frame))
+        size_t bit_pos = encoder->lsb_first ? i : (CHAR_BIT - 1U - i);
+        // TODO: This has to be tested on the target
+        bool bit = ((byte >> bit_pos) & 0x01U) != 0U;
+        if (!hdlc_put_bit(encoder, bit, frame))
         {
             return false;
         }

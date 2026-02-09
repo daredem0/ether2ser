@@ -77,6 +77,15 @@ cmake --build build-tests
 ctest --test-dir build-tests
 ```
 
+**Static Analysis**
+```bash
+cmake -S . -B build
+cmake --build build --target check_clang_tidy
+cmake --build build --target check_cppcheck
+```
+- `check_clang_tidy` requires `clang-tidy` in `PATH`.
+- `check_cppcheck` requires `cppcheck` in `PATH`.
+
 **Documentation (Doxygen)**
 ```bash
 cmake -S . -B build

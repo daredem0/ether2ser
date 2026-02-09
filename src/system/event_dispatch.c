@@ -249,7 +249,7 @@ static void ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* ap
     }
     case NET_PORT_LOCAL:
         app->local_config.port = payload->value.port;
-        if (err = w5500_reconfigure_udp_socket(&app->local_config) != E2S_OK)
+        if ((err = w5500_reconfigure_udp_socket(&app->local_config)) != E2S_OK)
         {
             fatal_panic(err);
         }
@@ -257,7 +257,7 @@ static void ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* ap
         break;
     case NET_PORT_REMOTE:
         app->destination_config.port = payload->value.port;
-        if (err = w5500_reconfigure_udp_socket(&app->destination_config) != E2S_OK)
+        if ((err = w5500_reconfigure_udp_socket(&app->destination_config)) != E2S_OK)
         {
             fatal_panic(err);
         }
@@ -268,7 +268,7 @@ static void ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* ap
     }
 }
 
-static void ev_get_net_settings(const event_queue_data_t* payload, app_ctx_t* app)
+static void ev_get_net_settings(const event_queue_data_t* payload, const app_ctx_t* app)
 {
     switch (payload->id)
     {
@@ -338,7 +338,7 @@ static void ev_get_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
     }
 }
 
-void event_dispatch(event_t* event, app_ctx_t* app)
+void event_dispatch(const event_t* event, app_ctx_t* app)
 {
     switch (event->type)
     {
@@ -383,7 +383,7 @@ void event_dispatch(event_t* event, app_ctx_t* app)
             app->accumulator.candidate_end);
         printf("  Reconstructed: len=%zu\r\n", app->reconstructed_frame.length);
         const v24_runtime_t* v24_runtime = get_v24_runtime();
-        printf("  PIO TX     : stalled=%d\r\n",
+        printf("  PIO TX     : stalled=%ld\r\n",
                v24_runtime->tx_pio ? ((v24_runtime->tx_pio->fdebug >>
                                        (PIO_FDEBUG_TXSTALL_LSB + v24_runtime->tx_sm)) &
                                       1U)

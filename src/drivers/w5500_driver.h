@@ -103,7 +103,7 @@ bool w5500_poll_rx(UDP_CONFIG_T* send_config, UDP_FRAME_T* frame);
  * @param send_config Local endpoint settings.
  * @return E2S_OK on success, error code otherwise.
  */
-e2s_error_t w5500_open_udp_socket(UDP_CONFIG_T* send_config);
+e2s_error_t w5500_open_udp_socket(UDP_CONFIG_T* config);
 
 /**
  * @brief Reconfigure UDP socket with new endpoint settings.

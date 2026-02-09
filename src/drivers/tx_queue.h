@@ -87,7 +87,7 @@ typedef struct
  * @param frame UDP frame payload source.
  * @return Error code.
  */
-e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, UDP_FRAME_T* frame);
+e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, const UDP_FRAME_T* frame);
 
 /**
  * @brief Check whether queue and active entry are fully drained.

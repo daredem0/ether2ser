@@ -58,20 +58,20 @@ void cli_poll(void)
             int   written   = snprintf(line_slot, CLI_BUFFER_SIZE, "%s", line_buffer);
             if (written < 0)
             {
-                LOG_ERROR("[WARN] failed to format CLI line\r\n");
+                LOG_ERROR("Failed to format CLI line\r\n");
                 buffer_len = 0;
                 continue;
             }
             if (written >= CLI_BUFFER_SIZE)
             {
-                LOG_ERROR("[WARN] CLI line truncated (len=%d)\r\n", written);
+                LOG_ERROR("CLI line truncated (len=%d)\r\n", written);
                 buffer_len = 0;
                 continue;
             }
 
             event_t new_event = {
                 .type     = EV_CLI_LINE,
-                .data     = line_slot,
+                .data     = {line_slot},
                 .data_len = strnlen(line_slot, CLI_BUFFER_SIZE) + 1,
             };
 
@@ -81,7 +81,7 @@ void cli_poll(void)
             }
             else
             {
-                LOG_ERROR("[WARN] event queue full, dropping line\r\n");
+                LOG_ERROR("Event queue full, dropping line\r\n");
             }
 
             buffer_len = 0;

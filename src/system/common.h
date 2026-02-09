@@ -56,7 +56,13 @@
 #endif
 
 #ifndef PRIu64
+#if UINT64_MAX == ULONG_MAX
+#define PRIu64 "lu"
+#elif UINT64_MAX == ULLONG_MAX
 #define PRIu64 "llu"
+#else
+#error "Unsupported uint64_t format"
+#endif
 #endif
 
 /**
@@ -74,7 +80,7 @@ typedef enum
  * @brief Set current global log level.
  * @param level New log level.
  */
-void        set_loglevel(log_level_t level);
+void set_loglevel(log_level_t level);
 
 /**
  * @brief Get current global log level.
@@ -86,7 +92,7 @@ log_level_t get_loglevel(void);
  * @brief Atomically read and clear "log emitted" flag.
  * @return true if any log was emitted since previous call.
  */
-bool        log_take_emitted_flag(void);
+bool log_take_emitted_flag(void);
 
 // extern log_level_t current_log_level;
 

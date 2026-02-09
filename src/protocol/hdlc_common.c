@@ -27,7 +27,6 @@
 
 static uint16_t crc16_ccitt_false(const uint8_t* payload, size_t num_bytes)
 {
-    uint8_t  bit;
     uint16_t crc16 = HDLC_CRC16_CCITT_INIT;
     while (num_bytes--)
     {

@@ -25,7 +25,9 @@ jobs:
             git \
             doxygen \
             graphviz \
-            gcovr
+            gcovr \
+            clang-tidy \
+            cppcheck
 
       - name: Fetch Pico SDK
         run: |
@@ -39,6 +41,11 @@ jobs:
         run: |
           cmake -S . -B build
           cmake --build build
+
+      - name: Run static analysis
+        run: |
+          cmake --build build --target check_clang_tidy
+          cmake --build build --target check_cppcheck
 
       - name: Build docs
         env:

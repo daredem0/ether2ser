@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.13)
 
 option(BUILD_TESTS "Build unit tests." OFF)
 option(ENABLE_COVERAGE "Enable coverage for unit tests" OFF)
+option(ENABLE_WERROR "Treat warnings as errors for project targets" ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(SOURCES
     src/system/app_init.c
@@ -24,6 +26,11 @@ set(SOURCES
     src/protocol/hdlc_encoder.c
     src/protocol/hdlc_decoder.c
     src/protocol/hdlc_sync.c
+)
+
+set(STATIC_ANALYSIS_SOURCES
+    src/main.c
+    ${SOURCES}
 )
 
 # Get version from git
@@ -98,23 +105,23 @@ if(NOT BUILD_TESTS)
             ${CMAKE_CURRENT_LIST_DIR}/src
         )
 
-        # Core ioLibrary headers
-        target_include_directories(${target_name} PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Internet
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/inc
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port
+        # Core ioLibrary headers (SYSTEM: do not elevate vendor warnings to errors)
+        target_include_directories(${target_name} SYSTEM PRIVATE
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Internet
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/inc
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port
         )
 
         # Core ioLibrary sources + WIZnet port layer for W55RP20
         target_sources(${target_name} PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/wizchip_conf.c
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/socket.c
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500/w5500.c
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_spi.c
-        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.c
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/wizchip_conf.c
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/socket.c
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500/w5500.c
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_spi.c
+            ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.c
         )
 
         # USB CDC serial (minicom) for CLI/printf
@@ -149,6 +156,26 @@ if(NOT BUILD_TESTS)
         src/main.c
         ${SOURCES}
     )
+
+    if(ENABLE_WERROR)
+        set(APP_WARNING_FLAGS
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Werror
+            # WIZnet vendor headers declare static helpers without definitions in this TU.
+            # Keep -Werror for project code but do not fail on this vendor-header pattern.
+            -Wno-unused-function
+        )
+        set(APP_FIRMWARE_SOURCES
+            src/main.c
+            ${SOURCES}
+        )
+        set_source_files_properties(${APP_FIRMWARE_SOURCES}
+            PROPERTIES COMPILE_OPTIONS "${APP_WARNING_FLAGS}"
+        )
+    endif()
+
     # Generate PIO header for WIZnet's QSPI PIO code
     pico_generate_pio_header(ether2serial
         ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.pio
@@ -208,33 +235,38 @@ if(NOT BUILD_TESTS)
         src/examples/w55_udp_echo/main.c
     )
 
-    # Core ioLibrary headers
-    target_include_directories(ex_w55_echo PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Internet
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/inc
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port
+    # Core ioLibrary headers (SYSTEM: do not elevate vendor warnings to errors)
+    target_include_directories(ex_w55_echo SYSTEM PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Internet
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/inc
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port
     )
 
     # Core ioLibrary sources + WIZnet port layer for W55RP20
     target_sources(ex_w55_echo PRIVATE
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/wizchip_conf.c
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/socket.c
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500/w5500.c
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_spi.c
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.c
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/wizchip_conf.c
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/socket.c
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500/w5500.c
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_spi.c
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.c
     )
 
-    # Generate PIO header for WIZnet's QSPI PIO code
+    # Generate PIO header for WIZnet's QSPI PIO code.
+    # Use a target-specific output dir to avoid duplicate custom-rule collisions
+    # with the same header generated for ether2serial.
+    set(EX_W55_ECHO_PIO_OUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated/ex_w55_echo)
     pico_generate_pio_header(ex_w55_echo
-    ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.pio
+        ${CMAKE_CURRENT_LIST_DIR}/external/WIZnet-PICO-C/port/ioLibrary_Driver/src/wizchip_qspi_pio.pio
+        OUTPUT_DIR ${EX_W55_ECHO_PIO_OUT_DIR}
     )
+    target_include_directories(ex_w55_echo PRIVATE ${EX_W55_ECHO_PIO_OUT_DIR})
 
     target_link_libraries(ex_w55_echo
-    hardware_pio
-    hardware_dma
+        hardware_pio
+        hardware_dma
     )
 
     configure_pico_target(ex_w55_echo)
@@ -333,4 +365,46 @@ if(DOXYGEN_FOUND)
             COMMENT "Generating API documentation (${GIT_VERSION})"
             VERBATIM)
     endif()
+endif()
+
+# Static analysis targets
+find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+if(CLANG_TIDY_EXE)
+    add_custom_target(check_clang_tidy
+        COMMAND ${CLANG_TIDY_EXE} -p ${CMAKE_BINARY_DIR} ${STATIC_ANALYSIS_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Running clang-tidy on project sources"
+        VERBATIM
+    )
+else()
+    add_custom_target(check_clang_tidy
+        COMMAND ${CMAKE_COMMAND} -E echo "clang-tidy not found in PATH"
+        COMMAND ${CMAKE_COMMAND} -E false
+        COMMENT "clang-tidy is required for check_clang_tidy"
+        VERBATIM
+    )
+endif()
+
+find_program(CPPCHECK_EXE NAMES cppcheck)
+if(CPPCHECK_EXE)
+    add_custom_target(check_cppcheck
+        COMMAND ${CPPCHECK_EXE}
+            --enable=warning,style,performance,portability,information
+            --inconclusive
+            --check-level=exhaustive
+            --std=c11
+            --quiet
+            -Isrc
+            src
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Running cppcheck on src/"
+        VERBATIM
+    )
+else()
+    add_custom_target(check_cppcheck
+        COMMAND ${CMAKE_COMMAND} -E echo "cppcheck not found in PATH"
+        COMMAND ${CMAKE_COMMAND} -E false
+        COMMENT "cppcheck is required for check_cppcheck"
+        VERBATIM
+    )
 endif()

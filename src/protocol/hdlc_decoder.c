@@ -111,11 +111,6 @@ static hdlc_decoder_bit_type_t hdlc_get_bit(hdlc_decoder_t* decoder, const HDLC_
     // TODO: This has to be tested on target
     while (decoder->raw_bit_index < raw_bits_total)
     {
-        if (raw_bits_total <= decoder->raw_bit_index)
-        {
-            return HDLC_BIT_EOF;
-        }
-
         uint8_t raw_bit = HDLC_DEC_GET_OUT_BIT(decoder);
         ++decoder->raw_bit_index;
         if (decoder->skip_next_zero)
@@ -142,15 +137,16 @@ static hdlc_decoder_bit_type_t hdlc_get_bit(hdlc_decoder_t* decoder, const HDLC_
         }
         return HDLC_BIT_OK;
     }
+    return HDLC_BIT_EOF;
 }
 
 static hdlc_decoder_bit_type_t hdlc_get_byte(hdlc_decoder_t* decoder, const HDLC_FRAME_T* frame,
                                              uint8_t* byte)
 {
-    *byte               = 0;
-    size_t bit_position = 0;
+    *byte = 0;
     for (uint8_t i = 0; i < CHAR_BIT; i++)
     {
+        size_t                  bit_position = 0;
         uint8_t                 bit;
         hdlc_decoder_bit_type_t bit_result = hdlc_get_bit(decoder, frame, &bit);
         if (bit_result != HDLC_BIT_OK)

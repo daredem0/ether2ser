@@ -671,14 +671,16 @@ static void cmd_get(const char* args)
 static void cmd_wipe(const char* args)
 {
     (void)args;
-    event_t wipe_event = {.type = EV_WIPE_CONFIG, .data = NULL, .data_len = 0};
+    event_t wipe_event = {
+        .type = EV_WIPE_CONFIG, .data.ptr = NULL, .data_len = 0, .is_inline = false};
     event_queue_push(&wipe_event);
 }
 
 static void cmd_save(const char* args)
 {
     (void)args;
-    event_t save_event = {.type = EV_SAVE_CONFIG, .data = NULL, .data_len = 0};
+    event_t save_event = {
+        .type = EV_SAVE_CONFIG, .data.ptr = NULL, .data_len = 0, .is_inline = false};
     event_queue_push(&save_event);
 }
 
@@ -750,7 +752,7 @@ static void cmd_status(const char* args)
     printf("status: ok\r\n");
     printf("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
            baudrate_estimator_get_current_estimation(V24_RXC));
-    event_t status_event = {.type = EV_STATUS, .data = NULL, .data_len = 0};
+    event_t status_event = {.type = EV_STATUS, .data.ptr = NULL, .data_len = 0, .is_inline = false};
     event_queue_push(&status_event);
 }
 

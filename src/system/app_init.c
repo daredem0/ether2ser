@@ -39,7 +39,7 @@ app_ctx_t* get_app_ctx(void)
     return app_ctx;
 }
 
-void init_app(app_ctx_t* app, config_t* persistent_config)
+void init_app(app_ctx_t* app, const config_t* persistent_config)
 {
     app_ctx = app;
     memset(&app->stats, 0, sizeof(app->stats));

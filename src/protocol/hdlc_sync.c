@@ -25,20 +25,20 @@
 
 void hdlc_sync_acc_init(HDLC_SYNC_ACCUMULATOR_T* accumulator, uint8_t sync_byte)
 {
-    accumulator->position          = 0;
-    accumulator->processed         = 0;
-    accumulator->candidate_start   = 0;
-    accumulator->candidate_end     = 0;
-    accumulator->candidate_valid   = false;
-    accumulator->candidate_i       = 0;
-    accumulator->candidate_bit_pos = 0;
-    accumulator->resume_pending    = false;
-    accumulator->resume_i          = 0;
-    accumulator->resume_bit_pos    = 0;
-    accumulator->bit_offset        = 0;
-    accumulator->state             = HDLC_SYNC_STATE_HUNTING;
-    accumulator->sync_byte         = sync_byte;
-    accumulator->sync_accumulator  = 0;
+    accumulator->position               = 0;
+    accumulator->processed              = 0;
+    accumulator->candidate_start        = 0;
+    accumulator->candidate_end          = 0;
+    accumulator->candidate_valid        = false;
+    accumulator->candidate_i            = 0;
+    accumulator->candidate_bit_pos      = 0;
+    accumulator->resume_pending         = false;
+    accumulator->resume_i               = 0;
+    accumulator->resume_bit_pos         = 0;
+    accumulator->bit_offset             = 0;
+    accumulator->state                  = HDLC_SYNC_STATE_HUNTING;
+    accumulator->sync_byte              = sync_byte;
+    accumulator->sync_accumulator       = 0;
     accumulator->lookahead_wait_syncing = 0;
     accumulator->lookahead_wait_synced  = 0;
     accumulator->frame_ready_count      = 0;
@@ -99,7 +99,7 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
                     {
                         accumulator->state             = HDLC_SYNC_STATE_SYNCING;
                         accumulator->bit_offset        = bit_pos;
-                        accumulator->candidate_start   = (i >= 1) ? (i - 1) : 0;
+                        accumulator->candidate_start   = i - 1;
                         accumulator->candidate_i       = i;
                         accumulator->candidate_bit_pos = (uint8_t)bit_pos;
                         out_frame->length              = 0;
@@ -263,14 +263,11 @@ void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool 
     if (accumulator->position >= (RX_HDLC_SYNC_MAX_BUFFER_SIZE - 16))
     {
         size_t keep = 16;
-        size_t drop = accumulator->position > keep ? (accumulator->position - keep) : 0;
-        if (drop > 0)
-        {
-            accumulator->hardcap_drop_events++;
-            accumulator->hardcap_drop_bytes += (uint32_t)drop;
-            memmove(accumulator->buffer, accumulator->buffer + drop, keep);
-            accumulator->position = keep;
-        }
+        size_t drop = accumulator->position - keep;
+        accumulator->hardcap_drop_events++;
+        accumulator->hardcap_drop_bytes += (uint32_t)drop;
+        memmove(accumulator->buffer, accumulator->buffer + drop, keep);
+        accumulator->position       = keep;
         accumulator->processed      = 0;
         accumulator->resume_pending = false;
     }
