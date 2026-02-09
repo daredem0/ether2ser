@@ -104,4 +104,4 @@ cmake --build build-tests --target docs
   **Coverage Report** (or open `coverage.html` directly).
 
 **License**
-MIT (see `LICENSE`).
+Apache-2.0 (see `LICENSE`).
