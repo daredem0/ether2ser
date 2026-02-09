@@ -18,6 +18,7 @@
 #include <stdio.h>
 
 // Library Headers
+#include "hardware/watchdog.h"
 #include "pico/time.h"
 #include "wizchip_conf.h"
 #include "wizchip_qspi_pio.h"
@@ -40,6 +41,9 @@
 #define MAIN_LOOP_SLEEP_MS 1
 #define MAIN_LOOP_SLEEP_US 50
 
+#define TX_QUEUE_DRAIN_CHUNK_SIZE 32
+#define EVENT_LOOP_MAX_EVENTS_AT_ONCE 20
+
 static void print_prompt(app_ctx_t* app)
 {
     if (app->need_prompt)
@@ -54,6 +58,7 @@ void event_loop(app_ctx_t* app)
     static uint8_t rx_byte = 0;
     while (true)
     {
+        watchdog_update();
         // Poll the event queue
         cli_poll();
         if (w5500_poll_rx(&app->sender_config, &app->rx_frame_buffer))
@@ -68,15 +73,22 @@ void event_loop(app_ctx_t* app)
             memset(app->rx_frame_buffer.payload, 0, app->rx_frame_buffer.length);
             app->rx_frame_buffer.length = 0;
         }
-        poll_queue_stats(&app->tx_queue);
+        if (poll_queue_stats(&app->tx_queue) != E2S_OK)
+        {
+            LOG_ERROR("Poll Queue Stats failed.\r\n");
+        }
 
         // Poll the tx queue. This writes out bytes on the serial line
-        tx_queue_drain(&app->tx_queue, 32);
+        if (tx_queue_drain(&app->tx_queue, TX_QUEUE_DRAIN_CHUNK_SIZE) != E2S_OK)
+        {
+            LOG_ERROR("Poll Queue Drain failed.\r\n");
+        }
 
         // If the tx queue is empty check if the fifo is empty to and reset rts
         if (tx_queue_is_empty(&app->tx_queue))
         {
-            tx_poll();
+            // Currently we dont evaluate the result, but the api offers it
+            (void)tx_poll();
         }
 
         // Drain RX FIFO into the accumulator buffer
@@ -129,7 +141,7 @@ void event_loop(app_ctx_t* app)
         app->stats.sync_hardcap_drop_bytes     = app->accumulator.hardcap_drop_bytes;
 
         event_t event_item;
-        for (int i = 0; i < 20 && event_queue_pop(&event_item); i++)
+        for (int i = 0; i < EVENT_LOOP_MAX_EVENTS_AT_ONCE && event_queue_pop(&event_item); i++)
         {
             event_dispatch(&event_item, app);
         }

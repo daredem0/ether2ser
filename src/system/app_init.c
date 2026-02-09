@@ -32,9 +32,16 @@
 #include "system/persistent_config.h"
 
 // Generated headers
+app_ctx_t* app_ctx = NULL;
+
+app_ctx_t* get_app_ctx(void)
+{
+    return app_ctx;
+}
 
 void init_app(app_ctx_t* app, config_t* persistent_config)
 {
+    app_ctx = app;
     memset(&app->stats, 0, sizeof(app->stats));
     app->need_prompt             = true;
     app->rx_frame_buffer.payload = app->rx_frame_buffer_data;

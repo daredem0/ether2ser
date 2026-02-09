@@ -801,20 +801,33 @@ const char* get_command_name(int index)
 
 void handle_cli_line(const char* line)
 {
-    char cmd[MAX_CMD_BUFFER_LEN];
-    cmd[0] = '\0';
-    char args[MAX_ARG_BUFFER_LEN];
-    if (cli_parse(line, cmd, args) == E2S_OK)
+    char cmd[MAX_CMD_BUFFER_LEN]  = {0};
+    char args[MAX_ARG_BUFFER_LEN] = {0};
+
+    e2s_error_t parse_result = cli_parse(line, cmd, sizeof(cmd), args, sizeof(args));
+    if (parse_result == E2S_ERR_CLI_EMPTY_LINE)
     {
-        // Look up command
-        for (size_t i = 0; i < NUM_COMMANDS; i++)
-        {
-            if (strcmp(cmd, commands[i].name) == 0)
-            {
-                commands[i].handler(args);
-                return;
-            }
-        }
-        printf("unknown: '%s' (try 'help')\r\n", cmd);
+        return;
     }
+    if (parse_result == E2S_ERR_CLI_LINE_TRUNCATED)
+    {
+        printf("error: command too long\r\n");
+        return;
+    }
+    if (parse_result != E2S_OK)
+    {
+        printf("error: invalid command line\r\n");
+        return;
+    }
+
+    for (size_t i = 0; i < NUM_COMMANDS; i++)
+    {
+        if (strcmp(cmd, commands[i].name) == 0)
+        {
+            commands[i].handler(args);
+            return;
+        }
+    }
+
+    printf("unknown: '%s' (try 'help')\r\n", cmd);
 }

@@ -356,30 +356,65 @@ e2s_error_t parse_get_args(const char* args, char* pin_name, const pin_info_t** 
     return E2S_OK;
 }
 
-e2s_error_t cli_parse(const char* line, char* cmd, char* args)
+e2s_error_t cli_parse(const char* line, char* cmd, size_t cmd_cap, char* args, size_t args_cap)
+
 {
+    if (!line || !cmd || !args || cmd_cap == 0 || args_cap == 0)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
 
     if (line[0] == '\0')
     {
+        cmd[0]  = '\0';
+        args[0] = '\0';
         return E2S_ERR_CLI_EMPTY_LINE;
     }
 
-    // Parse command and arguments
-    int n = sscanf(line, "%15s", cmd);
-    if (n == 1)
+    // Skip leading spaces
+    while (*line == ' ')
     {
-        // Find start of arguments
-        args[0]                 = '\0';
-        const char* first_space = strchr(line, ' ');
-        if (first_space)
-        {
-            const char* arg_start = first_space + 1;
-            while (*arg_start == ' ')
-            {
-                arg_start++;
-            }
-            strcpy(args, arg_start);
-        }
+        line++;
     }
+    if (*line == '\0')
+    {
+        cmd[0]  = '\0';
+        args[0] = '\0';
+        return E2S_ERR_CLI_EMPTY_LINE;
+    }
+
+    // cmd = first token
+    const char* cmd_end = line;
+    while (*cmd_end && *cmd_end != ' ')
+    {
+        cmd_end++;
+    }
+
+    size_t cmd_len = (size_t)(cmd_end - line);
+    if (cmd_len + 1 > cmd_cap)
+    {
+        return E2S_ERR_CLI_LINE_TRUNCATED;
+    }
+
+    memcpy(cmd, line, cmd_len);
+    cmd[cmd_len] = '\0';
+
+    // args = remainder (trim leading spaces)
+    const char* arg_start = cmd_end;
+    while (*arg_start == ' ')
+    {
+        arg_start++;
+    }
+
+    int written = snprintf(args, args_cap, "%s", arg_start);
+    if (written < 0)
+    {
+        return E2S_ERR_CLI_LINE_FORMAT;
+    }
+    if ((size_t)written >= args_cap)
+    {
+        return E2S_ERR_CLI_LINE_TRUNCATED;
+    }
+
     return E2S_OK;
 }

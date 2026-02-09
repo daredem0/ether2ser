@@ -11,7 +11,6 @@ set(SOURCES
     src/system/cli_commands.c
     src/system/cli_parser.c
     src/system/ringbuffer.c
-    src/system/ringbuffer.c
     src/system/log.c
     src/system/baudrate_monitor.c
     src/system/persistent_config.c

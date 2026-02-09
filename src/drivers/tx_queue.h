@@ -35,13 +35,13 @@
  * @brief Convenience macro to declare and initialize a TX queue and backing storage.
  * @param var_name Base variable name for queue and storage symbols.
  */
-#define TX_QUEUE_DECLARE_AND_INIT(var_name)                                        \
-    TX_QUEUE_T var_name;                                                           \
-    uint8_t    var_name##_buffer_data[TX_FRAME_QUEUE_SIZE * sizeof(HDLC_FRAME_T)]; \
-    Ringbuffer var_name##_ringbuf;                                                 \
-    RbInit(&var_name##_ringbuf, var_name##_buffer_data, TX_FRAME_QUEUE_SIZE,       \
-           sizeof(HDLC_FRAME_T));                                                  \
-    tq_queue_init(&var_name, &var_name##_ringbuf)
+#define TX_QUEUE_DECLARE_AND_INIT(var_name)                                            \
+    TX_QUEUE_T var_name;                                                               \
+    uint8_t    var_name##_buffer_data[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)]; \
+    Ringbuffer var_name##_ringbuf;                                                     \
+    RbInit(&var_name##_ringbuf, var_name##_buffer_data, TX_FRAME_QUEUE_SIZE,           \
+           sizeof(TX_QUEUE_ENTRY_T));                                                  \
+    tx_queue_init(&var_name, &var_name##_ringbuf)
 
 /**
  * @brief One queued HDLC frame plus drain offset state.
@@ -49,11 +49,11 @@
 typedef struct
 {
     /** Backing payload storage for the encoded frame. */
-    uint8_t      payload[4000];
+    uint8_t payload[4000];
     /** Encoded frame descriptor. */
     HDLC_FRAME_T frame;
     /** Number of bytes already drained to TX FIFO. */
-    size_t       offset;
+    size_t offset;
 } TX_QUEUE_ENTRY_T;
 
 /**
@@ -64,11 +64,11 @@ typedef struct
     /** Currently active entry being drained to PIO. */
     TX_QUEUE_ENTRY_T current_entry;
     /** Ring buffer of pending entries. */
-    Ringbuffer       queue_buffer;
+    Ringbuffer queue_buffer;
     /** Flag used to trigger periodic queue stats printouts. */
-    bool             queue_touched;
+    bool queue_touched;
     /** Total bytes pushed to wire via TX FIFO. */
-    uint64_t         tx_wire_bytes;
+    uint64_t tx_wire_bytes;
 } TX_QUEUE_T;
 
 /**
@@ -84,7 +84,7 @@ e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, UDP_FRAME_T* frame);
  * @param queue TX queue instance.
  * @return true if no pending or active bytes remain.
  */
-bool        tx_queue_is_empty(TX_QUEUE_T* queue);
+bool tx_queue_is_empty(TX_QUEUE_T* queue);
 
 /**
  * @brief Drain up to @p bytes_to_drain bytes from queue into TX FIFO.
@@ -114,6 +114,6 @@ e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data);
  * @param queue TX queue instance.
  * @return Entry count.
  */
-size_t      tx_queue_get_count(const TX_QUEUE_T* queue);
+size_t tx_queue_get_count(const TX_QUEUE_T* queue);
 
 #endif /* TX_QUEUE_H */

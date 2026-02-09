@@ -3,9 +3,9 @@ import socket, time, struct, statistics, argparse
 HOST = "192.168.29.20"
 PORT = 6969
 # Max is 1472, otherwise we get fragmentation
-SIZE = 1472         # payload size
-RATE = 1  # packets per second
-DURATION = 30      # seconds
+SIZE = 300         # payload size
+RATE = 10  # packets per second
+DURATION = 60      # seconds
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.settimeout(0.0)

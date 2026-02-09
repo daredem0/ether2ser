@@ -13,6 +13,7 @@
 #include "pio_tx_rx_driver.h"
 
 // Standard library headers
+#include <assert.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -40,6 +41,10 @@ typedef struct
 {
     uint32_t tx_rts_holdoff_us;
     bool     rts_set;
+    PIO      tx_pio;
+    uint     tx_sm;
+    PIO      rx_pio;
+    uint     rx_sm;
 } v24_runtime_t;
 
 // This struct holds the runtime state of the v24 and shall not be exposed
@@ -47,6 +52,19 @@ v24_runtime_t v24_runtime;
 
 // #define TX_RTS_HOLDOFF_US 4220u
 // static bool rts_set = false;
+
+static gpio_function_t pio_gpio_func(PIO pio)
+{
+    if (pio == pio0)
+    {
+        return GPIO_FUNC_PIO0;
+    }
+    if (pio == pio1)
+    {
+        return GPIO_FUNC_PIO1;
+    }
+    return GPIO_FUNC_NULL; // or assert(false)
+}
 
 static float baud_to_clockdiv(V24_BAUDRATE_T baudrate)
 {
@@ -115,11 +133,13 @@ void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 
 bool rx_get(uint8_t* data)
 {
-    if (pio0 == NULL || pio_sm_is_rx_fifo_empty(pio0, 1))
+    assert(v24_runtime.rx_pio != NULL);
+    if (v24_runtime.rx_pio == NULL ||
+        pio_sm_is_rx_fifo_empty(v24_runtime.rx_pio, v24_runtime.rx_sm))
     {
         return false;
     }
-    *data = (uint8_t)(pio_sm_get(pio0, 1) >> RX_SHIFT_TO_LSB);
+    *data = (uint8_t)(pio_sm_get(v24_runtime.rx_pio, v24_runtime.rx_sm) >> RX_SHIFT_TO_LSB);
     return true;
 }
 void rx_clock_update_settings(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
@@ -144,6 +164,8 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
              (unsigned)V24_RXC);
 
     pio_sm_claim(pio, pio_sm);
+    v24_runtime.rx_pio = pio;
+    v24_runtime.rx_sm  = pio_sm;
     // Load PIO program
     uint offset = pio_add_program(pio, &rck_rxd_program);
     LOG_INFO("RXC: program offset=%u\r\n", (unsigned)offset);
@@ -166,15 +188,6 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
     LOG_INFO("RXC: enabled\r\n");
 }
 
-static bool tx_can_deassert_rts(void)
-{
-    if (pio0 == NULL)
-    {
-        return false;
-    }
-    return pio_sm_is_tx_fifo_empty(pio0, 0);
-}
-
 bool tx_poll(void)
 {
     static bool     deassert_pending     = false;
@@ -186,8 +199,8 @@ bool tx_poll(void)
         return true;
     }
 
-    bool fifo_empty        = pio_sm_is_tx_fifo_empty(pio0, 0);
-    bool stalled           = (pio0->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + 0))) != 0;
+    bool fifo_empty = pio_sm_is_tx_fifo_empty(v24_runtime.tx_pio, v24_runtime.tx_sm);
+    bool stalled    = (v24_runtime.tx_pio->fdebug & (1u << (PIO_FDEBUG_TXSTALL_LSB + 0))) != 0;
     bool ready_to_deassert = (fifo_empty || stalled);
 
     uint64_t now_us = to_us_since_boot(get_absolute_time());
@@ -213,24 +226,35 @@ bool tx_poll(void)
     gpio_put(V24_RTS, 0);
     v24_runtime.rts_set = false;
     deassert_pending    = false;
+
+    // AFTER RTS is deasserted we turn of the clock. Until then, we
+    // have to keep clocking. To do that we temporarily take control over the pin
+    gpio_set_function(V24_TXC_DTE, GPIO_FUNC_SIO);
+    gpio_set_dir(V24_TXC_DTE, GPIO_OUT);
+    gpio_put(V24_TXC_DTE, 0);
+
+    // Return control to pio, state machine is stalled, level will remain
+    // until more bytes are pushed
+    gpio_set_function(V24_TXC_DTE, pio_gpio_func(v24_runtime.tx_pio));
     return true;
 }
 
 bool tx_put(uint8_t data)
 {
+    assert(v24_runtime.tx_pio != NULL);
     if (!v24_runtime.rts_set)
     {
         // Indicate ready to send by setting RTS
-        pio0->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + 0));
+        v24_runtime.tx_pio->fdebug = (1u << (PIO_FDEBUG_TXSTALL_LSB + 0));
         gpio_set_dir(V24_RTS, GPIO_OUT);
         gpio_put(V24_RTS, 1);
         v24_runtime.rts_set = true;
     }
-    if (pio0 == NULL || pio_sm_is_tx_fifo_full(pio0, 0))
+    if (v24_runtime.tx_pio == NULL || pio_sm_is_tx_fifo_full(v24_runtime.tx_pio, v24_runtime.tx_sm))
     {
         return false;
     }
-    pio_sm_put(pio0, 0, data);
+    pio_sm_put(v24_runtime.tx_pio, 0, data);
     return true;
 }
 
@@ -263,6 +287,9 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
              (unsigned)pio_sm, (unsigned)V24_TXC_DTE, (unsigned)baudrate, (double)clkdiv);
 
     pio_sm_claim(pio, pio_sm);
+    v24_runtime.tx_pio = pio;
+    v24_runtime.tx_sm  = pio_sm;
+
     // Load PIO program
     uint offset = pio_add_program(pio, &tck_txd_program);
     LOG_INFO("TXC: program offset=%u\r\n", (unsigned)offset);
@@ -287,6 +314,5 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
     // This implicitly activates the sm
     tx_clock_update_settings(pio, pio_sm, baudrate, polarities);
     LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
-
     LOG_INFO("TXC: enabled\r\n");
 }

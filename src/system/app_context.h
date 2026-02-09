@@ -92,8 +92,8 @@ typedef struct
     HDLC_FRAME_T            reconstructed_frame;
     HDLC_SYNC_ACCUMULATOR_T accumulator;
 
-    uint8_t    tx_queue_buffer[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)];
-    TX_QUEUE_T tx_queue;
+    uint8_t              tx_queue_buffer[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)];
+    TX_QUEUE_T           tx_queue;
     payload_statistics_t stats;
     // ... anything else the event loop touches
 } app_ctx_t;
@@ -104,5 +104,12 @@ typedef struct
  * @param persistent_config Source configuration (used when marked valid).
  */
 void init_app(app_ctx_t* app, config_t* persistent_config);
+
+/**
+ * @brief Get access to the app context. This context is owned by main, app_init
+ * just takes hold of a pointer to it.
+ * @return Pointer to the app context.
+ */
+app_ctx_t* get_app_ctx(void);
 
 #endif /* APP_CONTEXT_H */

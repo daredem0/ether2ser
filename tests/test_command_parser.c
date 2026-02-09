@@ -9,7 +9,7 @@
 void test_cli_parse_command_only(void)
 {
     char cmd[16], args[64];
-    TEST_ASSERT_EQUAL(E2S_OK, cli_parse("help", cmd, args));
+    TEST_ASSERT_EQUAL(E2S_OK, cli_parse("help", cmd, sizeof(cmd), args, sizeof(args)));
     TEST_ASSERT_EQUAL_STRING("help", cmd);
     TEST_ASSERT_EQUAL_STRING("", args);
 }
@@ -17,7 +17,7 @@ void test_cli_parse_command_only(void)
 void test_cli_parse_command_and_args(void)
 {
     char cmd[16], args[64];
-    TEST_ASSERT_EQUAL(E2S_OK, cli_parse("set gpio txd 1", cmd, args));
+    TEST_ASSERT_EQUAL(E2S_OK, cli_parse("set gpio txd 1", cmd, sizeof(cmd), args, sizeof(args)));
     TEST_ASSERT_EQUAL_STRING("set", cmd);
     TEST_ASSERT_EQUAL_STRING("gpio txd 1", args);
 }
@@ -25,7 +25,63 @@ void test_cli_parse_command_and_args(void)
 void test_cli_parse_empty_line(void)
 {
     char cmd[16], args[64];
-    TEST_ASSERT_EQUAL(E2S_ERR_CLI_EMPTY_LINE, cli_parse("", cmd, args));
+    TEST_ASSERT_EQUAL(E2S_ERR_CLI_EMPTY_LINE, cli_parse("", cmd, sizeof(cmd), args, sizeof(args)));
+}
+
+void test_cli_parse_space_only_line(void)
+{
+    char cmd[16], args[64];
+    TEST_ASSERT_EQUAL(E2S_ERR_CLI_EMPTY_LINE,
+                      cli_parse("      ", cmd, sizeof(cmd), args, sizeof(args)));
+}
+
+void test_cli_parse_leading_spaces(void)
+{
+    char cmd[16], args[64];
+    TEST_ASSERT_EQUAL(E2S_OK,
+                      cli_parse("   set gpio txd 1", cmd, sizeof(cmd), args, sizeof(args)));
+    TEST_ASSERT_EQUAL_STRING("set", cmd);
+    TEST_ASSERT_EQUAL_STRING("gpio txd 1", args);
+}
+
+void test_cli_parse_cmd_truncation(void)
+{
+    char cmd[4], args[64];
+    TEST_ASSERT_EQUAL(E2S_ERR_CLI_LINE_TRUNCATED,
+                      cli_parse("hello arg", cmd, sizeof(cmd), args, sizeof(args)));
+}
+
+void test_cli_parse_args_truncation(void)
+{
+    char cmd[16], args[5];
+    TEST_ASSERT_EQUAL(E2S_ERR_CLI_LINE_TRUNCATED,
+                      cli_parse("set gpio txd 1", cmd, sizeof(cmd), args, sizeof(args)));
+}
+
+void test_cli_parse_exact_capacity_cmd_and_args(void)
+{
+    char cmd[4], args[7];
+    TEST_ASSERT_EQUAL(E2S_OK, cli_parse("set abcdef", cmd, sizeof(cmd), args, sizeof(args)));
+    TEST_ASSERT_EQUAL_STRING("set", cmd);
+    TEST_ASSERT_EQUAL_STRING("abcdef", args);
+}
+
+void test_cli_parse_null_params(void)
+{
+    char cmd[16], args[64];
+    TEST_ASSERT_EQUAL(E2S_ERR_CLI_USAGE_SET,
+                      cli_parse(NULL, cmd, sizeof(cmd), args, sizeof(args)));
+    TEST_ASSERT_EQUAL(E2S_ERR_CLI_USAGE_SET,
+                      cli_parse("help", NULL, sizeof(cmd), args, sizeof(args)));
+    TEST_ASSERT_EQUAL(E2S_ERR_CLI_USAGE_SET,
+                      cli_parse("help", cmd, sizeof(cmd), NULL, sizeof(args)));
+}
+
+void test_cli_parse_zero_capacity(void)
+{
+    char cmd[16], args[64];
+    TEST_ASSERT_EQUAL(E2S_ERR_CLI_USAGE_SET, cli_parse("help", cmd, 0, args, sizeof(args)));
+    TEST_ASSERT_EQUAL(E2S_ERR_CLI_USAGE_SET, cli_parse("help", cmd, sizeof(cmd), args, 0));
 }
 
 void test_cli_parse_set_args_unknown_pin(void)

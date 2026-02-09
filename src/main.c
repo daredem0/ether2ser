@@ -29,6 +29,7 @@
 // Library Headers
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
+#include "hardware/watchdog.h"
 #include "pico/stdio.h"
 #include "pico/time.h"
 #include "wizchip_conf.h"
@@ -94,6 +95,9 @@ int main(void)
                   &(app_context.v24_config.polarities.tx_polarities));
     rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
     baudrate_estimator_init(V24_RXC);
+
+    // Enable watchdog, 5s timeout, disabled in debugging
+    watchdog_enable(5000, 1);
 
     printf("\r\nv24-eth-bridge: hello from RP2040\r\n");
     printf("\r\nType 'help' in USB serial.\r\n");
