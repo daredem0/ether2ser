@@ -376,8 +376,12 @@ void event_dispatch(event_t* event, app_ctx_t* app)
             app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
             app->accumulator.candidate_end);
         printf("  Reconstructed: len=%zu\r\n", app->reconstructed_frame.length);
-        printf("  PIO SM0     : stalled=%d\r\n", (pio0->fdebug >> PIO_FDEBUG_TXSTALL_LSB) & 1);
-
+        const v24_runtime_t* v24_runtime = get_v24_runtime();
+        printf("  PIO TX     : stalled=%d\r\n",
+               v24_runtime->tx_pio ? ((v24_runtime->tx_pio->fdebug >>
+                                       (PIO_FDEBUG_TXSTALL_LSB + v24_runtime->tx_sm)) &
+                                      1U)
+                                   : 0);
         print_memory_usage();
         print_flash_usage();
         app->need_prompt = true;

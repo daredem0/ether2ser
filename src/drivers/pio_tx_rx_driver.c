@@ -37,21 +37,13 @@
 #include "rck_rxd.pio.h"
 #include "tck_txd.pio.h"
 
-typedef struct
-{
-    uint32_t tx_rts_holdoff_us;
-    bool     rts_set;
-    PIO      tx_pio;
-    uint     tx_sm;
-    PIO      rx_pio;
-    uint     rx_sm;
-} v24_runtime_t;
-
 // This struct holds the runtime state of the v24 and shall not be exposed
 v24_runtime_t v24_runtime;
 
-// #define TX_RTS_HOLDOFF_US 4220u
-// static bool rts_set = false;
+const v24_runtime_t* get_v24_runtime(void)
+{
+    return (const v24_runtime_t*)&v24_runtime;
+}
 
 static gpio_function_t pio_gpio_func(PIO pio)
 {

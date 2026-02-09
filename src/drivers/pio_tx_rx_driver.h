@@ -28,6 +28,16 @@
 
 // Generated headers
 
+typedef struct
+{
+    uint32_t tx_rts_holdoff_us;
+    bool     rts_set;
+    PIO      tx_pio;
+    uint     tx_sm;
+    PIO      rx_pio;
+    uint     rx_sm;
+} v24_runtime_t;
+
 /**
  * @brief Initialize TX clock/data PIO state machine.
  * @param pio PIO instance.
@@ -100,5 +110,11 @@ void tx_clock_update_settings(V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* pola
  * @param polarities RX polarity settings.
  */
 void rx_clock_update_settings(V24_RX_POLARITIES_T* polarities);
+
+/**
+ * @brief Returns a pointer to the v24 runtime.
+ * @return Pointer to the v24 runtime.
+ */
+const v24_runtime_t* get_v24_runtime(void);
 
 #endif /* PIO_TX_RX_DRIVER_H */

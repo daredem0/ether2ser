@@ -152,8 +152,10 @@ Secondary API:
 ### 9.2 PIO TX/RX Driver (`src/drivers/pio_tx_rx_driver.c`)
 - TX and RX state machines on RP2040 PIO
 - TX path manages RTS assertion/deassertion lifecycle
-- TX poll applies holdoff before releasing RTS after FIFO drain/stall
+- TX poll applies configurable holdoff (`tx_rts_holdoff_us`) before releasing RTS after FIFO drain/stall
+- End-of-burst behavior explicitly forces TX clock (`V24_TXC_DTE`) low in GPIO mode and then returns pin control to the configured PIO function
 - Runtime clock/polarity update APIs used by V.24 config events
+- Driver stores runtime-selected PIO instance and SM indices for both TX and RX paths (`tx_pio/tx_sm`, `rx_pio/rx_sm`) and uses them in FIFO access and update operations
 - Optional instrumentation reports SM stall conditions
 
 ### 9.3 TX Queue (`src/drivers/tx_queue.c`)
@@ -201,7 +203,7 @@ Status output includes:
 - Serial RX bytes and serialized TX wire bytes
 - Sync wait/maintenance counters
 - Accumulator internals and reconstructed length
-- PIO SM0 stall bit
+- Active TX SM stall bit (derived from runtime-selected TX PIO/SM)
 
 ## 13. Build and Test Architecture
 ### 13.1 Firmware Build
