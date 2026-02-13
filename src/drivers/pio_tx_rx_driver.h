@@ -43,10 +43,9 @@ typedef struct
  * @brief Initialize TX clock/data PIO state machine.
  * @param pio PIO instance.
  * @param pio_sm State machine index.
- * @param baudrate Target synchronous baudrate.
- * @param polarities TX signal polarity configuration.
+ * @param config V.24 configuration.
  */
-void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities);
+void tx_clock_init(PIO pio, uint pio_sm, V24_CONFIG_T* config);
 
 /**
  * @brief Poll TX completion/holdoff state and manage RTS release.
@@ -99,10 +98,9 @@ void led_mirror_init(void);
  * @brief Apply TX runtime settings to an already configured TX PIO SM.
  * Take note that this function relies on tx_clock_init being called before.
  * This is asserted in debug builds but otherwise UB in production.
- * @param baudrate New baudrate.
- * @param polarities TX polarity settings.
+ * @param config V.24 configuration.
  */
-void tx_clock_update_settings(V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities);
+void tx_clock_update_settings(V24_CONFIG_T* config);
 
 /**
  * @brief Apply RX runtime settings to an already configured RX PIO SM.

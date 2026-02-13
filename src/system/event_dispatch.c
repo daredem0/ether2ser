@@ -324,14 +324,12 @@ static void ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
     {
     case V24_BAUDRATE:
         reinit_v24_config(&app->v24_config, payload->value.baudrate);
-        tx_clock_update_settings(app->v24_config.baudrate,
-                                 &(app->v24_config.polarities.tx_polarities));
+        tx_clock_update_settings(&app->v24_config);
         app->need_prompt = true;
         break;
     case V24_POLARITIES:
         memcpy(&app->v24_config.polarities, &payload->value.polarities, sizeof(V24_POLARITIES_T));
-        tx_clock_update_settings(app->v24_config.baudrate,
-                                 &(app->v24_config.polarities.tx_polarities));
+        tx_clock_update_settings(&app->v24_config);
         rx_clock_update_settings(&(app->v24_config.polarities.rx_polarities));
         app->need_prompt = true;
         break;
@@ -374,13 +372,13 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
             tx_gap = app->stats.hdlc_frame_ready - app->stats.udp_tx_frames;
         }
 
-        static uint64_t prev_udp_rx_frames       = 0U;
-        static uint64_t prev_hdlc_frame_ready    = 0U;
-        static uint64_t prev_udp_tx_frames       = 0U;
-        static uint64_t prev_hdlc_decode_fail    = 0U;
-        static uint64_t prev_serial_rx_bytes     = 0U;
-        uint32_t        report_now_ms            = to_ms_since_boot(get_absolute_time());
-        uint32_t        elapsed_ms               = 0U;
+        static uint64_t prev_udp_rx_frames    = 0U;
+        static uint64_t prev_hdlc_frame_ready = 0U;
+        static uint64_t prev_udp_tx_frames    = 0U;
+        static uint64_t prev_hdlc_decode_fail = 0U;
+        static uint64_t prev_serial_rx_bytes  = 0U;
+        uint32_t        report_now_ms         = to_ms_since_boot(get_absolute_time());
+        uint32_t        elapsed_ms            = 0U;
         if (app->stats.last_report_ms != 0U)
         {
             elapsed_ms = report_now_ms - app->stats.last_report_ms;
@@ -402,13 +400,21 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
         uint64_t decode_fail_rate   = (d_decode_fail * 1000U) / elapsed_ms;
         uint64_t serial_rx_rate_bps = (d_serial_rx_bytes * 1000U) / elapsed_ms;
 
-        prev_udp_rx_frames    = app->stats.udp_rx_frames;
-        prev_hdlc_frame_ready = app->stats.hdlc_frame_ready;
-        prev_udp_tx_frames    = app->stats.udp_tx_frames;
-        prev_hdlc_decode_fail = app->stats.hdlc_decode_fail;
-        prev_serial_rx_bytes  = app->stats.serial_rx_bytes;
+        prev_udp_rx_frames        = app->stats.udp_rx_frames;
+        prev_hdlc_frame_ready     = app->stats.hdlc_frame_ready;
+        prev_udp_tx_frames        = app->stats.udp_tx_frames;
+        prev_hdlc_decode_fail     = app->stats.hdlc_decode_fail;
+        prev_serial_rx_bytes      = app->stats.serial_rx_bytes;
         app->stats.last_report_ms = report_now_ms;
 
+        LOG_PLAIN("status: ok\r\n");
+        LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
+                  baudrate_estimator_get_current_estimation(V24_RXC));
+        if (app->v24_config.external_clock)
+        {
+            LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_TXC_DCE,
+                      baudrate_estimator_get_current_estimation(V24_TXC_DCE));
+        }
         LOG_PLAIN("PIPE STATS\r\n");
         LOG_PLAIN("  Traffic\r\n");
         LOG_PLAIN("    Frames    : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
@@ -440,14 +446,14 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
                   "  hardcap_bytes=%" PRIu64 "\r\n",
                   app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
                   app->stats.sync_hardcap_drop_bytes);
-        LOG_PLAIN("    Resync    : idle=%" PRIu64 "  hard=%" PRIu64 "  no_progress=%" PRIu64
-                  "\r\n",
+        LOG_PLAIN("    Resync    : idle=%" PRIu64 "  hard=%" PRIu64 "  no_progress=%" PRIu64 "\r\n",
                   app->stats.resync_idle_timeout_count, app->stats.resync_hard_fail_count,
                   app->stats.resync_no_progress_count);
-        LOG_PLAIN("    Accum     : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
-                  app->accumulator.position, app->accumulator.processed,
-                  (int)app->accumulator.state, app->accumulator.bit_offset,
-                  app->accumulator.candidate_valid ? 1 : 0, app->accumulator.candidate_end);
+        LOG_PLAIN(
+            "    Accum     : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
+            app->accumulator.position, app->accumulator.processed, (int)app->accumulator.state,
+            app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
+            app->accumulator.candidate_end);
         LOG_PLAIN("    RX Health : acc_pos_max=%" PRIu64 "  rx_fifo_stall=%" PRIu64
                   "  rx_drop_acc_full=%" PRIu64 "\r\n",
                   app->stats.accumulator_pos_max, app->stats.rx_fifo_stall_events,

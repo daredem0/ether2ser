@@ -197,7 +197,10 @@ void event_loop(app_ctx_t* app)
             }
             break;
         }
-        if ((app->stats.serial_rx_bytes > last_frame_ready_bytes) &&
+        bool decode_in_progress = (app->accumulator.state != HDLC_SYNC_STATE_HUNTING) ||
+                                  app->accumulator.candidate_valid ||
+                                  (app->reconstructed_frame.length > 0U);
+        if (decode_in_progress && (app->stats.serial_rx_bytes > last_frame_ready_bytes) &&
             ((app->stats.serial_rx_bytes - last_frame_ready_bytes) >
              HDLC_SYNC_NO_PROGRESS_MAX_BYTES))
         {

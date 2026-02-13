@@ -86,13 +86,15 @@ typedef struct
 typedef struct
 {
     /** Configured serial baudrate. */
-    V24_BAUDRATE_T   baudrate;
+    V24_BAUDRATE_T baudrate;
     /** Signal polarity set for TX and RX paths. */
     V24_POLARITIES_T polarities;
     /** RTS release holdoff in microseconds after TX completion. */
-    uint32_t         tx_rts_holdoff_us;
+    uint32_t tx_rts_holdoff_us;
     /** Internal state: current RTS asserted/deasserted status. */
-    bool             rts_set;
+    bool rts_set;
+    /** True if XCK, false if TCK */
+    bool external_clock;
 } V24_CONFIG_T;
 
 #endif /* V24_CONFIG_H */

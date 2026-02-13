@@ -110,10 +110,13 @@ int main(void)
 
     // Initialize PIO
     // Currently anything faster than 38400 is not supported
-    tx_clock_init(pio0, 0, app_context.v24_config.baudrate,
-                  &(app_context.v24_config.polarities.tx_polarities));
+    tx_clock_init(pio0, 0, &app_context.v24_config);
     rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
     baudrate_estimator_init(V24_RXC);
+    if (app_context.v24_config.external_clock)
+    {
+        baudrate_estimator_init(V24_TXC_DCE);
+    }
 
     // Enable watchdog, 5s timeout, disabled in debugging
     watchdog_enable(GLOBAL_WATCHDOG_TIMEOUT_MS, WATCHDOG_DISABLED_FOR_DEBUGGING);

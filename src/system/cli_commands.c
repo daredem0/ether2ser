@@ -758,9 +758,6 @@ static void cmd_help(const char* args)
 static void cmd_status(const char* args)
 {
     (void)args;
-    LOG_PLAIN("status: ok\r\n");
-    LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
-              baudrate_estimator_get_current_estimation(V24_RXC));
     event_t status_event = {.type = EV_STATUS, .data.ptr = NULL, .data_len = 0, .is_inline = false};
     event_queue_push(&status_event);
 }

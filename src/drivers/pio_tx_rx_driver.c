@@ -37,6 +37,7 @@
 #include "led_activity_mirror.pio.h"
 #include "rck_rxd.pio.h"
 #include "tck_txd.pio.h"
+#include "xck_txd.pio.h"
 
 /**
  * @brief Minimum RTS holdoff in microseconds used as a safety floor.
@@ -135,6 +136,7 @@ void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 {
     config->polarities = init_polarities();
     reinit_v24_config(config, baudrate);
+    config->external_clock = true;
 }
 
 bool rx_get(uint8_t* data)
@@ -271,33 +273,49 @@ bool tx_put(uint8_t data)
     return true;
 }
 
-void tx_clock_update_settings(V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities)
+void tx_clock_update_settings(V24_CONFIG_T* config)
 {
     assert(v24_runtime.tx_pio != NULL);
-    float clkdiv = baud_to_clockdiv(baudrate);
+    float clkdiv = baud_to_clockdiv(config->baudrate);
 
     pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, false);
 
+    V24_TX_POLARITIES_T* polarities = &(config->polarities.tx_polarities);
     if (polarities)
     {
-        gpio_set_outover(V24_TXC_DTE,
-                         polarities->txc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+        if (config->external_clock)
+        {
+            gpio_set_inover(V24_TXC_DCE,
+                            polarities->txc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+        }
+        else
+        {
+            gpio_set_outover(V24_TXC_DTE, polarities->txc_inverted ? GPIO_OVERRIDE_INVERT
+                                                                   : GPIO_OVERRIDE_NORMAL);
+        }
         gpio_set_outover(V24_TXD,
                          polarities->txd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
         gpio_set_inover(V24_CTS,
                         polarities->cts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
     }
-
-    pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, clkdiv);
+    if (!config->external_clock)
+    {
+        pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, clkdiv);
+    }
+    else
+    {
+        // pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, 1.0f);
+    }
     pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, true);
 }
 
-void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities)
+static void tx_clock_init_tck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
 {
-    float clkdiv = baud_to_clockdiv(baudrate);
+    float clkdiv = baud_to_clockdiv(config->baudrate);
 
-    LOG_INFO("TXC: init pio%u sm%u pin%u baud=%u clkdiv=%.6f\r\n", (unsigned)pio_get_index(pio),
-             (unsigned)pio_sm, (unsigned)V24_TXC_DTE, (unsigned)baudrate, (double)clkdiv);
+    LOG_INFO("Initializing internal clock\r\n");
+    LOG_DEBUG("TXC: init pio%u sm%u pin%u baud=%u clkdiv=%.6f\r\n", (unsigned)pio_get_index(pio),
+              (unsigned)pio_sm, (unsigned)V24_TXC_DTE, (unsigned)config->baudrate, (double)clkdiv);
 
     pio_sm_claim(pio, pio_sm);
     v24_runtime.tx_pio = pio;
@@ -305,7 +323,7 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
 
     // Load PIO program
     uint offset = pio_add_program(pio, &tck_txd_program);
-    LOG_INFO("TXC: program offset=%u\r\n", (unsigned)offset);
+    LOG_DEBUG("TXC: program offset=%u\r\n", (unsigned)offset);
 
     // Route GPIO to PIO
     pio_gpio_init(pio, V24_TXC_DTE);
@@ -316,16 +334,59 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_CTS, 1, false);
 
     // Configure state machine
-    pio_sm_config config = tck_txd_program_get_default_config(offset);
-    sm_config_set_sideset_pins(&config, V24_TXC_DTE);
-    sm_config_set_out_pins(&config, V24_TXD, 1);
-    sm_config_set_jmp_pin(&config, V24_CTS);
-    sm_config_set_out_shift(&config, true, true, CHAR_BIT);
+    pio_sm_config sm_config = tck_txd_program_get_default_config(offset);
+    sm_config_set_sideset_pins(&sm_config, V24_TXC_DTE);
+    sm_config_set_out_pins(&sm_config, V24_TXD, 1);
+    sm_config_set_jmp_pin(&sm_config, V24_CTS);
+    sm_config_set_out_shift(&sm_config, true, true, CHAR_BIT);
 
-    pio_sm_init(pio, pio_sm, offset, &config);
+    pio_sm_init(pio, pio_sm, offset, &sm_config);
 
     // This implicitly activates the sm
-    tx_clock_update_settings(baudrate, polarities);
+    tx_clock_update_settings(config);
     LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
     LOG_INFO("TXC: enabled\r\n");
+}
+
+static void tx_clock_init_xck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
+{
+    LOG_INFO("Initializing external clock\r\n");
+    LOG_DEBUG("XXC: init pio%u sm%u pin%u\r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm,
+              (unsigned)V24_TXC_DCE);
+
+    pio_sm_claim(pio, pio_sm);
+    v24_runtime.tx_pio = pio;
+    v24_runtime.tx_sm  = pio_sm;
+
+    // Load PIO program
+    uint offset = pio_add_program(pio, &xck_txd_program);
+    LOG_DEBUG("XCK: program offset=%u\r\n", (unsigned)offset);
+
+    // Route GPIO to PIO
+    pio_gpio_init(pio, V24_TXC_DCE);
+    pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_TXC_DCE, 1, false);
+    pio_gpio_init(pio, V24_TXD);
+    pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_TXD, 1, true);
+    pio_gpio_init(pio, V24_CTS);
+    pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_CTS, 1, false);
+
+    // Configure state machine
+    pio_sm_config sm_config = xck_txd_program_get_default_config(offset);
+    sm_config_set_in_pins(&sm_config, V24_TXC_DCE);
+    sm_config_set_out_pins(&sm_config, V24_TXD, 1);
+    sm_config_set_jmp_pin(&sm_config, V24_CTS);
+    sm_config_set_out_shift(&sm_config, true, true, CHAR_BIT);
+
+    pio_sm_init(pio, pio_sm, offset, &sm_config);
+
+    // This implicitly activates the sm
+    tx_clock_update_settings(config);
+    LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
+    LOG_INFO("XCK: enabled\r\n");
+}
+
+void tx_clock_init(PIO pio, uint pio_sm, V24_CONFIG_T* config)
+{
+    config->external_clock ? tx_clock_init_xck(pio, pio_sm, config)
+                           : tx_clock_init_tck(pio, pio_sm, config);
 }

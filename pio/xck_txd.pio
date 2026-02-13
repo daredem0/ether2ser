@@ -1,0 +1,11 @@
+.program xck_txd
+.wrap_target
+bitloop:
+    wait 0 pin  0              ; ensure we're in low phase
+    wait 1 pin  0              ; rising edge: safe point to change TXD
+    jmp pin do_shift           ; check CTS
+    jmp bitloop                ; CTS not asserted -> do not consume a bit
+do_shift:
+    out pins, 1                ; consume/send next bit
+    jmp bitloop
+.wrap

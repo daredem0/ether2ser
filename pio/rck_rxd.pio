@@ -7,6 +7,5 @@
                 jmp wait_high        ; still LOW, keep waiting
 
     got_high:   jmp pin, got_high    ; still HIGH? keep waiting
-                nop [31]              ; Short delay for clock skew
                 in pins, 1           ; Falling edge detected -> read bit
 .wrap

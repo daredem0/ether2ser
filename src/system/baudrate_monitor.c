@@ -13,6 +13,7 @@
 #include "baudrate_monitor.h"
 
 // Standard library headers
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -39,8 +40,10 @@
 #define BAUD_EMA_ALPHA 0.2F
 static volatile uint32_t edge_count[PIN_COUNT] = {0};
 static repeating_timer_t baud_timer;
-static volatile bool     baud_ready[PIN_COUNT] = {false};
-static volatile float    baud_hz[PIN_COUNT]    = {0.0F};
+static volatile bool     baud_ready[PIN_COUNT]    = {false};
+static volatile float    baud_hz[PIN_COUNT]       = {0.0F};
+static size_t            current_pin_count        = 0;
+static volatile uint8_t  monitored_pin[PIN_COUNT] = {0};
 // First/last edge timestamps within the current sample window.
 static volatile uint64_t first_edge_time_us[PIN_COUNT] = {0};
 static volatile uint64_t last_edge_time_us[PIN_COUNT]  = {0};
@@ -70,38 +73,42 @@ static bool baud_timer_cb(repeating_timer_t* timer)
     (void)timer;
 
     uint64_t now_us = time_us_64();
-    uint32_t edges  = __atomic_exchange_n(&edge_count[V24_RXC], 0, __ATOMIC_RELAXED);
-
-    if (edges > 1)
+    for (size_t pin_index = 0; pin_index < current_pin_count; ++pin_index)
     {
-        // Use first/last edge timestamps to avoid timer jitter skewing Hz.
-        uint32_t save     = save_and_disable_interrupts();
-        uint64_t first_us = first_edge_time_us[V24_RXC];
-        uint64_t last_us  = last_edge_time_us[V24_RXC];
-        restore_interrupts(save);
-        if (last_us > first_us)
+        uint32_t edges =
+            __atomic_exchange_n(&edge_count[monitored_pin[pin_index]], 0, __ATOMIC_RELAXED);
+        if (edges > 1)
         {
-            uint64_t elapsed_us = last_us - first_us;
-            float    inst_hz    = ((float)(edges - 1) * (float)US_PER_SECOND) / (float)elapsed_us;
-            if (baud_hz[V24_RXC] <= 0.0F)
+            // Use first/last edge timestamps to avoid timer jitter skewing Hz.
+            uint32_t save     = save_and_disable_interrupts();
+            uint64_t first_us = first_edge_time_us[monitored_pin[pin_index]];
+            uint64_t last_us  = last_edge_time_us[monitored_pin[pin_index]];
+            restore_interrupts(save);
+            if (last_us > first_us)
             {
-                baud_hz[V24_RXC] = inst_hz;
+                uint64_t elapsed_us = last_us - first_us;
+                float    inst_hz = ((float)(edges - 1) * (float)US_PER_SECOND) / (float)elapsed_us;
+                if (baud_hz[monitored_pin[pin_index]] <= 0.0F)
+                {
+                    baud_hz[monitored_pin[pin_index]] = inst_hz;
+                }
+                else
+                {
+                    // Smooth bursts with a simple EMA.
+                    baud_hz[monitored_pin[pin_index]] =
+                        (BAUD_EMA_ALPHA * inst_hz) +
+                        ((1.0F - BAUD_EMA_ALPHA) * baud_hz[monitored_pin[pin_index]]);
+                }
+                baud_ready[monitored_pin[pin_index]] = true;
             }
-            else
-            {
-                // Smooth bursts with a simple EMA.
-                baud_hz[V24_RXC] =
-                    (BAUD_EMA_ALPHA * inst_hz) + ((1.0F - BAUD_EMA_ALPHA) * baud_hz[V24_RXC]);
-            }
-            baud_ready[V24_RXC] = true;
         }
-    }
-    else
-    {
-        // If no edges recently, mark estimate as stale without forcing zero.
-        if (now_us - last_edge_time_us[V24_RXC] > BAUD_STALE_US)
+        else
         {
-            baud_ready[V24_RXC] = false;
+            // If no edges recently, mark estimate as stale without forcing zero.
+            if (now_us - last_edge_time_us[monitored_pin[pin_index]] > BAUD_STALE_US)
+            {
+                baud_ready[monitored_pin[pin_index]] = false;
+            }
         }
     }
 
@@ -110,9 +117,23 @@ static bool baud_timer_cb(repeating_timer_t* timer)
 
 void baudrate_estimator_init(V24_PIN_T pin)
 {
-    gpio_init(pin);
-    gpio_set_dir(pin, GPIO_IN);
-    gpio_pull_down(pin);
-    gpio_set_irq_enabled_with_callback(pin, GPIO_IRQ_EDGE_RISE, true, &rxc_edge_isr);
-    add_repeating_timer_ms(BAUD_TIMER_MS, baud_timer_cb, NULL, &baud_timer);
+    assert(pin <= PIN_COUNT);
+    static bool initialized = false;
+    // gpio_init(pin);
+    // gpio_set_dir(pin, GPIO_IN);
+    // gpio_pull_down(pin);
+    if (!initialized)
+    {
+        gpio_set_irq_enabled_with_callback(pin, GPIO_IRQ_EDGE_RISE, true, &rxc_edge_isr);
+        add_repeating_timer_ms(BAUD_TIMER_MS, baud_timer_cb, NULL, &baud_timer);
+        initialized = true;
+    }
+    else
+    {
+        gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE, true);
+    }
+    if (current_pin_count < PIN_COUNT)
+    {
+        monitored_pin[current_pin_count++] = pin;
+    }
 }
