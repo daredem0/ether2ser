@@ -164,59 +164,89 @@ static void request_save_config(void)
     event_queue_push(&save_event);
 }
 
-static void ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* app)
+typedef struct
 {
+    bool changed;
+    bool reboot_required;
+} apply_result_t;
+
+static bool ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* app)
+{
+    bool        changed = false;
     e2s_error_t err;
     switch (payload->id)
     {
     case NET_IP_REMOTE:
-        memcpy(app->destination_config.ip_address, payload->value.ip, 4);
+        if (memcmp(app->destination_config.ip_address, payload->value.ip, 4) != 0)
+        {
+            memcpy(app->destination_config.ip_address, payload->value.ip, 4);
+            changed = true;
+        }
         break;
     case NET_IP_LOCAL:
     {
-        memcpy(app->local_config.ip_address, payload->value.ip, 4);
         wiz_NetInfo net_info;
         wizchip_getnetinfo(&net_info);
-        memcpy(net_info.ip, payload->value.ip, 4);
-        wizchip_setnetinfo(&net_info);
+        if (memcmp(net_info.ip, payload->value.ip, 4) != 0)
+        {
+            memcpy(app->local_config.ip_address, payload->value.ip, 4);
+            memcpy(net_info.ip, payload->value.ip, 4);
+            wizchip_setnetinfo(&net_info);
+            changed = true;
+        }
         break;
     }
     case NET_IP_MASK:
     {
         wiz_NetInfo net_info;
         wizchip_getnetinfo(&net_info);
-        memcpy(net_info.sn, payload->value.ip, 4);
-        wizchip_setnetinfo(&net_info);
+        if (memcmp(net_info.sn, payload->value.ip, 4) != 0)
+        {
+            memcpy(net_info.sn, payload->value.ip, 4);
+            wizchip_setnetinfo(&net_info);
+            changed = true;
+        }
         break;
     }
     case NET_IP_GATEWAY:
     {
         wiz_NetInfo net_info;
         wizchip_getnetinfo(&net_info);
-        memcpy(net_info.gw, payload->value.ip, 4);
-        wizchip_setnetinfo(&net_info);
-        app->need_prompt = true;
+        if (memcmp(net_info.gw, payload->value.ip, 4) != 0)
+        {
+            memcpy(net_info.gw, payload->value.ip, 4);
+            wizchip_setnetinfo(&net_info);
+            changed = true;
+        }
         break;
     }
     case NET_PORT_LOCAL:
-        app->local_config.port = payload->value.port;
-        if ((err = w5500_reconfigure_udp_socket(&app->local_config)) != E2S_OK)
+        if (app->local_config.port != payload->value.port)
         {
-            fatal_panic(err);
+            app->local_config.port = payload->value.port;
+            if ((err = w5500_reconfigure_udp_socket(&app->local_config)) != E2S_OK)
+            {
+                fatal_panic(err);
+            }
+            changed = true;
         }
-        app->need_prompt = true;
         break;
     case NET_PORT_REMOTE:
-        app->destination_config.port = payload->value.port;
-        if ((err = w5500_reconfigure_udp_socket(&app->destination_config)) != E2S_OK)
+        if (app->destination_config.port != payload->value.port)
         {
-            fatal_panic(err);
+            app->destination_config.port = payload->value.port;
+            if ((err = w5500_reconfigure_udp_socket(&app->destination_config)) != E2S_OK)
+            {
+                fatal_panic(err);
+            }
+            changed = true;
         }
-        app->need_prompt = true;
         break;
     default:
         break;
     }
+    app->need_prompt = true;
+    return changed;
 }
 
 static void ev_get_net_settings(const event_queue_data_t* payload, const app_ctx_t* app)
@@ -251,22 +281,34 @@ static void ev_get_net_settings(const event_queue_data_t* payload, const app_ctx
     }
 }
 
-static void ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* app)
+static apply_result_t ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* app)
 {
+    apply_result_t result = {0};
     switch (payload->id)
     {
     case V24_BAUDRATE:
-        reinit_v24_config(&app->v24_config, payload->value.baudrate);
-        tx_clock_update_settings(&app->v24_config);
+        if (app->v24_config.baudrate != payload->value.baudrate)
+        {
+            reinit_v24_config(&app->v24_config, payload->value.baudrate);
+            tx_clock_update_settings(&app->v24_config);
+            result.changed = true;
+        }
         app->need_prompt = true;
         break;
     case V24_POLARITIES:
-        memcpy(&app->v24_config.polarities, &payload->value.polarities, sizeof(V24_POLARITIES_T));
-        tx_clock_update_settings(&app->v24_config);
-        rx_clock_update_settings(&(app->v24_config.polarities.rx_polarities));
+        if (memcmp(&app->v24_config.polarities, &payload->value.polarities, sizeof(V24_POLARITIES_T)) !=
+            0)
+        {
+            memcpy(&app->v24_config.polarities, &payload->value.polarities,
+                   sizeof(V24_POLARITIES_T));
+            tx_clock_update_settings(&app->v24_config);
+            rx_clock_update_settings(&(app->v24_config.polarities.rx_polarities));
+            result.changed = true;
+        }
         app->need_prompt = true;
         break;
     case V24_CLOCK_MODE:
+    {
         bool external_clock = payload->value.v24_clock_mode;
 
         if (app->v24_config.external_clock != external_clock)
@@ -278,27 +320,21 @@ static void ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
             }
             LOG_PLAIN("Switching to %s mode.\r\n", external_clock ? "external" : "internal");
             app->v24_config.external_clock = external_clock;
-            // For now we just save the new clock setting and reboot. Runtime reconfiguration
-            // is not yet added.
-            request_save_config();
-
-            event_t reboot_event = {
-                .type      = EV_REBOOT,
-                .data.ptr  = NULL,
-                .data_len  = 0,
-                .is_inline = false,
-            };
-            event_queue_push(&reboot_event);
+            result.changed         = true;
+            result.reboot_required = true;
         }
         else
         {
-            LOG_INFO("Already in %s mode.", external_clock ? "external" : "internal");
+            LOG_INFO("Already in %s mode.\r\n", external_clock ? "external" : "internal");
             break;
         }
+        app->need_prompt = true;
         break;
+    }
     default:
         break;
     }
+    return result;
 }
 
 static void ev_get_v24_settings(const event_queue_data_t* payload, app_ctx_t* app)
@@ -540,14 +576,14 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
         config_write(&app->persistent_config);
         LOG_PLAIN("Config stored. Dumping for checking:\r\n");
         dump_config();
-        LOG_PLAIN("\r\n> ");
+        app->need_prompt = true;
         break;
     case EV_WIPE_CONFIG:
         LOG_PLAIN("Wiping persistent config in flash.\r\n");
         config_wipe();
         LOG_PLAIN("Config wiped. Dumping for checking:\r\n");
         dump_config();
-        LOG_PLAIN("\r\n> ");
+        app->need_prompt = true;
         break;
     case EV_SET_NET_SETTINGS:
     {
@@ -560,10 +596,10 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
         {
             break;
         }
-        ev_set_net_settings(payload, app);
-        // For now dumbly always save after a change of settings.
-        // This is not the best idea since it degrades flash lifetime.
-        request_save_config();
+        if (ev_set_net_settings(payload, app))
+        {
+            request_save_config();
+        }
         break;
     }
     case EV_GET_NET_SETTINGS:
@@ -588,10 +624,21 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
         {
             break;
         }
-        ev_set_v24_settings(payload, app);
-        // For now dumbly always save after a change of settings.
-        // This is not the best idea since it degrades flash lifetime.
-        request_save_config();
+        apply_result_t set_result = ev_set_v24_settings(payload, app);
+        if (set_result.changed)
+        {
+            request_save_config();
+        }
+        if (set_result.reboot_required)
+        {
+            event_t reboot_event = {
+                .type      = EV_REBOOT,
+                .data.ptr  = NULL,
+                .data_len  = 0,
+                .is_inline = false,
+            };
+            event_queue_push(&reboot_event);
+        }
         break;
     }
     case EV_GET_V24_SETTINGS:
