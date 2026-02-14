@@ -62,7 +62,7 @@ static void hdlc_sync_reset_hunting_state(HDLC_SYNC_ACCUMULATOR_T* accumulator)
 }
 
 static void hdlc_sync_reject_oversized_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator,
-                                                  HDLC_FRAME_T* out_frame, size_t* scan_index)
+                                                 HDLC_FRAME_T* out_frame, size_t* scan_index)
 {
     if (!accumulator || !out_frame || !scan_index)
     {
@@ -322,14 +322,12 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
             uint8_t found_bit_pos   = 0;
             bool    found_shift_dir = false;
 
-            bool found = hdlc_sync_find_complete_candidate_short(accumulator, scan_index,
-                                                                 &start_index, &found_bit_pos,
-                                                                 &found_shift_dir);
+            bool found = hdlc_sync_find_complete_candidate_short(
+                accumulator, scan_index, &start_index, &found_bit_pos, &found_shift_dir);
             if (!found)
             {
-                found = hdlc_sync_find_opening_candidate(accumulator, scan_index, false,
-                                                         &start_index, &found_bit_pos,
-                                                         &found_shift_dir);
+                found = hdlc_sync_find_opening_candidate(
+                    accumulator, scan_index, false, &start_index, &found_bit_pos, &found_shift_dir);
             }
             if (found)
             {
@@ -410,7 +408,7 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
                     accumulator->bit_offset = (uint8_t)(8U - accumulator->bit_offset);
                 }
 
-                result                        = E2S_ERR_HDLC_ACC_FRAME_READY;
+                result = E2S_ERR_HDLC_ACC_FRAME_READY;
                 scan_index++;
                 goto out;
             }
@@ -478,7 +476,7 @@ void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool 
     if (accumulator->position >= (RX_HDLC_SYNC_MAX_BUFFER_SIZE - 16))
     {
         size_t keep = 16;
-        size_t drop = accumulator->position - keep;
+        drop        = accumulator->position - keep;
         accumulator->hardcap_drop_events++;
         accumulator->hardcap_drop_bytes += (uint32_t)drop;
         hdlc_sync_drop_prefix(accumulator, drop);

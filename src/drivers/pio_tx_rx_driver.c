@@ -140,13 +140,12 @@ void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 
 bool rx_clock_poll_stall(void)
 {
-    const v24_runtime_t* v24_runtime = get_v24_runtime();
-    if (v24_runtime->rx_pio != NULL)
+    if (v24_runtime.rx_pio != NULL)
     {
-        uint32_t rx_stall_mask = (1U << (PIO_FDEBUG_RXSTALL_LSB + v24_runtime->rx_sm));
-        if ((v24_runtime->rx_pio->fdebug & rx_stall_mask) != 0U)
+        uint32_t rx_stall_mask = (1U << (PIO_FDEBUG_RXSTALL_LSB + v24_runtime.rx_sm));
+        if ((v24_runtime.rx_pio->fdebug & rx_stall_mask) != 0U)
         {
-            v24_runtime->rx_pio->fdebug = rx_stall_mask;
+            v24_runtime.rx_pio->fdebug = rx_stall_mask;
             return true;
         }
     }
@@ -182,14 +181,13 @@ void rx_clock_update_settings(V24_RX_POLARITIES_T* polarities)
 
 void rx_clock_hard_reset(void)
 {
-    const v24_runtime_t* v24_runtime = get_v24_runtime();
-    if (v24_runtime->rx_pio != NULL)
+    if (v24_runtime.rx_pio != NULL)
     {
-        pio_sm_set_enabled(v24_runtime->rx_pio, v24_runtime->rx_sm, false);
-        pio_sm_clear_fifos(v24_runtime->rx_pio, v24_runtime->rx_sm);
-        pio_sm_restart(v24_runtime->rx_pio, v24_runtime->rx_sm);
-        pio_sm_clkdiv_restart(v24_runtime->rx_pio, v24_runtime->rx_sm);
-        pio_sm_set_enabled(v24_runtime->rx_pio, v24_runtime->rx_sm, true);
+        pio_sm_set_enabled(v24_runtime.rx_pio, v24_runtime.rx_sm, false);
+        pio_sm_clear_fifos(v24_runtime.rx_pio, v24_runtime.rx_sm);
+        pio_sm_restart(v24_runtime.rx_pio, v24_runtime.rx_sm);
+        pio_sm_clkdiv_restart(v24_runtime.rx_pio, v24_runtime.rx_sm);
+        pio_sm_set_enabled(v24_runtime.rx_pio, v24_runtime.rx_sm, true);
     }
 }
 
@@ -298,23 +296,21 @@ void tx_clock_update_settings(V24_CONFIG_T* config)
     pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, false);
 
     V24_TX_POLARITIES_T* polarities = &(config->polarities.tx_polarities);
-    if (polarities)
+
+    if (config->external_clock)
     {
-        if (config->external_clock)
-        {
-            gpio_set_inover(V24_TXC_DCE,
-                            polarities->txc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
-        }
-        else
-        {
-            gpio_set_outover(V24_TXC_DTE, polarities->txc_inverted ? GPIO_OVERRIDE_INVERT
-                                                                   : GPIO_OVERRIDE_NORMAL);
-        }
-        gpio_set_outover(V24_TXD,
-                         polarities->txd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
-        gpio_set_inover(V24_CTS,
-                        polarities->cts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+        gpio_set_inover(V24_TXC_DCE,
+                        polarities->txc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
     }
+    else
+    {
+        gpio_set_outover(V24_TXC_DTE,
+                         polarities->txc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+    }
+    gpio_set_outover(V24_TXD,
+                     polarities->txd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+    gpio_set_inover(V24_CTS,
+                    polarities->cts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
     if (!config->external_clock)
     {
         pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, clkdiv);
