@@ -33,7 +33,7 @@ void start_cpu_led_blink(uint pin)
     {
         on = !on;
         gpio_put(pin, on);
-        LOG_PLAIN("tick: led=%d\r\n", on ? 1 : 0);
+        printf("tick: led=%d\r\n", on ? 1 : 0);
         sleep_ms(500);
     }
 }

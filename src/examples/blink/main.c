@@ -38,8 +38,8 @@ int main(void)
     // Give the USB CDC a moment to enumerate (harmless even if not using USB)
     sleep_ms(1500);
 
-    LOG_PLAIN("v24-eth-bridge: hello from RP2040\r\n");
-    LOG_PLAIN("PIO blinking GPIO19 (USER LED), APU blinking GPIO%d\r\n", APU_LED_PIN);
+    printf("v24-eth-bridge: hello from RP2040\r\n");
+    printf("PIO blinking GPIO19 (USER LED), APU blinking GPIO%d\r\n", APU_LED_PIN);
 
     // --- Start PIO blink on onboard USER LED (GPIO19) ---
     start_pio_led_blink(pio0, 0, PIO_LED_PIN);
