@@ -13,12 +13,12 @@
 #include "persistent_config.h"
 
 // Standard library headers
+#include <assert.h>
 #include <inttypes.h>
 #include <malloc.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 
 // Library Headers
@@ -176,6 +176,7 @@ void dump_config(void)
 // Write: erase then program
 void config_write(const config_t* cfg)
 {
+    assert(FLASH_PAGE_SIZE > sizeof(config_t));
     uint8_t   buf[FLASH_PAGE_SIZE] = {0}; // 256 bytes, pad with zeros
     config_t* cfg_mut              = (config_t*)cfg;
     cfg_mut->magic                 = CONFIG_MAGIC;

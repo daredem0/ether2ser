@@ -35,6 +35,7 @@ static const pin_info_t pin_table[] = {
     {"rts", V24_RTS, true},       {"cts", V24_CTS, false},
     {"dtr", V24_DTR, true},       {"dsr", V24_DSR, false},
     {"dcd", V24_DCD, false},      {"tx_active", V24_TX_ACTIVE, true},
+    {"tck", V24_TXC_DTE, true},   {"rck", V24_RXC, false},
     {"led", V24_STATUS_LED, true}};
 
 #define NUM_PINS ARRAY_LEN(pin_table)
@@ -393,6 +394,14 @@ e2s_error_t parse_set_v24_polarities(const char* args, V24_POLARITIES_T* polarit
         else if (strcmp(token_ptr, "dcd") == 0)
         {
             polarities->rx_polarities.dcd_inverted = true;
+        }
+        else if (strcmp(token_ptr, "tck") == 0)
+        {
+            polarities->tx_polarities.txc_inverted = true;
+        }
+        else if (strcmp(token_ptr, "rck") == 0)
+        {
+            polarities->rx_polarities.rxc_inverted = true;
         }
         else
         {

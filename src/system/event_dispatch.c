@@ -115,7 +115,7 @@ static const char* hdlc_sync_state_name(HDLC_SYNC_STATE_T state)
     }
 }
 
-static void print_net_set_settings_event(const event_t* event)
+static void print_net_settings_event(const event_t* event)
 {
     if (event == NULL)
     {
@@ -123,29 +123,12 @@ static void print_net_set_settings_event(const event_t* event)
     }
 
     const event_queue_data_t* payload = NULL;
-    event_queue_data_t        inline_payload;
-
-    if (event->is_inline)
+    if (!event_get_payload_ptr(event, sizeof(*payload), (const void**)&payload))
     {
-        if (event->data_len < sizeof(event_queue_data_t))
-        {
-            LOG_ERROR("EV_SET_NET_SETTINGS: invalid data_len=%u\r\n", (unsigned)event->data_len);
-            return;
-        }
-        memcpy(&inline_payload, event->data.bytes, sizeof(inline_payload));
-        payload = &inline_payload;
-    }
-    else
-    {
-        if (event->data.ptr == NULL || event->data_len < sizeof(event_queue_data_t))
-        {
-            LOG_ERROR("EV_SET_NET_SETTINGS: invalid data ptr/len\r\n");
-            return;
-        }
-        payload = (const event_queue_data_t*)event->data.ptr;
+        return;
     }
 
-    LOG_DEBUG("EV_SET_NET_SETTINGS: id=%s\r\n", net_setting_id_name(payload->id));
+    LOG_DEBUG("EV_NET_SETTINGS: id=%s\r\n", net_setting_id_name(payload->id));
     switch (payload->id)
     {
     case NET_IP_REMOTE:
@@ -156,57 +139,6 @@ static void print_net_set_settings_event(const event_t* event)
         break;
     case NET_IP_MASK:
         LOG_DEBUG("  subnetmask=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
-                  payload->value.ip[2], payload->value.ip[3]);
-        break;
-    case NET_PORT_LOCAL:
-    case NET_PORT_REMOTE:
-        LOG_DEBUG("  port=%u\r\n", payload->value.port);
-        break;
-    default:
-        LOG_DEBUG("  raw: %02X %02X %02X %02X %02X %02X\r\n", payload->value.ip[0],
-                  payload->value.ip[1], payload->value.ip[2], payload->value.ip[3],
-                  (uint8_t)(payload->value.port >> 8), (uint8_t)(payload->value.port & 0xFF));
-        break;
-    }
-}
-
-static void print_net_get_settings_event(const event_t* event)
-{
-    if (event == NULL)
-    {
-        return;
-    }
-
-    const event_queue_data_t* payload = NULL;
-    event_queue_data_t        inline_payload;
-
-    if (event->is_inline)
-    {
-        if (event->data_len < sizeof(event_queue_data_t))
-        {
-            LOG_ERROR("EV_GET_NET_SETTINGS: invalid data_len=%u\r\n", (unsigned)event->data_len);
-            return;
-        }
-        memcpy(&inline_payload, event->data.bytes, sizeof(inline_payload));
-        payload = &inline_payload;
-    }
-    else
-    {
-        if (event->data.ptr == NULL || event->data_len < sizeof(event_queue_data_t))
-        {
-            LOG_ERROR("EV_GET_NET_SETTINGS: invalid data ptr/len\r\n");
-            return;
-        }
-        payload = (const event_queue_data_t*)event->data.ptr;
-    }
-
-    LOG_DEBUG("EV_GET_NET_SETTINGS: id=%s\r\n", net_setting_id_name(payload->id));
-    switch (payload->id)
-    {
-    case NET_IP_REMOTE:
-    case NET_IP_LOCAL:
-    case NET_IP_GATEWAY:
-        LOG_DEBUG("  ip=%u.%u.%u.%u\r\n", payload->value.ip[0], payload->value.ip[1],
                   payload->value.ip[2], payload->value.ip[3]);
         break;
     case NET_PORT_LOCAL:
@@ -391,6 +323,143 @@ static void ev_get_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
     }
 }
 
+typedef struct
+{
+    uint64_t frame_gap;
+    uint64_t tx_gap;
+    uint64_t udp_rx_rate_fps;
+    uint64_t hdlc_rx_rate_fps;
+    uint64_t udp_tx_rate_fps;
+    uint64_t decode_fail_rate;
+    uint64_t serial_rx_rate_bps;
+} ev_status_stats_t;
+
+static void ev_status(app_ctx_t* app, ev_status_stats_t* status_stats)
+{
+    status_stats->frame_gap = 0;
+    if (app->stats.hdlc_tx_frames > app->stats.hdlc_frame_ready)
+    {
+        status_stats->frame_gap = app->stats.hdlc_tx_frames - app->stats.hdlc_frame_ready;
+    }
+    status_stats->tx_gap = 0;
+    if (app->stats.hdlc_frame_ready > app->stats.udp_tx_frames)
+    {
+        status_stats->tx_gap = app->stats.hdlc_frame_ready - app->stats.udp_tx_frames;
+    }
+
+    static uint64_t prev_udp_rx_frames    = 0U;
+    static uint64_t prev_hdlc_frame_ready = 0U;
+    static uint64_t prev_udp_tx_frames    = 0U;
+    static uint64_t prev_hdlc_decode_fail = 0U;
+    static uint64_t prev_serial_rx_bytes  = 0U;
+    uint32_t        report_now_ms         = to_ms_since_boot(get_absolute_time());
+    uint32_t        elapsed_ms            = 0U;
+    if (app->stats.last_report_ms != 0U)
+    {
+        elapsed_ms = report_now_ms - app->stats.last_report_ms;
+    }
+    if (elapsed_ms == 0U)
+    {
+        elapsed_ms = 1U;
+    }
+
+    uint64_t d_udp_rx_frames    = app->stats.udp_rx_frames - prev_udp_rx_frames;
+    uint64_t d_hdlc_frame_ready = app->stats.hdlc_frame_ready - prev_hdlc_frame_ready;
+    uint64_t d_udp_tx_frames    = app->stats.udp_tx_frames - prev_udp_tx_frames;
+    uint64_t d_decode_fail      = app->stats.hdlc_decode_fail - prev_hdlc_decode_fail;
+    uint64_t d_serial_rx_bytes  = app->stats.serial_rx_bytes - prev_serial_rx_bytes;
+
+    status_stats->udp_rx_rate_fps    = (d_udp_rx_frames * 1000U) / elapsed_ms;
+    status_stats->hdlc_rx_rate_fps   = (d_hdlc_frame_ready * 1000U) / elapsed_ms;
+    status_stats->udp_tx_rate_fps    = (d_udp_tx_frames * 1000U) / elapsed_ms;
+    status_stats->decode_fail_rate   = (d_decode_fail * 1000U) / elapsed_ms;
+    status_stats->serial_rx_rate_bps = (d_serial_rx_bytes * 1000U) / elapsed_ms;
+
+    prev_udp_rx_frames        = app->stats.udp_rx_frames;
+    prev_hdlc_frame_ready     = app->stats.hdlc_frame_ready;
+    prev_udp_tx_frames        = app->stats.udp_tx_frames;
+    prev_hdlc_decode_fail     = app->stats.hdlc_decode_fail;
+    prev_serial_rx_bytes      = app->stats.serial_rx_bytes;
+    app->stats.last_report_ms = report_now_ms;
+}
+
+static void print_status_event(app_ctx_t* app, ev_status_stats_t* status_stats)
+{
+
+    LOG_PLAIN("status: ok\r\n");
+    LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
+              baudrate_estimator_get_current_estimation(V24_RXC));
+    if (app->v24_config.external_clock)
+    {
+        LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_TXC_DCE,
+                  baudrate_estimator_get_current_estimation(V24_TXC_DCE));
+    }
+    LOG_PLAIN("PIPE STATS\r\n");
+    LOG_PLAIN("  Traffic\r\n");
+    LOG_PLAIN("    Frames    : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
+              "  udp_tx=%" PRIu64 "\r\n",
+              app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.hdlc_frame_ready,
+              app->stats.udp_tx_frames);
+    LOG_PLAIN("    Backlog   : tx->ready_gap=%" PRIu64 "  ready->udp_gap=%" PRIu64 "\r\n",
+              status_stats->frame_gap, status_stats->tx_gap);
+    LOG_PLAIN("    Serial    : rx_bytes=%" PRIu64 "  tx_bytes=%" PRIu64 "\r\n",
+              app->stats.serial_rx_bytes, app->tx_queue.tx_wire_bytes);
+    LOG_PLAIN("    Rates     : udp_rx=%" PRIu64 "/s  hdlc_rx=%" PRIu64 "/s  udp_tx=%" PRIu64
+              "/s  fail=%" PRIu64 "/s  rx_bytes=%" PRIu64 "/s\r\n",
+              status_stats->udp_rx_rate_fps, status_stats->hdlc_rx_rate_fps,
+              status_stats->udp_tx_rate_fps, status_stats->decode_fail_rate,
+              status_stats->serial_rx_rate_bps);
+
+    LOG_PLAIN("  Decode / Sync\r\n");
+    LOG_PLAIN("    Decode    : frame_ready=%" PRIu64 "  ok=%" PRIu64 "  fail=%" PRIu64 "\r\n",
+              app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok, app->stats.hdlc_decode_fail);
+    LOG_PLAIN("    FailReason: invalid=%" PRIu64 "  short=%" PRIu64 "  long=%" PRIu64
+              "  unstuff=%" PRIu64 "  crc=%" PRIu64 "\r\n",
+              app->stats.decode_fail_invalid_frame, app->stats.decode_fail_too_short,
+              app->stats.decode_fail_payload_too_long, app->stats.decode_fail_unstuff_error,
+              app->stats.decode_fail_crc_mismatch);
+    LOG_PLAIN("    SyncState : %s\r\n", hdlc_sync_state_name(app->accumulator.state));
+    LOG_PLAIN("    SyncWait  : syncing=%" PRIu64 "  synced=%" PRIu64 "\r\n",
+              app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
+    LOG_PLAIN("    SyncMaint : consume=%" PRIu64 "  hardcap_events=%" PRIu64
+              "  hardcap_bytes=%" PRIu64 "\r\n",
+              app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
+              app->stats.sync_hardcap_drop_bytes);
+    LOG_PLAIN("    Resync    : idle=%" PRIu64 "  hard=%" PRIu64 "  no_progress=%" PRIu64 "\r\n",
+              app->stats.resync_idle_timeout_count, app->stats.resync_hard_fail_count,
+              app->stats.resync_no_progress_count);
+    LOG_PLAIN(
+        "    Accum     : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
+        app->accumulator.position, app->accumulator.processed, (int)app->accumulator.state,
+        app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
+        app->accumulator.candidate_end);
+    LOG_PLAIN("    RX Health : acc_pos_max=%" PRIu64 "  rx_fifo_stall=%" PRIu64
+              "  rx_drop_acc_full=%" PRIu64 "  hunt_idle_drop=%" PRIu64 "\r\n",
+              app->stats.accumulator_pos_max, app->stats.rx_fifo_stall_events,
+              app->stats.serial_rx_drop_acc_full, app->stats.hunt_idle_drop_bytes);
+
+    LOG_PLAIN("  Buffers\r\n");
+    LOG_PLAIN("    TX Queue  : used=%zu/%zu  active=%d\r\n", app->tx_queue.queue_buffer.count,
+              app->tx_queue.queue_buffer.capacity,
+              (app->tx_queue.current_entry.offset < app->tx_queue.current_entry.frame.length) ? 1
+                                                                                              : 0);
+    LOG_PLAIN("    HighWater : tx=%" PRIu64 "  event=%" PRIu64 "  log=%" PRIu64 "\r\n",
+              app->stats.tx_queue_used_max, app->stats.event_queue_used_max,
+              app->stats.log_queue_used_max);
+    LOG_PLAIN("    Drops     : tx=%" PRIu64 "  event=%" PRIu64 "  log=%" PRIu64 "\r\n",
+              app->stats.tx_queue_drop_frames, app->stats.event_queue_drop_events,
+              app->stats.log_drop_lines);
+    LOG_PLAIN("    Recons    : len=%zu\r\n", app->reconstructed_frame.length);
+    const v24_runtime_t* v24_runtime = get_v24_runtime();
+    LOG_PLAIN(
+        "    PIO TX    : stalled=%" PRIu32 "\r\n",
+        (v24_runtime->tx_pio)
+            ? ((v24_runtime->tx_pio->fdebug >>
+                (PIO_FDEBUG_TXSTALL_LSB + v24_runtime->tx_sm)) & // NOLINT(misc-include-cleaner)
+               1U)
+            : 0);
+}
+
 void event_dispatch(const event_t* event, app_ctx_t* app)
 {
     switch (event->type)
@@ -402,125 +471,9 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
     }
     case EV_STATUS:
     {
-        uint64_t frame_gap = 0;
-        if (app->stats.hdlc_tx_frames > app->stats.hdlc_frame_ready)
-        {
-            frame_gap = app->stats.hdlc_tx_frames - app->stats.hdlc_frame_ready;
-        }
-        uint64_t tx_gap = 0;
-        if (app->stats.hdlc_frame_ready > app->stats.udp_tx_frames)
-        {
-            tx_gap = app->stats.hdlc_frame_ready - app->stats.udp_tx_frames;
-        }
-
-        static uint64_t prev_udp_rx_frames    = 0U;
-        static uint64_t prev_hdlc_frame_ready = 0U;
-        static uint64_t prev_udp_tx_frames    = 0U;
-        static uint64_t prev_hdlc_decode_fail = 0U;
-        static uint64_t prev_serial_rx_bytes  = 0U;
-        uint32_t        report_now_ms         = to_ms_since_boot(get_absolute_time());
-        uint32_t        elapsed_ms            = 0U;
-        if (app->stats.last_report_ms != 0U)
-        {
-            elapsed_ms = report_now_ms - app->stats.last_report_ms;
-        }
-        if (elapsed_ms == 0U)
-        {
-            elapsed_ms = 1U;
-        }
-
-        uint64_t d_udp_rx_frames    = app->stats.udp_rx_frames - prev_udp_rx_frames;
-        uint64_t d_hdlc_frame_ready = app->stats.hdlc_frame_ready - prev_hdlc_frame_ready;
-        uint64_t d_udp_tx_frames    = app->stats.udp_tx_frames - prev_udp_tx_frames;
-        uint64_t d_decode_fail      = app->stats.hdlc_decode_fail - prev_hdlc_decode_fail;
-        uint64_t d_serial_rx_bytes  = app->stats.serial_rx_bytes - prev_serial_rx_bytes;
-
-        uint64_t udp_rx_rate_fps    = (d_udp_rx_frames * 1000U) / elapsed_ms;
-        uint64_t hdlc_rx_rate_fps   = (d_hdlc_frame_ready * 1000U) / elapsed_ms;
-        uint64_t udp_tx_rate_fps    = (d_udp_tx_frames * 1000U) / elapsed_ms;
-        uint64_t decode_fail_rate   = (d_decode_fail * 1000U) / elapsed_ms;
-        uint64_t serial_rx_rate_bps = (d_serial_rx_bytes * 1000U) / elapsed_ms;
-
-        prev_udp_rx_frames        = app->stats.udp_rx_frames;
-        prev_hdlc_frame_ready     = app->stats.hdlc_frame_ready;
-        prev_udp_tx_frames        = app->stats.udp_tx_frames;
-        prev_hdlc_decode_fail     = app->stats.hdlc_decode_fail;
-        prev_serial_rx_bytes      = app->stats.serial_rx_bytes;
-        app->stats.last_report_ms = report_now_ms;
-
-        LOG_PLAIN("status: ok\r\n");
-        LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
-                  baudrate_estimator_get_current_estimation(V24_RXC));
-        if (app->v24_config.external_clock)
-        {
-            LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_TXC_DCE,
-                      baudrate_estimator_get_current_estimation(V24_TXC_DCE));
-        }
-        LOG_PLAIN("PIPE STATS\r\n");
-        LOG_PLAIN("  Traffic\r\n");
-        LOG_PLAIN("    Frames    : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
-                  "  udp_tx=%" PRIu64 "\r\n",
-                  app->stats.udp_rx_frames, app->stats.hdlc_tx_frames, app->stats.hdlc_frame_ready,
-                  app->stats.udp_tx_frames);
-        LOG_PLAIN("    Backlog   : tx->ready_gap=%" PRIu64 "  ready->udp_gap=%" PRIu64 "\r\n",
-                  frame_gap, tx_gap);
-        LOG_PLAIN("    Serial    : rx_bytes=%" PRIu64 "  tx_bytes=%" PRIu64 "\r\n",
-                  app->stats.serial_rx_bytes, app->tx_queue.tx_wire_bytes);
-        LOG_PLAIN("    Rates     : udp_rx=%" PRIu64 "/s  hdlc_rx=%" PRIu64 "/s  udp_tx=%" PRIu64
-                  "/s  fail=%" PRIu64 "/s  rx_bytes=%" PRIu64 "/s\r\n",
-                  udp_rx_rate_fps, hdlc_rx_rate_fps, udp_tx_rate_fps, decode_fail_rate,
-                  serial_rx_rate_bps);
-
-        LOG_PLAIN("  Decode / Sync\r\n");
-        LOG_PLAIN("    Decode    : frame_ready=%" PRIu64 "  ok=%" PRIu64 "  fail=%" PRIu64 "\r\n",
-                  app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok,
-                  app->stats.hdlc_decode_fail);
-        LOG_PLAIN("    FailReason: invalid=%" PRIu64 "  short=%" PRIu64 "  long=%" PRIu64
-                  "  unstuff=%" PRIu64 "  crc=%" PRIu64 "\r\n",
-                  app->stats.decode_fail_invalid_frame, app->stats.decode_fail_too_short,
-                  app->stats.decode_fail_payload_too_long, app->stats.decode_fail_unstuff_error,
-                  app->stats.decode_fail_crc_mismatch);
-        LOG_PLAIN("    SyncState : %s\r\n", hdlc_sync_state_name(app->accumulator.state));
-        LOG_PLAIN("    SyncWait  : syncing=%" PRIu64 "  synced=%" PRIu64 "\r\n",
-                  app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
-        LOG_PLAIN("    SyncMaint : consume=%" PRIu64 "  hardcap_events=%" PRIu64
-                  "  hardcap_bytes=%" PRIu64 "\r\n",
-                  app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
-                  app->stats.sync_hardcap_drop_bytes);
-        LOG_PLAIN("    Resync    : idle=%" PRIu64 "  hard=%" PRIu64 "  no_progress=%" PRIu64 "\r\n",
-                  app->stats.resync_idle_timeout_count, app->stats.resync_hard_fail_count,
-                  app->stats.resync_no_progress_count);
-        LOG_PLAIN(
-            "    Accum     : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
-            app->accumulator.position, app->accumulator.processed, (int)app->accumulator.state,
-            app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
-            app->accumulator.candidate_end);
-        LOG_PLAIN("    RX Health : acc_pos_max=%" PRIu64 "  rx_fifo_stall=%" PRIu64
-                  "  rx_drop_acc_full=%" PRIu64 "  hunt_idle_drop=%" PRIu64 "\r\n",
-                  app->stats.accumulator_pos_max, app->stats.rx_fifo_stall_events,
-                  app->stats.serial_rx_drop_acc_full, app->stats.hunt_idle_drop_bytes);
-
-        LOG_PLAIN("  Buffers\r\n");
-        LOG_PLAIN("    TX Queue  : used=%zu/%zu  active=%d\r\n", app->tx_queue.queue_buffer.count,
-                  app->tx_queue.queue_buffer.capacity,
-                  (app->tx_queue.current_entry.offset < app->tx_queue.current_entry.frame.length)
-                      ? 1
-                      : 0);
-        LOG_PLAIN("    HighWater : tx=%" PRIu64 "  event=%" PRIu64 "  log=%" PRIu64 "\r\n",
-                  app->stats.tx_queue_used_max, app->stats.event_queue_used_max,
-                  app->stats.log_queue_used_max);
-        LOG_PLAIN("    Drops     : tx=%" PRIu64 "  event=%" PRIu64 "  log=%" PRIu64 "\r\n",
-                  app->stats.tx_queue_drop_frames, app->stats.event_queue_drop_events,
-                  app->stats.log_drop_lines);
-        LOG_PLAIN("    Recons    : len=%zu\r\n", app->reconstructed_frame.length);
-        const v24_runtime_t* v24_runtime = get_v24_runtime();
-        LOG_PLAIN(
-            "    PIO TX    : stalled=%" PRIu32 "\r\n",
-            (v24_runtime->tx_pio)
-                ? ((v24_runtime->tx_pio->fdebug >>
-                    (PIO_FDEBUG_TXSTALL_LSB + v24_runtime->tx_sm)) & // NOLINT(misc-include-cleaner)
-                   1U)
-                : 0);
+        ev_status_stats_t status_stats = {0};
+        ev_status(app, &status_stats);
+        print_status_event(app, &status_stats);
         app->need_prompt = true;
     }
     break;
@@ -600,7 +553,7 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
     {
         if (get_loglevel() == LOG_LEVEL_DEBUG)
         {
-            print_net_set_settings_event(event);
+            print_net_settings_event(event);
         }
         const event_queue_data_t* payload = NULL;
         if (!event_get_payload_ptr(event, sizeof(*payload), (const void**)&payload))
@@ -617,7 +570,7 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
     {
         if (get_loglevel() == LOG_LEVEL_DEBUG)
         {
-            print_net_get_settings_event(event);
+            print_net_settings_event(event);
         }
         const event_queue_data_t* payload = NULL;
         if (!event_get_payload_ptr(event, sizeof(*payload), (const void**)&payload))
