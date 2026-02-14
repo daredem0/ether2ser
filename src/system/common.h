@@ -148,10 +148,15 @@ static inline const char* log_level_tag(log_level_t level)
  * @param ... Format arguments.
  */
 void log_write(log_level_t level, const char* fmt, ...);
-#define LOG(level, fmt, ...)                      \
-    do                                            \
-    {                                             \
-        log_write((level), (fmt), ##__VA_ARGS__); \
+#define LOG(level, fmt, ...)                                               \
+    do                                                                     \
+    {                                                                      \
+        /* Evaluate level once to avoid double-evaluation side effects. */ \
+        const log_level_t _log_level = (level);                            \
+        if (get_loglevel() >= _log_level)                                  \
+        {                                                                  \
+            log_write(_log_level, (fmt), ##__VA_ARGS__);                   \
+        }                                                                  \
     } while (0)
 
 #define LOG_PLAIN(...) LOG(LOG_LEVEL_PLAIN, __VA_ARGS__)
