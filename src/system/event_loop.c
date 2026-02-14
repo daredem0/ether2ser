@@ -47,6 +47,7 @@
 #define HDLC_DECODE_FAIL_STREAK_LIMIT 4U
 #define HDLC_SYNC_IDLE_TIMEOUT_US 20000U
 #define HDLC_SYNC_NO_PROGRESS_MAX_BYTES 2048U
+#define HDLC_SYNC_NO_PROGRESS_MAX_BYTES_EXTERNAL 12288
 
 static void print_prompt(app_ctx_t* app)
 {
@@ -69,6 +70,28 @@ void event_loop(app_ctx_t* app)
         watchdog_update();
         // Poll the event queue
         cli_poll();
+
+        // Drain RX early in the loop to reduce risk of RX FIFO stalling under continuous clock.
+        size_t rx_drained_early = 0;
+        while (rx_get(&rx_byte))
+        {
+            work_done = true;
+            rx_drained_early++;
+            if (!hdlc_sync_acc_process_byte(&app->accumulator, rx_byte))
+            {
+                app->stats.serial_rx_drop_acc_full++;
+            }
+        }
+        app->stats.serial_rx_bytes += rx_drained_early;
+        if (app->accumulator.position > app->stats.accumulator_pos_max)
+        {
+            app->stats.accumulator_pos_max = app->accumulator.position;
+        }
+        if (rx_drained_early > 0U)
+        {
+            last_rx_byte_us = to_us_since_boot(get_absolute_time());
+        }
+
         if (w5500_poll_rx(&app->sender_config, &app->rx_frame_buffer))
         {
             app->stats.udp_rx_frames++;
@@ -172,6 +195,16 @@ void event_loop(app_ctx_t* app)
                 else
                 {
                     app->stats.hdlc_decode_fail++;
+                    if (app->stats.hdlc_decode_fail == 1U)
+                    {
+                        LOG_DEBUG("HDLC first decode fail: off=%u shift_right=%u cand_start=%zu "
+                                  "cand_end=%zu pos=%zu proc=%zu\r\n",
+                                  (unsigned)app->accumulator.bit_offset,
+                                  (unsigned)app->accumulator.align_shift_right,
+                                  app->accumulator.candidate_start,
+                                  app->accumulator.candidate_end, app->accumulator.position,
+                                  app->accumulator.processed);
+                    }
                     hdlc_sync_acc_consume_candidate(&app->accumulator, false);
                     if (hdlc_decode_fail_streak < UINT8_MAX)
                     {
@@ -197,16 +230,29 @@ void event_loop(app_ctx_t* app)
             }
             break;
         }
+        // External-clock mode continuously feeds idle bytes. In HUNTING this is normal and
+        // must not trigger no-progress resyncs, otherwise the next real frame gets clipped.
         bool decode_in_progress = (app->accumulator.state != HDLC_SYNC_STATE_HUNTING) ||
                                   app->accumulator.candidate_valid ||
                                   (app->reconstructed_frame.length > 0U);
-        if (decode_in_progress && (app->stats.serial_rx_bytes > last_frame_ready_bytes) &&
-            ((app->stats.serial_rx_bytes - last_frame_ready_bytes) >
-             HDLC_SYNC_NO_PROGRESS_MAX_BYTES))
+        if (!decode_in_progress)
+        {
+            // In external-clock idle periods serial_rx_bytes keeps increasing.
+            // Reset baseline while idle so first frame after a gap is not
+            // immediately forced into no-progress resync.
+            last_frame_ready_bytes = app->stats.serial_rx_bytes;
+        }
+        bool have_decode_lock = (app->stats.hdlc_decode_ok > 0U);
+        const uint64_t no_progress_max_bytes = app->v24_config.external_clock
+                                                   ? HDLC_SYNC_NO_PROGRESS_MAX_BYTES_EXTERNAL
+                                                   : HDLC_SYNC_NO_PROGRESS_MAX_BYTES;
+        if (have_decode_lock && decode_in_progress &&
+            (app->stats.serial_rx_bytes > last_frame_ready_bytes) &&
+            ((app->stats.serial_rx_bytes - last_frame_ready_bytes) > no_progress_max_bytes))
         {
             app->stats.resync_no_progress_count++;
-            LOG_DEBUG("HDLC no-progress resync after %" PRIu64 " bytes\r\n",
-                      (app->stats.serial_rx_bytes - last_frame_ready_bytes));
+            LOG_DEBUG("HDLC no-progress resync after %" PRIu64 " bytes (limit=%" PRIu64 ")\r\n",
+                      (app->stats.serial_rx_bytes - last_frame_ready_bytes), no_progress_max_bytes);
             hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
             hdlc_decode_fail_streak = 0U;
             memset(app->reconstructed_frame.payload, 0, app->reconstructed_frame.length);
@@ -232,11 +278,11 @@ void event_loop(app_ctx_t* app)
 
         hdlc_decode_stats_t decode_stats = {0};
         hdlc_decode_stats_snapshot(&decode_stats);
-        app->stats.decode_fail_invalid_frame   = decode_stats.invalid_frame;
-        app->stats.decode_fail_too_short       = decode_stats.too_short;
+        app->stats.decode_fail_invalid_frame    = decode_stats.invalid_frame;
+        app->stats.decode_fail_too_short        = decode_stats.too_short;
         app->stats.decode_fail_payload_too_long = decode_stats.payload_too_long;
-        app->stats.decode_fail_unstuff_error   = decode_stats.unstuff_error;
-        app->stats.decode_fail_crc_mismatch    = decode_stats.crc_mismatch;
+        app->stats.decode_fail_unstuff_error    = decode_stats.unstuff_error;
+        app->stats.decode_fail_crc_mismatch     = decode_stats.crc_mismatch;
 
         size_t tx_queue_count = tx_queue_get_count(&app->tx_queue);
         if (tx_queue_count > app->stats.tx_queue_used_max)

@@ -189,6 +189,8 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
     sm_config_set_jmp_pin(&config, V24_RXC);
     sm_config_set_in_pins(&config, V24_RXD);
     sm_config_set_in_shift(&config, true, true, CHAR_BIT);
+    // External clock can keep streaming continuously; use joined RX FIFO for more headroom.
+    sm_config_set_fifo_join(&config, PIO_FIFO_JOIN_RX);
     pio_sm_init(pio, pio_sm, offset, &config);
 
     // This implicitly enables the sm
@@ -375,7 +377,8 @@ static void tx_clock_init_xck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
     sm_config_set_in_pins(&sm_config, V24_TXC_DCE);
     sm_config_set_out_pins(&sm_config, V24_TXD, 1);
     sm_config_set_jmp_pin(&sm_config, V24_CTS);
-    sm_config_set_out_shift(&sm_config, true, true, CHAR_BIT);
+    // xck_txd.pio uses explicit `pull block` and emits exactly 8 bits/byte.
+    sm_config_set_out_shift(&sm_config, true, false, CHAR_BIT);
 
     pio_sm_init(pio, pio_sm, offset, &sm_config);
 

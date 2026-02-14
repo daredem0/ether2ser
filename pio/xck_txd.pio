@@ -1,11 +1,15 @@
 .program xck_txd
 .wrap_target
+next_byte:
+    pull block                 ; block here (between bytes), never mid-bit
+    set x, 7                   ; transmit exactly 8 bits from this byte
 bitloop:
-    wait 0 pin  0              ; ensure we're in low phase
-    wait 1 pin  0              ; rising edge: safe point to change TXD
-    jmp pin do_shift           ; check CTS
-    jmp bitloop                ; CTS not asserted -> do not consume a bit
+    wait 0 pin 0               ; sync to low phase first
+    wait 1 pin 0               ; then update TXD on rising edge
+    jmp pin do_shift           ; CTS high -> transmit this bit
+    jmp bitloop                ; CTS low -> skip this edge, keep current TXD level
 do_shift:
-    out pins, 1                ; consume/send next bit
-    jmp bitloop
+    out pins, 1
+    jmp x-- bitloop
+    jmp next_byte
 .wrap

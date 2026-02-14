@@ -1,0 +1,527 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e289e32..6854f0e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -193,6 +193,7 @@ if(NOT BUILD_TESTS)
+         ${CMAKE_CURRENT_LIST_DIR}/pio/tx_clock.pio
+         ${CMAKE_CURRENT_LIST_DIR}/pio/tck_txd.pio
+         ${CMAKE_CURRENT_LIST_DIR}/pio/rck_rxd.pio
++        ${CMAKE_CURRENT_LIST_DIR}/pio/xck_txd.pio
+         ${CMAKE_CURRENT_LIST_DIR}/pio/led_activity_mirror.pio
+     )
+ 
+diff --git a/pio/rck_rxd.pio b/pio/rck_rxd.pio
+index b6ee4ac..25a0b4d 100644
+--- a/pio/rck_rxd.pio
++++ b/pio/rck_rxd.pio
+@@ -7,6 +7,5 @@
+                 jmp wait_high        ; still LOW, keep waiting
+ 
+     got_high:   jmp pin, got_high    ; still HIGH? keep waiting
+-                nop [31]              ; Short delay for clock skew
+                 in pins, 1           ; Falling edge detected -> read bit
+ .wrap
+diff --git a/pio/tck_txd.pio b/pio/tck_txd.pio
+index 08afe33..d427629 100644
+--- a/pio/tck_txd.pio
++++ b/pio/tck_txd.pio
+@@ -6,7 +6,7 @@ bitloop:
+     jmp bitloop     side 0 [1]   ; CTS not ready -> hold clock low
+ 
+ send:
+-    out pins, 1     side 0 [1]   ; 2 cycles low, shift data bit
+-    nop             side 1 [1]   ; 2 cycles high
+-    jmp bitloop     side 1 [1]   ; 2 cycles high
++    out pins, 1     side 1 [1]   ; 2 cycles low, shift data bit
++    nop             side 0 [1]   ; 2 cycles high
++    jmp bitloop     side 0 [1]   ; 2 cycles high
+ .wrap
+diff --git a/pio/xck_txd.pio b/pio/xck_txd.pio
+new file mode 100644
+index 0000000..5319f93
+--- /dev/null
++++ b/pio/xck_txd.pio
+@@ -0,0 +1,11 @@
++.program xck_txd
++.wrap_target
++bitloop:
++    wait 0 pin  0              ; ensure we're in low phase
++    wait 1 pin  0              ; rising edge: safe point to change TXD
++    jmp pin do_shift           ; check CTS
++    jmp bitloop                ; CTS not asserted -> do not consume a bit
++do_shift:
++    out pins, 1                ; consume/send next bit
++    jmp bitloop
++.wrap
+diff --git a/src/drivers/pio_tx_rx_driver.c b/src/drivers/pio_tx_rx_driver.c
+index 33caa54..d68fd30 100644
+--- a/src/drivers/pio_tx_rx_driver.c
++++ b/src/drivers/pio_tx_rx_driver.c
+@@ -37,6 +37,7 @@
+ #include "led_activity_mirror.pio.h"
+ #include "rck_rxd.pio.h"
+ #include "tck_txd.pio.h"
++#include "xck_txd.pio.h"
+ 
+ /**
+  * @brief Minimum RTS holdoff in microseconds used as a safety floor.
+@@ -135,6 +136,7 @@ void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
+ {
+     config->polarities = init_polarities();
+     reinit_v24_config(config, baudrate);
++    config->external_clock = true;
+ }
+ 
+ bool rx_get(uint8_t* data)
+@@ -271,33 +273,49 @@ bool tx_put(uint8_t data)
+     return true;
+ }
+ 
+-void tx_clock_update_settings(V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities)
++void tx_clock_update_settings(V24_CONFIG_T* config)
+ {
+     assert(v24_runtime.tx_pio != NULL);
+-    float clkdiv = baud_to_clockdiv(baudrate);
++    float clkdiv = baud_to_clockdiv(config->baudrate);
+ 
+     pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, false);
+ 
++    V24_TX_POLARITIES_T* polarities = &(config->polarities.tx_polarities);
+     if (polarities)
+     {
+-        gpio_set_outover(V24_TXC_DTE,
+-                         polarities->txc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
++        if (config->external_clock)
++        {
++            gpio_set_inover(V24_TXC_DCE,
++                            polarities->txc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
++        }
++        else
++        {
++            gpio_set_outover(V24_TXC_DTE, polarities->txc_inverted ? GPIO_OVERRIDE_INVERT
++                                                                   : GPIO_OVERRIDE_NORMAL);
++        }
+         gpio_set_outover(V24_TXD,
+                          polarities->txd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+         gpio_set_inover(V24_CTS,
+                         polarities->cts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+     }
+-
+-    pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, clkdiv);
++    if (!config->external_clock)
++    {
++        pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, clkdiv);
++    }
++    else
++    {
++        // pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, 1.0f);
++    }
+     pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, true);
+ }
+ 
+-void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities)
++static void tx_clock_init_tck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
+ {
+-    float clkdiv = baud_to_clockdiv(baudrate);
++    float clkdiv = baud_to_clockdiv(config->baudrate);
+ 
+-    LOG_INFO("TXC: init pio%u sm%u pin%u baud=%u clkdiv=%.6f\r\n", (unsigned)pio_get_index(pio),
+-             (unsigned)pio_sm, (unsigned)V24_TXC_DTE, (unsigned)baudrate, (double)clkdiv);
++    LOG_INFO("Initializing internal clock\r\n");
++    LOG_DEBUG("TXC: init pio%u sm%u pin%u baud=%u clkdiv=%.6f\r\n", (unsigned)pio_get_index(pio),
++              (unsigned)pio_sm, (unsigned)V24_TXC_DTE, (unsigned)config->baudrate, (double)clkdiv);
+ 
+     pio_sm_claim(pio, pio_sm);
+     v24_runtime.tx_pio = pio;
+@@ -305,7 +323,7 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
+ 
+     // Load PIO program
+     uint offset = pio_add_program(pio, &tck_txd_program);
+-    LOG_INFO("TXC: program offset=%u\r\n", (unsigned)offset);
++    LOG_DEBUG("TXC: program offset=%u\r\n", (unsigned)offset);
+ 
+     // Route GPIO to PIO
+     pio_gpio_init(pio, V24_TXC_DTE);
+@@ -316,16 +334,59 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARIT
+     pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_CTS, 1, false);
+ 
+     // Configure state machine
+-    pio_sm_config config = tck_txd_program_get_default_config(offset);
+-    sm_config_set_sideset_pins(&config, V24_TXC_DTE);
+-    sm_config_set_out_pins(&config, V24_TXD, 1);
+-    sm_config_set_jmp_pin(&config, V24_CTS);
+-    sm_config_set_out_shift(&config, true, true, CHAR_BIT);
++    pio_sm_config sm_config = tck_txd_program_get_default_config(offset);
++    sm_config_set_sideset_pins(&sm_config, V24_TXC_DTE);
++    sm_config_set_out_pins(&sm_config, V24_TXD, 1);
++    sm_config_set_jmp_pin(&sm_config, V24_CTS);
++    sm_config_set_out_shift(&sm_config, true, true, CHAR_BIT);
+ 
+-    pio_sm_init(pio, pio_sm, offset, &config);
++    pio_sm_init(pio, pio_sm, offset, &sm_config);
+ 
+     // This implicitly activates the sm
+-    tx_clock_update_settings(baudrate, polarities);
++    tx_clock_update_settings(config);
+     LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
+     LOG_INFO("TXC: enabled\r\n");
+ }
++
++static void tx_clock_init_xck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
++{
++    LOG_INFO("Initializing external clock\r\n");
++    LOG_DEBUG("XXC: init pio%u sm%u pin%u\r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm,
++              (unsigned)V24_TXC_DCE);
++
++    pio_sm_claim(pio, pio_sm);
++    v24_runtime.tx_pio = pio;
++    v24_runtime.tx_sm  = pio_sm;
++
++    // Load PIO program
++    uint offset = pio_add_program(pio, &xck_txd_program);
++    LOG_DEBUG("XCK: program offset=%u\r\n", (unsigned)offset);
++
++    // Route GPIO to PIO
++    pio_gpio_init(pio, V24_TXC_DCE);
++    pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_TXC_DCE, 1, false);
++    pio_gpio_init(pio, V24_TXD);
++    pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_TXD, 1, true);
++    pio_gpio_init(pio, V24_CTS);
++    pio_sm_set_consecutive_pindirs(pio, pio_sm, V24_CTS, 1, false);
++
++    // Configure state machine
++    pio_sm_config sm_config = xck_txd_program_get_default_config(offset);
++    sm_config_set_in_pins(&sm_config, V24_TXC_DCE);
++    sm_config_set_out_pins(&sm_config, V24_TXD, 1);
++    sm_config_set_jmp_pin(&sm_config, V24_CTS);
++    sm_config_set_out_shift(&sm_config, true, true, CHAR_BIT);
++
++    pio_sm_init(pio, pio_sm, offset, &sm_config);
++
++    // This implicitly activates the sm
++    tx_clock_update_settings(config);
++    LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
++    LOG_INFO("XCK: enabled\r\n");
++}
++
++void tx_clock_init(PIO pio, uint pio_sm, V24_CONFIG_T* config)
++{
++    config->external_clock ? tx_clock_init_xck(pio, pio_sm, config)
++                           : tx_clock_init_tck(pio, pio_sm, config);
++}
+diff --git a/src/drivers/pio_tx_rx_driver.h b/src/drivers/pio_tx_rx_driver.h
+index f22551b..11ee8b9 100644
+--- a/src/drivers/pio_tx_rx_driver.h
++++ b/src/drivers/pio_tx_rx_driver.h
+@@ -43,10 +43,9 @@ typedef struct
+  * @brief Initialize TX clock/data PIO state machine.
+  * @param pio PIO instance.
+  * @param pio_sm State machine index.
+- * @param baudrate Target synchronous baudrate.
+- * @param polarities TX signal polarity configuration.
++ * @param config V.24 configuration.
+  */
+-void tx_clock_init(PIO pio, uint pio_sm, V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities);
++void tx_clock_init(PIO pio, uint pio_sm, V24_CONFIG_T* config);
+ 
+ /**
+  * @brief Poll TX completion/holdoff state and manage RTS release.
+@@ -99,10 +98,9 @@ void led_mirror_init(void);
+  * @brief Apply TX runtime settings to an already configured TX PIO SM.
+  * Take note that this function relies on tx_clock_init being called before.
+  * This is asserted in debug builds but otherwise UB in production.
+- * @param baudrate New baudrate.
+- * @param polarities TX polarity settings.
++ * @param config V.24 configuration.
+  */
+-void tx_clock_update_settings(V24_BAUDRATE_T baudrate, V24_TX_POLARITIES_T* polarities);
++void tx_clock_update_settings(V24_CONFIG_T* config);
+ 
+ /**
+  * @brief Apply RX runtime settings to an already configured RX PIO SM.
+diff --git a/src/drivers/v24_config.h b/src/drivers/v24_config.h
+index 288d6ee..c9ec54d 100644
+--- a/src/drivers/v24_config.h
++++ b/src/drivers/v24_config.h
+@@ -86,13 +86,15 @@ typedef struct
+ typedef struct
+ {
+     /** Configured serial baudrate. */
+-    V24_BAUDRATE_T   baudrate;
++    V24_BAUDRATE_T baudrate;
+     /** Signal polarity set for TX and RX paths. */
+     V24_POLARITIES_T polarities;
+     /** RTS release holdoff in microseconds after TX completion. */
+-    uint32_t         tx_rts_holdoff_us;
++    uint32_t tx_rts_holdoff_us;
+     /** Internal state: current RTS asserted/deasserted status. */
+-    bool             rts_set;
++    bool rts_set;
++    /** True if XCK, false if TCK */
++    bool external_clock;
+ } V24_CONFIG_T;
+ 
+ #endif /* V24_CONFIG_H */
+diff --git a/src/main.c b/src/main.c
+index d2531b3..cc5bbe3 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -110,10 +110,13 @@ int main(void)
+ 
+     // Initialize PIO
+     // Currently anything faster than 38400 is not supported
+-    tx_clock_init(pio0, 0, app_context.v24_config.baudrate,
+-                  &(app_context.v24_config.polarities.tx_polarities));
++    tx_clock_init(pio0, 0, &app_context.v24_config);
+     rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
+     baudrate_estimator_init(V24_RXC);
++    if (app_context.v24_config.external_clock)
++    {
++        baudrate_estimator_init(V24_TXC_DCE);
++    }
+ 
+     // Enable watchdog, 5s timeout, disabled in debugging
+     watchdog_enable(GLOBAL_WATCHDOG_TIMEOUT_MS, WATCHDOG_DISABLED_FOR_DEBUGGING);
+diff --git a/src/system/baudrate_monitor.c b/src/system/baudrate_monitor.c
+index dff4502..7de0887 100644
+--- a/src/system/baudrate_monitor.c
++++ b/src/system/baudrate_monitor.c
+@@ -13,6 +13,7 @@
+ #include "baudrate_monitor.h"
+ 
+ // Standard library headers
++#include <assert.h>
+ #include <stdbool.h>
+ #include <stddef.h>
+ #include <stdint.h>
+@@ -39,8 +40,10 @@
+ #define BAUD_EMA_ALPHA 0.2F
+ static volatile uint32_t edge_count[PIN_COUNT] = {0};
+ static repeating_timer_t baud_timer;
+-static volatile bool     baud_ready[PIN_COUNT] = {false};
+-static volatile float    baud_hz[PIN_COUNT]    = {0.0F};
++static volatile bool     baud_ready[PIN_COUNT]    = {false};
++static volatile float    baud_hz[PIN_COUNT]       = {0.0F};
++static size_t            current_pin_count        = 0;
++static volatile uint8_t  monitored_pin[PIN_COUNT] = {0};
+ // First/last edge timestamps within the current sample window.
+ static volatile uint64_t first_edge_time_us[PIN_COUNT] = {0};
+ static volatile uint64_t last_edge_time_us[PIN_COUNT]  = {0};
+@@ -70,38 +73,42 @@ static bool baud_timer_cb(repeating_timer_t* timer)
+     (void)timer;
+ 
+     uint64_t now_us = time_us_64();
+-    uint32_t edges  = __atomic_exchange_n(&edge_count[V24_RXC], 0, __ATOMIC_RELAXED);
+-
+-    if (edges > 1)
++    for (size_t pin_index = 0; pin_index < current_pin_count; ++pin_index)
+     {
+-        // Use first/last edge timestamps to avoid timer jitter skewing Hz.
+-        uint32_t save     = save_and_disable_interrupts();
+-        uint64_t first_us = first_edge_time_us[V24_RXC];
+-        uint64_t last_us  = last_edge_time_us[V24_RXC];
+-        restore_interrupts(save);
+-        if (last_us > first_us)
++        uint32_t edges =
++            __atomic_exchange_n(&edge_count[monitored_pin[pin_index]], 0, __ATOMIC_RELAXED);
++        if (edges > 1)
+         {
+-            uint64_t elapsed_us = last_us - first_us;
+-            float    inst_hz    = ((float)(edges - 1) * (float)US_PER_SECOND) / (float)elapsed_us;
+-            if (baud_hz[V24_RXC] <= 0.0F)
+-            {
+-                baud_hz[V24_RXC] = inst_hz;
+-            }
+-            else
++            // Use first/last edge timestamps to avoid timer jitter skewing Hz.
++            uint32_t save     = save_and_disable_interrupts();
++            uint64_t first_us = first_edge_time_us[monitored_pin[pin_index]];
++            uint64_t last_us  = last_edge_time_us[monitored_pin[pin_index]];
++            restore_interrupts(save);
++            if (last_us > first_us)
+             {
+-                // Smooth bursts with a simple EMA.
+-                baud_hz[V24_RXC] =
+-                    (BAUD_EMA_ALPHA * inst_hz) + ((1.0F - BAUD_EMA_ALPHA) * baud_hz[V24_RXC]);
++                uint64_t elapsed_us = last_us - first_us;
++                float    inst_hz = ((float)(edges - 1) * (float)US_PER_SECOND) / (float)elapsed_us;
++                if (baud_hz[monitored_pin[pin_index]] <= 0.0F)
++                {
++                    baud_hz[monitored_pin[pin_index]] = inst_hz;
++                }
++                else
++                {
++                    // Smooth bursts with a simple EMA.
++                    baud_hz[monitored_pin[pin_index]] =
++                        (BAUD_EMA_ALPHA * inst_hz) +
++                        ((1.0F - BAUD_EMA_ALPHA) * baud_hz[monitored_pin[pin_index]]);
++                }
++                baud_ready[monitored_pin[pin_index]] = true;
+             }
+-            baud_ready[V24_RXC] = true;
+         }
+-    }
+-    else
+-    {
+-        // If no edges recently, mark estimate as stale without forcing zero.
+-        if (now_us - last_edge_time_us[V24_RXC] > BAUD_STALE_US)
++        else
+         {
+-            baud_ready[V24_RXC] = false;
++            // If no edges recently, mark estimate as stale without forcing zero.
++            if (now_us - last_edge_time_us[monitored_pin[pin_index]] > BAUD_STALE_US)
++            {
++                baud_ready[monitored_pin[pin_index]] = false;
++            }
+         }
+     }
+ 
+@@ -110,9 +117,23 @@ static bool baud_timer_cb(repeating_timer_t* timer)
+ 
+ void baudrate_estimator_init(V24_PIN_T pin)
+ {
+-    gpio_init(pin);
+-    gpio_set_dir(pin, GPIO_IN);
+-    gpio_pull_down(pin);
+-    gpio_set_irq_enabled_with_callback(pin, GPIO_IRQ_EDGE_RISE, true, &rxc_edge_isr);
+-    add_repeating_timer_ms(BAUD_TIMER_MS, baud_timer_cb, NULL, &baud_timer);
++    assert(pin <= PIN_COUNT);
++    static bool initialized = false;
++    // gpio_init(pin);
++    // gpio_set_dir(pin, GPIO_IN);
++    // gpio_pull_down(pin);
++    if (!initialized)
++    {
++        gpio_set_irq_enabled_with_callback(pin, GPIO_IRQ_EDGE_RISE, true, &rxc_edge_isr);
++        add_repeating_timer_ms(BAUD_TIMER_MS, baud_timer_cb, NULL, &baud_timer);
++        initialized = true;
++    }
++    else
++    {
++        gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_RISE, true);
++    }
++    if (current_pin_count < PIN_COUNT)
++    {
++        monitored_pin[current_pin_count++] = pin;
++    }
+ }
+diff --git a/src/system/cli_commands.c b/src/system/cli_commands.c
+index 8398e61..136cf2c 100644
+--- a/src/system/cli_commands.c
++++ b/src/system/cli_commands.c
+@@ -758,9 +758,6 @@ static void cmd_help(const char* args)
+ static void cmd_status(const char* args)
+ {
+     (void)args;
+-    LOG_PLAIN("status: ok\r\n");
+-    LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
+-              baudrate_estimator_get_current_estimation(V24_RXC));
+     event_t status_event = {.type = EV_STATUS, .data.ptr = NULL, .data_len = 0, .is_inline = false};
+     event_queue_push(&status_event);
+ }
+diff --git a/src/system/event_dispatch.c b/src/system/event_dispatch.c
+index 88aa9bd..f624208 100644
+--- a/src/system/event_dispatch.c
++++ b/src/system/event_dispatch.c
+@@ -324,14 +324,12 @@ static void ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
+     {
+     case V24_BAUDRATE:
+         reinit_v24_config(&app->v24_config, payload->value.baudrate);
+-        tx_clock_update_settings(app->v24_config.baudrate,
+-                                 &(app->v24_config.polarities.tx_polarities));
++        tx_clock_update_settings(&app->v24_config);
+         app->need_prompt = true;
+         break;
+     case V24_POLARITIES:
+         memcpy(&app->v24_config.polarities, &payload->value.polarities, sizeof(V24_POLARITIES_T));
+-        tx_clock_update_settings(app->v24_config.baudrate,
+-                                 &(app->v24_config.polarities.tx_polarities));
++        tx_clock_update_settings(&app->v24_config);
+         rx_clock_update_settings(&(app->v24_config.polarities.rx_polarities));
+         app->need_prompt = true;
+         break;
+@@ -374,13 +372,13 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
+             tx_gap = app->stats.hdlc_frame_ready - app->stats.udp_tx_frames;
+         }
+ 
+-        static uint64_t prev_udp_rx_frames       = 0U;
+-        static uint64_t prev_hdlc_frame_ready    = 0U;
+-        static uint64_t prev_udp_tx_frames       = 0U;
+-        static uint64_t prev_hdlc_decode_fail    = 0U;
+-        static uint64_t prev_serial_rx_bytes     = 0U;
+-        uint32_t        report_now_ms            = to_ms_since_boot(get_absolute_time());
+-        uint32_t        elapsed_ms               = 0U;
++        static uint64_t prev_udp_rx_frames    = 0U;
++        static uint64_t prev_hdlc_frame_ready = 0U;
++        static uint64_t prev_udp_tx_frames    = 0U;
++        static uint64_t prev_hdlc_decode_fail = 0U;
++        static uint64_t prev_serial_rx_bytes  = 0U;
++        uint32_t        report_now_ms         = to_ms_since_boot(get_absolute_time());
++        uint32_t        elapsed_ms            = 0U;
+         if (app->stats.last_report_ms != 0U)
+         {
+             elapsed_ms = report_now_ms - app->stats.last_report_ms;
+@@ -402,13 +400,21 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
+         uint64_t decode_fail_rate   = (d_decode_fail * 1000U) / elapsed_ms;
+         uint64_t serial_rx_rate_bps = (d_serial_rx_bytes * 1000U) / elapsed_ms;
+ 
+-        prev_udp_rx_frames    = app->stats.udp_rx_frames;
+-        prev_hdlc_frame_ready = app->stats.hdlc_frame_ready;
+-        prev_udp_tx_frames    = app->stats.udp_tx_frames;
+-        prev_hdlc_decode_fail = app->stats.hdlc_decode_fail;
+-        prev_serial_rx_bytes  = app->stats.serial_rx_bytes;
++        prev_udp_rx_frames        = app->stats.udp_rx_frames;
++        prev_hdlc_frame_ready     = app->stats.hdlc_frame_ready;
++        prev_udp_tx_frames        = app->stats.udp_tx_frames;
++        prev_hdlc_decode_fail     = app->stats.hdlc_decode_fail;
++        prev_serial_rx_bytes      = app->stats.serial_rx_bytes;
+         app->stats.last_report_ms = report_now_ms;
+ 
++        LOG_PLAIN("status: ok\r\n");
++        LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_RXC,
++                  baudrate_estimator_get_current_estimation(V24_RXC));
++        if (app->v24_config.external_clock)
++        {
++            LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_TXC_DCE,
++                      baudrate_estimator_get_current_estimation(V24_TXC_DCE));
++        }
+         LOG_PLAIN("PIPE STATS\r\n");
+         LOG_PLAIN("  Traffic\r\n");
+         LOG_PLAIN("    Frames    : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
+@@ -440,14 +446,14 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
+                   "  hardcap_bytes=%" PRIu64 "\r\n",
+                   app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
+                   app->stats.sync_hardcap_drop_bytes);
+-        LOG_PLAIN("    Resync    : idle=%" PRIu64 "  hard=%" PRIu64 "  no_progress=%" PRIu64
+-                  "\r\n",
++        LOG_PLAIN("    Resync    : idle=%" PRIu64 "  hard=%" PRIu64 "  no_progress=%" PRIu64 "\r\n",
+                   app->stats.resync_idle_timeout_count, app->stats.resync_hard_fail_count,
+                   app->stats.resync_no_progress_count);
+-        LOG_PLAIN("    Accum     : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
+-                  app->accumulator.position, app->accumulator.processed,
+-                  (int)app->accumulator.state, app->accumulator.bit_offset,
+-                  app->accumulator.candidate_valid ? 1 : 0, app->accumulator.candidate_end);
++        LOG_PLAIN(
++            "    Accum     : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
++            app->accumulator.position, app->accumulator.processed, (int)app->accumulator.state,
++            app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
++            app->accumulator.candidate_end);
+         LOG_PLAIN("    RX Health : acc_pos_max=%" PRIu64 "  rx_fifo_stall=%" PRIu64
+                   "  rx_drop_acc_full=%" PRIu64 "\r\n",
+                   app->stats.accumulator_pos_max, app->stats.rx_fifo_stall_events,
+diff --git a/src/system/event_loop.c b/src/system/event_loop.c
+index cd72923..9eef7f2 100644
+--- a/src/system/event_loop.c
++++ b/src/system/event_loop.c
+@@ -197,7 +197,10 @@ void event_loop(app_ctx_t* app)
+             }
+             break;
+         }
+-        if ((app->stats.serial_rx_bytes > last_frame_ready_bytes) &&
++        bool decode_in_progress = (app->accumulator.state != HDLC_SYNC_STATE_HUNTING) ||
++                                  app->accumulator.candidate_valid ||
++                                  (app->reconstructed_frame.length > 0U);
++        if (decode_in_progress && (app->stats.serial_rx_bytes > last_frame_ready_bytes) &&
+             ((app->stats.serial_rx_bytes - last_frame_ready_bytes) >
+              HDLC_SYNC_NO_PROGRESS_MAX_BYTES))
+         {
