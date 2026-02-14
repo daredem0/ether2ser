@@ -119,9 +119,6 @@ void baudrate_estimator_init(V24_PIN_T pin)
 {
     assert(pin <= PIN_COUNT);
     static bool initialized = false;
-    // gpio_init(pin);
-    // gpio_set_dir(pin, GPIO_IN);
-    // gpio_pull_down(pin);
     if (!initialized)
     {
         gpio_set_irq_enabled_with_callback(pin, GPIO_IRQ_EDGE_RISE, true, &rxc_edge_isr);

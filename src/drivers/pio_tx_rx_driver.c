@@ -32,7 +32,6 @@
 #include "drivers/v24_config.h"
 #include "platform/pinmap.h"
 #include "system/common.h"
-#include "system/error.h"
 
 // Generated headers
 #include "led_activity_mirror.pio.h"
@@ -139,6 +138,21 @@ void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
     reinit_v24_config(config, baudrate);
 }
 
+bool rx_clock_poll_stall(void)
+{
+    const v24_runtime_t* v24_runtime = get_v24_runtime();
+    if (v24_runtime->rx_pio != NULL)
+    {
+        uint32_t rx_stall_mask = (1U << (PIO_FDEBUG_RXSTALL_LSB + v24_runtime->rx_sm));
+        if ((v24_runtime->rx_pio->fdebug & rx_stall_mask) != 0U)
+        {
+            v24_runtime->rx_pio->fdebug = rx_stall_mask;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool rx_get(uint8_t* data)
 {
     assert(v24_runtime.rx_pio != NULL);
@@ -164,6 +178,19 @@ void rx_clock_update_settings(V24_RX_POLARITIES_T* polarities)
     }
 
     pio_sm_set_enabled(v24_runtime.rx_pio, v24_runtime.rx_sm, true);
+}
+
+void rx_clock_hard_reset(void)
+{
+    const v24_runtime_t* v24_runtime = get_v24_runtime();
+    if (v24_runtime->rx_pio != NULL)
+    {
+        pio_sm_set_enabled(v24_runtime->rx_pio, v24_runtime->rx_sm, false);
+        pio_sm_clear_fifos(v24_runtime->rx_pio, v24_runtime->rx_sm);
+        pio_sm_restart(v24_runtime->rx_pio, v24_runtime->rx_sm);
+        pio_sm_clkdiv_restart(v24_runtime->rx_pio, v24_runtime->rx_sm);
+        pio_sm_set_enabled(v24_runtime->rx_pio, v24_runtime->rx_sm, true);
+    }
 }
 
 void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
@@ -237,18 +264,6 @@ bool tx_poll(void)
     gpio_put(V24_RTS, 0);
     v24_runtime.rts_set = false;
     deassert_pending    = false;
-
-    // AFTER RTS is deasserted we turn of the clock. Until then, we
-    // have to keep clocking. To do that we temporarily take control over the pin
-    // gpio_set_function(V24_TXC_DTE, GPIO_FUNC_SIO); // NOLINT(misc-include-cleaner)
-    // gpio_set_dir(V24_TXC_DTE, GPIO_OUT);
-    // gpio_put(V24_TXC_DTE, 0);
-
-    // pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, false);
-    // pio_sm_set_pins_with_mask(v24_runtime.tx_pio, v24_runtime.tx_sm, 0U, 1U << V24_TXC_DTE);
-    // // Return control to pio, state machine is stalled, level will remain
-    // // until more bytes are pushed
-    // gpio_set_function(V24_TXC_DTE, pio_gpio_func(v24_runtime.tx_pio));
     return true;
 }
 
@@ -392,39 +407,4 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_CONFIG_T* config)
 {
     config->external_clock ? tx_clock_init_xck(pio, pio_sm, config)
                            : tx_clock_init_tck(pio, pio_sm, config);
-}
-
-e2s_error_t tx_clock_switch_mode(V24_CONFIG_T* config, bool external_clock)
-{
-    if (!config || !v24_runtime.tx_pio)
-    {
-        return E2S_V24_RUNTIME_NOT_INITIALIZED;
-    }
-    if (config->external_clock == external_clock)
-    {
-        return E2S_OK;
-    }
-
-    PIO  pio = v24_runtime.tx_pio;
-    uint sm  = v24_runtime.tx_sm;
-
-    gpio_put(V24_RTS, 0);
-    v24_runtime.rts_set = false;
-
-    pio_sm_set_enabled(pio, sm, false);
-    pio_sm_clear_fifos(pio, sm);
-    pio_sm_restart(pio, sm);
-    pio_sm_clkdiv_restart(pio, sm);
-
-    gpio_set_function(V24_TXC_DTE, GPIO_FUNC_SIO);
-    gpio_set_dir(V24_TXC_DTE, GPIO_IN);
-    gpio_set_function(V24_TXC_DCE, GPIO_FUNC_SIO);
-    gpio_set_dir(V24_TXC_DCE, GPIO_IN);
-
-    // ensure program offsets added once, then reuse
-    // build mode-specific sm_config + pio_sm_init(...)
-
-    config->external_clock = external_clock;
-    tx_clock_update_settings(config);
-    return E2S_OK;
 }

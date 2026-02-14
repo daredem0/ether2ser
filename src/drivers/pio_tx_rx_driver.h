@@ -116,4 +116,15 @@ void rx_clock_update_settings(V24_RX_POLARITIES_T* polarities);
  */
 const v24_runtime_t* get_v24_runtime(void);
 
+/**
+ * @brief Disable RX Path, clear fifos, restart SMs and CLKDIV and enable again.
+ */
+void rx_clock_hard_reset(void);
+
+/**
+ * @brief Poll RX FIFO stall events and update the provided event counter.
+ * @return True if stalled, false otherwise.
+ */
+bool rx_clock_poll_stall(void);
+
 #endif /* PIO_TX_RX_DRIVER_H */
