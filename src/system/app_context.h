@@ -82,6 +82,7 @@ typedef struct
     uint64_t accumulator_pos_max;
     uint64_t rx_fifo_stall_events;
     uint64_t serial_rx_drop_acc_full;
+    uint64_t hunt_idle_drop_bytes;
 
     uint32_t last_report_ms;
 } payload_statistics_t;

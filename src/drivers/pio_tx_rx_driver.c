@@ -136,7 +136,7 @@ void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 {
     config->polarities = init_polarities();
     reinit_v24_config(config, baudrate);
-    config->external_clock = true;
+    config->external_clock = false;
 }
 
 bool rx_get(uint8_t* data)

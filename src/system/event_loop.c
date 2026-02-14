@@ -58,12 +58,43 @@ static void print_prompt(app_ctx_t* app)
     }
 }
 
+static bool event_loop_should_drop_hunt_idle_byte(app_ctx_t* app, uint8_t rx_byte,
+                                                  uint32_t* idle_run_length)
+{
+    if (!app || !idle_run_length)
+    {
+        return false;
+    }
+
+    bool in_external_hunting = app->v24_config.external_clock &&
+                               (app->accumulator.state == HDLC_SYNC_STATE_HUNTING);
+    if (!in_external_hunting)
+    {
+        *idle_run_length = 0U;
+        return false;
+    }
+
+    if (rx_byte == 0x00U || rx_byte == 0xFFU)
+    {
+        if (*idle_run_length >= 2U)
+        {
+            return true;
+        }
+        (*idle_run_length)++;
+        return false;
+    }
+
+    *idle_run_length = 0U;
+    return false;
+}
+
 void event_loop(app_ctx_t* app)
 {
     static uint8_t  rx_byte                 = 0;
     static uint8_t  hdlc_decode_fail_streak = 0;
     static uint64_t last_rx_byte_us         = 0U;
     static uint64_t last_frame_ready_bytes  = 0U;
+    static uint32_t hunt_idle_run_length    = 0U;
     bool            work_done               = false;
     while (true)
     {
@@ -77,6 +108,11 @@ void event_loop(app_ctx_t* app)
         {
             work_done = true;
             rx_drained_early++;
+            if (event_loop_should_drop_hunt_idle_byte(app, rx_byte, &hunt_idle_run_length))
+            {
+                app->stats.hunt_idle_drop_bytes++;
+                continue;
+            }
             if (!hdlc_sync_acc_process_byte(&app->accumulator, rx_byte))
             {
                 app->stats.serial_rx_drop_acc_full++;
@@ -141,6 +177,11 @@ void event_loop(app_ctx_t* app)
         {
             work_done = true;
             rx_drained++;
+            if (event_loop_should_drop_hunt_idle_byte(app, rx_byte, &hunt_idle_run_length))
+            {
+                app->stats.hunt_idle_drop_bytes++;
+                continue;
+            }
             if (!hdlc_sync_acc_process_byte(&app->accumulator, rx_byte))
             {
                 app->stats.serial_rx_drop_acc_full++;
