@@ -64,16 +64,12 @@ typedef struct
     size_t            candidate_end;
     /** Whether a valid candidate is currently available. */
     bool              candidate_valid;
-    size_t            candidate_i;
-    uint8_t           candidate_bit_pos;
-    bool              resume_pending;
-    size_t            resume_i;
-    uint8_t           resume_bit_pos;
+    /** Bit offset used to align raw bytes into HDLC bytes. */
     uint8_t           bit_offset;
+    /** Alignment direction for non-zero @ref bit_offset. */
     bool              align_shift_right;
     HDLC_SYNC_STATE_T state;
     uint8_t           sync_byte;
-    uint16_t          sync_accumulator;
 
     uint32_t lookahead_wait_syncing;
     uint32_t lookahead_wait_synced;

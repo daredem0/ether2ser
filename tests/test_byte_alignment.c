@@ -346,7 +346,6 @@ void test_hdlc_sync_consume_candidate_drops_prefix_and_resets(void)
     accumulator.candidate_end = 3;
     accumulator.state = HDLC_SYNC_STATE_SYNCED;
     accumulator.bit_offset = 2;
-    accumulator.resume_pending = true;
 
     hdlc_sync_acc_consume_candidate(&accumulator, true);
 
@@ -357,7 +356,6 @@ void test_hdlc_sync_consume_candidate_drops_prefix_and_resets(void)
     TEST_ASSERT_EQUAL(HDLC_SYNC_STATE_HUNTING, accumulator.state);
     TEST_ASSERT_FALSE(accumulator.candidate_valid);
     TEST_ASSERT_EQUAL_UINT8(0, accumulator.bit_offset);
-    TEST_ASSERT_FALSE(accumulator.resume_pending);
     TEST_ASSERT_EQUAL_UINT32(1, accumulator.consume_count);
 }
 

@@ -26,6 +26,63 @@
 #define HDLC_SYNC_MAX_REASONABLE_FRAME_SIZE_BYTES 2048U
 #define HDLC_SYNC_SHORT_BUFFER_SEARCH_LIMIT 64U
 
+static void hdlc_sync_drop_prefix(HDLC_SYNC_ACCUMULATOR_T* accumulator, size_t drop_count)
+{
+    if (!accumulator || drop_count == 0)
+    {
+        return;
+    }
+
+    if (drop_count >= accumulator->position)
+    {
+        accumulator->position  = 0;
+        accumulator->processed = 0;
+        return;
+    }
+
+    size_t remaining = accumulator->position - drop_count;
+    memmove(accumulator->buffer, accumulator->buffer + drop_count, remaining);
+    accumulator->position = remaining;
+}
+
+static void hdlc_sync_reset_hunting_state(HDLC_SYNC_ACCUMULATOR_T* accumulator)
+{
+    if (!accumulator)
+    {
+        return;
+    }
+
+    accumulator->processed         = 0;
+    accumulator->candidate_start   = 0;
+    accumulator->candidate_end     = 0;
+    accumulator->candidate_valid   = false;
+    accumulator->state             = HDLC_SYNC_STATE_HUNTING;
+    accumulator->bit_offset        = 0;
+    accumulator->align_shift_right = false;
+}
+
+static void hdlc_sync_reject_oversized_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator,
+                                                  HDLC_FRAME_T* out_frame, size_t* scan_index)
+{
+    if (!accumulator || !out_frame || !scan_index)
+    {
+        return;
+    }
+
+    // Candidate grew far beyond expected frame sizes; treat it as false lock and
+    // retry from the next raw byte so alternate alignments can be tested.
+    size_t drop = accumulator->candidate_start + 1;
+    if (drop > accumulator->position)
+    {
+        drop = accumulator->position;
+    }
+
+    hdlc_sync_drop_prefix(accumulator, drop);
+    hdlc_sync_reset_hunting_state(accumulator);
+    out_frame->length = 0;
+    *scan_index       = 0;
+}
+
 static bool hdlc_sync_get_aligned_byte(const HDLC_SYNC_ACCUMULATOR_T* accumulator, size_t raw_index,
                                        uint8_t bit_offset, bool shift_right, uint8_t* out_byte)
 {
@@ -207,16 +264,10 @@ void hdlc_sync_acc_init(HDLC_SYNC_ACCUMULATOR_T* accumulator, uint8_t sync_byte)
     accumulator->candidate_start        = 0;
     accumulator->candidate_end          = 0;
     accumulator->candidate_valid        = false;
-    accumulator->candidate_i            = 0;
-    accumulator->candidate_bit_pos      = 0;
-    accumulator->resume_pending         = false;
-    accumulator->resume_i               = 0;
-    accumulator->resume_bit_pos         = 0;
     accumulator->bit_offset             = 0;
     accumulator->align_shift_right      = false;
     accumulator->state                  = HDLC_SYNC_STATE_HUNTING;
     accumulator->sync_byte              = sync_byte;
-    accumulator->sync_accumulator       = 0;
     accumulator->lookahead_wait_syncing = 0;
     accumulator->lookahead_wait_synced  = 0;
     accumulator->frame_ready_count      = 0;
@@ -286,8 +337,6 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
                 accumulator->bit_offset        = found_bit_pos;
                 accumulator->align_shift_right = found_shift_dir;
                 accumulator->candidate_start   = start_index;
-                accumulator->candidate_i       = start_index + 1;
-                accumulator->candidate_bit_pos = found_bit_pos;
                 accumulator->candidate_valid   = false;
                 out_frame->length              = 1;
                 out_frame->payload[0]          = accumulator->sync_byte;
@@ -302,31 +351,7 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
         case HDLC_SYNC_STATE_SYNCING:
             if (out_frame->length >= HDLC_SYNC_MAX_REASONABLE_FRAME_SIZE_BYTES)
             {
-                // Candidate grew far beyond expected frame sizes; treat it as false lock and
-                // retry from the next raw byte so alternate alignments can be tested.
-                size_t drop = accumulator->candidate_start + 1;
-                if (drop > accumulator->position)
-                {
-                    drop = accumulator->position;
-                }
-                if (drop > 0)
-                {
-                    size_t remaining = accumulator->position - drop;
-                    memmove(accumulator->buffer, accumulator->buffer + drop, remaining);
-                    accumulator->position = remaining;
-                }
-                accumulator->processed         = 0;
-                accumulator->candidate_start   = 0;
-                accumulator->candidate_end     = 0;
-                accumulator->candidate_valid   = false;
-                accumulator->candidate_i       = 0;
-                accumulator->candidate_bit_pos = 0;
-                accumulator->state             = HDLC_SYNC_STATE_HUNTING;
-                accumulator->bit_offset        = 0;
-                accumulator->align_shift_right = false;
-                accumulator->sync_accumulator  = 0;
-                out_frame->length              = 0;
-                scan_index                     = 0;
+                hdlc_sync_reject_oversized_candidate(accumulator, out_frame, &scan_index);
                 break;
             }
             if (!hdlc_sync_get_aligned_byte(accumulator, scan_index, accumulator->bit_offset,
@@ -352,31 +377,7 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
         case HDLC_SYNC_STATE_SYNCED:
             if (out_frame->length >= HDLC_SYNC_MAX_REASONABLE_FRAME_SIZE_BYTES)
             {
-                // Candidate grew far beyond expected frame sizes; treat it as false lock and
-                // retry from the next raw byte so alternate alignments can be tested.
-                size_t drop = accumulator->candidate_start + 1;
-                if (drop > accumulator->position)
-                {
-                    drop = accumulator->position;
-                }
-                if (drop > 0)
-                {
-                    size_t remaining = accumulator->position - drop;
-                    memmove(accumulator->buffer, accumulator->buffer + drop, remaining);
-                    accumulator->position = remaining;
-                }
-                accumulator->processed         = 0;
-                accumulator->candidate_start   = 0;
-                accumulator->candidate_end     = 0;
-                accumulator->candidate_valid   = false;
-                accumulator->candidate_i       = 0;
-                accumulator->candidate_bit_pos = 0;
-                accumulator->state             = HDLC_SYNC_STATE_HUNTING;
-                accumulator->bit_offset        = 0;
-                accumulator->align_shift_right = false;
-                accumulator->sync_accumulator  = 0;
-                out_frame->length              = 0;
-                scan_index                     = 0;
+                hdlc_sync_reject_oversized_candidate(accumulator, out_frame, &scan_index);
                 break;
             }
             if (!hdlc_sync_get_aligned_byte(accumulator, scan_index, accumulator->bit_offset,
@@ -399,10 +400,9 @@ e2s_error_t hdlc_sync_acc_poll(HDLC_SYNC_ACCUMULATOR_T* accumulator, HDLC_FRAME_
             if (aligned == accumulator->sync_byte)
             {
                 accumulator->frame_ready_count++;
-                accumulator->state            = HDLC_SYNC_STATE_HUNTING;
-                accumulator->sync_accumulator = 0;
-                accumulator->candidate_end    = scan_index + 1;
-                accumulator->candidate_valid  = true;
+                accumulator->state           = HDLC_SYNC_STATE_HUNTING;
+                accumulator->candidate_end   = scan_index + 1;
+                accumulator->candidate_valid = true;
 
                 // For diagnostics/tests we report the equivalent left-shift bit offset.
                 if (accumulator->align_shift_right && accumulator->bit_offset > 0)
@@ -437,9 +437,7 @@ out:
         {
             drop = accumulator->position;
         }
-        size_t remaining = accumulator->position - drop;
-        memmove(accumulator->buffer, accumulator->buffer + drop, remaining);
-        accumulator->position = remaining;
+        hdlc_sync_drop_prefix(accumulator, drop);
         accumulator->processed = 0;
     }
 
@@ -471,24 +469,10 @@ void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool 
     }
     if (drop > 0)
     {
-        size_t remaining = accumulator->position - drop;
         accumulator->consume_count++;
-        memmove(accumulator->buffer, accumulator->buffer + drop, remaining);
-        accumulator->position = remaining;
+        hdlc_sync_drop_prefix(accumulator, drop);
     }
-    accumulator->processed         = 0;
-    accumulator->candidate_start   = 0;
-    accumulator->candidate_end     = 0;
-    accumulator->candidate_valid   = false;
-    accumulator->candidate_i       = 0;
-    accumulator->candidate_bit_pos = 0;
-    accumulator->bit_offset        = 0;
-    accumulator->align_shift_right = false;
-    accumulator->state             = HDLC_SYNC_STATE_HUNTING;
-    accumulator->sync_accumulator  = 0;
-    accumulator->resume_pending    = false;
-    accumulator->resume_i          = 0;
-    accumulator->resume_bit_pos    = 0;
+    hdlc_sync_reset_hunting_state(accumulator);
 
     // Hard cap: if buffer is near full, drop oldest bytes to keep bounded.
     if (accumulator->position >= (RX_HDLC_SYNC_MAX_BUFFER_SIZE - 16))
@@ -497,9 +481,7 @@ void hdlc_sync_acc_consume_candidate(HDLC_SYNC_ACCUMULATOR_T* accumulator, bool 
         size_t drop = accumulator->position - keep;
         accumulator->hardcap_drop_events++;
         accumulator->hardcap_drop_bytes += (uint32_t)drop;
-        memmove(accumulator->buffer, accumulator->buffer + drop, keep);
-        accumulator->position       = keep;
-        accumulator->processed      = 0;
-        accumulator->resume_pending = false;
+        hdlc_sync_drop_prefix(accumulator, drop);
+        accumulator->processed = 0;
     }
 }
