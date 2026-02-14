@@ -1,233 +1,399 @@
 # Software Design and Architecture Description (SDD/SAD)
 
 ## 1. Purpose
-This document specifies the current software design and architecture of `ether2ser` as implemented in `src/`.
+This document describes the software design and architecture of `ether2ser` as currently implemented in `src/`.
 
 Scope:
 - Runtime architecture and module decomposition
-- Data and control flows
-- Protocol handling (UDP, HDLC, synchronous V.24)
-- Configuration, persistence, logging, and diagnostics
+- Data and control flows (UDP, HDLC, synchronous V.24)
+- Concurrency model and scheduling behavior
+- Configuration, persistence, CLI, logging, diagnostics
 - Build and test structure
 
 ## 2. System Context
-`ether2ser` runs on W55RP20-EVB-PICO (RP2040 + W5500) and bridges:
+`ether2ser` runs on **W55RP20-EVB-PICO** (RP2040 + integrated W5500) and bridges:
 - Ethernet UDP datagrams
-- Synchronous V.24 serial bitstream
+- Synchronous V.24 serial stream (HDLC framed)
 
 Functional behavior:
 - UDP payload -> HDLC bit-stuffed frame -> serial TX
-- Serial RX bitstream -> HDLC sync + decode -> UDP payload TX
-- USB CDC CLI for runtime configuration and status
-- Persistent flash-backed configuration
+- Serial RX stream -> HDLC sync/deframe/CRC -> UDP payload TX
+- USB CDC CLI for runtime control and diagnostics
+- Flash-backed persistent configuration
 
 ## 3. Architectural Style
-The firmware is a single-threaded polling system with one primary runtime loop.
+The firmware uses a **polling control loop** on core0 plus a **dedicated logging drain loop** on core1.
 
 Design decisions:
-- Deterministic control flow without RTOS scheduling
-- Static memory allocation for all runtime paths
-- Direct high-throughput data path in loop body
-- Event queue for command/configuration control-plane actions
+- Deterministic polling control flow (no RTOS)
+- Static allocation for runtime data paths
+- Bounded queues and bounded protocol accumulators
+- Event queue for control-plane actions (CLI/config/status)
+- Asynchronous logging via lock-free single-producer/single-consumer queue
+
+Concurrency model:
+- **Core0**: network/serial data plane + CLI + event dispatch + watchdog feed
+- **Core1**: drains log queue to stdout and flushes
+
+### 3.1 High-Level Context Diagram
+```mermaid
+flowchart LR
+    Host[USB CLI Host]
+    FW[ether2ser Firmware<br/>RP2040]
+    W5500[W5500 Ethernet MAC/PHY]
+    Peer[V.24 Synchronous Peer]
+    Flash[(Flash Config Sector)]
+
+    Host <-->|USB CDC CLI/Logs| FW
+    FW <-->|UDP frames| W5500
+    FW <-->|TXD/TXC, RXD/RXC<br/>RTS/CTS/DTR/DCD| Peer
+    FW <-->|Read/Write Config| Flash
+```
 
 ## 4. Runtime Architecture
-### 4.1 Initialization Path (`src/main.c`)
-Startup order:
-1. Initialize USB stdio and wait for host visibility.
-2. Initialize W5500 and board I/O direction defaults.
-3. Load persistent configuration (or defaults if invalid).
-4. Build and initialize `app_ctx_t`.
-5. Configure UDP socket and TX queue.
-6. Initialize PIO TX/RX engines and baudrate monitor.
-7. Enter `event_loop(app)`.
+### 4.1 Startup Path (`src/main.c`)
+Startup sequence:
+1. Initialize stdio/USB (`stdio_init_all`) and delay for host enumeration.
+2. Initialize W5500 driver (`w5500_driver_init`) and board pin directions (`init_pins`).
+3. Validate/read persistent config (`config_is_valid`, `config_read`).
+4. Initialize app context (`init_app`).
+5. Open local UDP socket (`w5500_open_udp_socket`).
+6. Initialize TX queue (`tx_queue_init`).
+7. Initialize PIO TX (`tx_clock_init`) and RX (`rx_clock_init`) state machines.
+8. Initialize baudrate estimator for RX clock and optionally TX external clock.
+9. Enable watchdog.
+10. Print banner/version; optionally dump config in debug log level.
+11. Launch core1 log drain loop (`multicore_launch_core1`).
+12. Initialize event queue (`event_queue_init`).
+13. Assert DTR and enter `event_loop(app)`.
 
 ### 4.2 Main Loop (`src/system/event_loop.c`)
-Loop cadence:
-- Poll CLI input (`cli_poll`) and enqueue CLI events.
-- Poll UDP RX (`w5500_poll_rx`) and enqueue HDLC TX frames.
-- Drain TX queue into PIO TX FIFO (`tx_queue_drain`).
-- Run TX completion/RTS holdoff logic (`tx_poll`) when queue is empty.
-- Drain RX FIFO bytes into HDLC sync accumulator.
-- Poll accumulator for complete frames and decode/forward immediately.
-- Mirror sync internals into runtime statistics.
-- Dispatch up to 20 queued events each iteration.
-- Render CLI prompt when output occurred.
-- Sleep `50 us`.
+Each iteration:
+1. Feed watchdog.
+2. Poll CLI input (`cli_poll`) and enqueue CLI line events.
+3. Early RX drain from PIO FIFO into HDLC sync accumulator.
+4. Poll UDP RX (`w5500_poll_rx`) and enqueue encoded frames into TX queue.
+5. Poll TX queue stats and drain up to `TX_QUEUE_DRAIN_CHUNK_SIZE` bytes to PIO TX.
+6. If queue empty, run TX completion/RTS holdoff logic (`tx_poll`).
+7. Second RX drain pass.
+8. Apply HDLC idle-timeout resync policy.
+9. Poll HDLC sync for ready frames; decode and forward UDP immediately.
+10. Apply HDLC no-progress resync policy.
+11. Update runtime stats snapshots (decode stats, queue HWM/drops, log drops/HWM).
+12. Poll RX FIFO stall flags.
+13. Dispatch control events (up to 20 per loop, or 2 while TX active).
+14. Redraw CLI prompt if output happened.
+15. Sleep `50 us` only when no work was done.
+
+### 4.3 Runtime Concurrency Diagram
+```mermaid
+flowchart LR
+    subgraph RP2040
+        C0[Core0<br/>event_loop]
+        C1[Core1<br/>log_core1_drain loop]
+        LQ[(Log Queue)]
+        EQ[(Event Queue)]
+        TXQ[(TX Queue)]
+        ACC[(HDLC Sync Accumulator)]
+    end
+
+    C0 --> EQ
+    C0 --> TXQ
+    C0 --> ACC
+    C0 --> LQ
+    C1 --> LQ
+```
+
+HDLC resync/recovery policies in loop:
+- Idle timeout (`HDLC_SYNC_IDLE_TIMEOUT_US`)
+- Decode fail streak hard resync (`HDLC_DECODE_FAIL_STREAK_LIMIT`)
+- No-progress byte-window resync with different thresholds for internal/external clock
+- External-clock hunting idle-byte suppression for long runs of `0x00/0xFF`
 
 ## 5. Module Decomposition
 ### 5.1 Application Context (`src/system/app_context.h`)
-`app_ctx_t` is the central state container:
-- Runtime config mirrors (`local`, `destination`, `sender`, `net`, `v24`)
+`app_ctx_t` is the central shared state:
+- Effective runtime configs (`local`, `destination`, `sender`, `net`, `v24`)
 - Persistent config snapshot
-- UDP RX/TX buffers
-- HDLC reconstructed frame buffer
-- HDLC sync accumulator
-- TX queue instance and backing storage
+- UDP RX/TX frame buffers
+- HDLC reconstructed frame + sync accumulator
+- TX queue + backing storage
 - Runtime statistics (`payload_statistics_t`)
 - CLI prompt state
 
-### 5.2 Control Plane
-- `event_queue.*`: bounded ring-based event transport
-- `event_dispatch.c`: handlers for config/status/CLI events
-- `cli_usb_cdc.c`: USB line I/O and line buffering
-- `cli_parser.c` + `cli_commands.c`: command parsing and command execution
+### 5.2 Control Plane Modules
+- `system/event_queue.*`: bounded event transport
+- `system/event_dispatch.*`: event handlers for status/config/CLI actions
+- `system/cli_usb_cdc.*`: USB CDC line input and event emission
+- `system/cli_commands.*`: command routing and event creation
+- `system/cli_parser.*`: strict argument parsing and pin lookup
+- `platform/watchdog.*`: reboot abstraction
 
-### 5.3 Data Plane
-- UDP ingress/egress: `drivers/w5500_driver.c`
-- HDLC encode/decode/sync: `protocol/hdlc_*.c`
-- Serial TX/RX engines: `drivers/pio_tx_rx_driver.c`
-- Serial TX buffering: `drivers/tx_queue.c`
+### 5.3 Data Plane Modules
+- `drivers/w5500_driver.*`: UDP RX/TX and socket/network control
+- `protocol/hdlc_encoder.*`: bit-stuffed HDLC encoding
+- `protocol/hdlc_sync.*`: bit-phase synchronization and frame candidate assembly
+- `protocol/hdlc_decoder.*`: unstuffing + CRC validation
+- `drivers/pio_tx_rx_driver.*`: PIO TX/RX engines, RTS gating, clock/polarity updates
+- `drivers/tx_queue.*`: HDLC frame queue + partial-drain tracking
 
-### 5.4 Persistence and Logging
-- Flash config read/write/wipe: `system/persistent_config.*`
-- Logging runtime and API: `system/log.c`, `system/common.h`
+### 5.4 Support Modules
+- `system/log.c` + `system/common.h`: logging API/macros + async queue
+- `system/persistent_config.*`: flash-backed config read/write/wipe
+- `system/baudrate_monitor.*`: edge-based clock estimation
+- `system/ringbuffer.*`: generic fixed-size ring used by TX queue
+- `drivers/gpio_driver.*`: initial pin direction defaults + default V.24 polarities
 
 ## 6. Data Flow Design
-### 6.1 UDP to Serial
-1. `w5500_poll_rx` receives UDP payload to `app->rx_frame_buffer`.
-2. `tx_queue_enqueue_udp_frame` calls `hdlc_encode(..., lsb_first=true)`.
-3. Encoded frame enters TX ring queue as `TX_QUEUE_ENTRY_T`.
-4. `tx_queue_drain` pushes bytes to PIO via `tx_put`.
-5. TX clock/data state machine emits synchronous serial data.
+### 6.1 UDP -> Serial
+1. `w5500_poll_rx` fills `app->rx_frame_buffer`.
+2. `tx_queue_enqueue_udp_frame` encodes to HDLC (`hdlc_encode(..., lsb_first=true)`).
+3. Encoded frame is queued as `TX_QUEUE_ENTRY_T`.
+4. `tx_queue_drain` pushes bytes via `tx_put` into TX PIO FIFO.
+5. TX PIO emits bits on TXD with internal (TCK) or external (XCK) clock mode.
 
-### 6.2 Serial to UDP
-1. `rx_get` drains bytes from RX PIO FIFO.
-2. `hdlc_sync_acc_process_byte` appends into sync accumulator.
-3. `hdlc_sync_acc_poll` detects an aligned HDLC frame candidate.
-4. `hdlc_decode(..., lsb_first=true)` performs unstuff + CRC check.
-5. On decode success, `w5500_udp_tx` forwards payload.
-6. Candidate window is consumed with `hdlc_sync_acc_consume_candidate`.
+```mermaid
+flowchart LR
+    U[UDP RX] --> QE[tx_queue_enqueue_udp_frame]
+    QE --> EN[hdlc_encode]
+    EN --> TQ[(TX Queue)]
+    TQ --> DR[tx_queue_drain]
+    DR --> PIO[PIO TX]
+    PIO --> WIRE[V.24 TX wire]
+```
+
+### 6.2 Serial -> UDP
+1. `rx_get` drains RX PIO FIFO bytes.
+2. `hdlc_sync_acc_process_byte` appends raw bytes to accumulator.
+3. `hdlc_sync_acc_poll` returns aligned candidate frame when closed by flag.
+4. `hdlc_decode(..., lsb_first=true)` unstuff/CRC-checks.
+5. On success, `w5500_udp_tx` forwards payload to configured destination.
+6. Candidate region is consumed by `hdlc_sync_acc_consume_candidate(accept)`.
+
+```mermaid
+flowchart LR
+    RXWIRE[V.24 RX wire] --> PIO[PIO RX]
+    PIO --> ACCIN[hdlc_sync_acc_process_byte]
+    ACCIN --> POLL[hdlc_sync_acc_poll]
+    POLL --> DEC[hdlc_decode]
+    DEC -->|CRC OK| UDPTX[w5500_udp_tx]
+    DEC -->|accept/reject| CONS[hdlc_sync_acc_consume_candidate]
+```
 
 ## 7. Event System Design
-### 7.1 Queue Model (`src/system/event_queue.h`)
-- Capacity: `EVENT_QUEUE_CAPACITY = 16`
-- Inline payload: `bytes[16]` for small objects
-- Pointer payload: external storage with explicit length
-- Access helper: `event_get_payload_ptr(event, required_size, out)`
+### 7.1 Queue Model (`src/system/event_queue.h/.c`)
+- Queue slots: `EVENT_QUEUE_CAPACITY = 16`
+- Effective max queued entries: 15 (one slot reserved for full/empty disambiguation)
+- Payload modes:
+  - inline (`bytes[16]`) for small value payloads
+  - pointer (`data.ptr`) for external storage
+- Validation helper: `event_get_payload_ptr(event, required_size, out)`
+- Instrumentation: high-water mark + push-drop counter
 
-### 7.2 Event Categories
-Used event types include:
-- CLI and status: `EV_CLI_LINE`, `EV_STATUS`
-- Config persistence: `EV_SAVE_CONFIG`, `EV_WIPE_CONFIG`
-- Runtime settings: `EV_SET_NET_SETTINGS`, `EV_GET_NET_SETTINGS`, `EV_SET_V24_SETTINGS`, `EV_GET_V24_SETTINGS`
-- Data-path event ids exist in enum (`EV_UDP_RX`, `EV_UDP_TX`, `EV_HDLC_DECODE`) and remain supported by dispatcher paths.
+### 7.2 Event Types
+Implemented event types:
+- CLI/status/memory: `EV_CLI_LINE`, `EV_STATUS`, `EV_MEM`
+- Persistence/reboot: `EV_SAVE_CONFIG`, `EV_WIPE_CONFIG`, `EV_REBOOT`
+- Settings: `EV_SET_NET_SETTINGS`, `EV_GET_NET_SETTINGS`, `EV_SET_V24_SETTINGS`, `EV_GET_V24_SETTINGS`
+- Legacy/data-path events still handled: `EV_UDP_RX`, `EV_UDP_TX`, `EV_HDLC_DECODE`
 
 ## 8. Protocol Design
 ### 8.1 HDLC Encoder (`src/protocol/hdlc_encoder.c`)
-`hdlc_encode` behavior:
-- Adds start/end flag bytes
-- Emits payload and CRC bitwise
-- Applies bit stuffing (insert `0` after five consecutive `1` bits)
-- Supports configurable bit order (`lsb_first`)
-- Produces byte-packed frame buffer
+`hdlc_encode`:
+- Prepends/appends flag byte (`0x7E`)
+- Appends CRC16-CCITT-FALSE
+- Bit-stuffs (insert `0` after 5 consecutive `1` bits)
+- Supports selectable bit order (`lsb_first`)
 
-Secondary API:
-- `hdlc_encode_byte` is present for byte-escaped framing compatibility/tests.
+Compatibility path:
+- `hdlc_encode_byte` implements escaped-byte framing (`0x7D` escaping)
 
 ### 8.2 HDLC Synchronizer (`src/protocol/hdlc_sync.c`)
-Accumulator behavior:
-- States: `HUNTING`, `SYNCING`, `SYNCED`
-- Searches for sync byte across bit offsets
-- Builds aligned candidate frames in output buffer
-- Tracks candidate window and consumes it explicitly
-- Maintains bounded memory with hard-cap drop logic near buffer limits
+State machine:
+- `HUNTING` -> detect opening flag + alignment
+- `SYNCING` -> consume first aligned byte
+- `SYNCED` -> consume aligned bytes until closing flag
+
+```mermaid
+stateDiagram-v2
+    [*] --> HUNTING
+    HUNTING --> SYNCING: opening flag found + alignment lock
+    SYNCING --> SYNCED: first aligned byte consumed
+    SYNCED --> HUNTING: closing flag => FRAME_READY
+    SYNCING --> HUNTING: oversized/invalid lock recovery
+    SYNCED --> HUNTING: oversized/invalid lock recovery
+```
+
+Key behavior:
+- Handles non-byte-aligned streams via bit-offset + shift direction
+- Uses short-buffer exhaustive search and fast opening search for longer windows
+- Produces encoded candidate frame; decode/accept decision stays in caller
+- Reject strategy advances only one raw byte from candidate start to preserve alternate phases
+- Hardcap drop logic keeps bounded memory
 
 ### 8.3 HDLC Decoder (`src/protocol/hdlc_decoder.c`)
-`hdlc_decode` behavior:
-- Validates frame envelope
-- Extracts bits with unstuffing
-- Reassembles payload bytes
+`hdlc_decode`:
+- Validates flag envelope
+- De-stuffs bits
+- Reassembles bytes
 - Verifies CRC16
-- Supports configurable bit order (`lsb_first`)
+- Tracks cumulative decode failure reasons
 
-Secondary API:
-- `hdlc_decode_byte` is present for compatibility/tests.
+Compatibility path:
+- `hdlc_decode_byte` supports escaped-byte framing
 
 ## 9. Driver Design
 ### 9.1 W5500 Driver (`src/drivers/w5500_driver.c`)
-- UDP socket configuration and non-blocking poll model
-- RX payload extraction and TX send API
-- Runtime network reconfiguration support
+- Initializes WIZnet port layer (PIO SPI + critical section + chip init/check)
+- Opens non-blocking UDP socket on configured local port
+- Poll-based RX (`recvfrom`) and TX (`sendto`)
+- Local/remote socket reconfigure via close+reopen
+- Broadcast address derived from IP/subnet
 
 ### 9.2 PIO TX/RX Driver (`src/drivers/pio_tx_rx_driver.c`)
-- TX and RX state machines on RP2040 PIO
-- TX path manages RTS assertion/deassertion lifecycle
-- TX poll applies configurable holdoff (`tx_rts_holdoff_us`) before releasing RTS after FIFO drain/stall
-- End-of-burst behavior explicitly forces TX clock (`V24_TXC_DTE`) low in GPIO mode and then returns pin control to the configured PIO function
-- Runtime clock/polarity update APIs used by V.24 config events
-- Driver stores runtime-selected PIO instance and SM indices for both TX and RX paths (`tx_pio/tx_sm`, `rx_pio/rx_sm`) and uses them in FIFO access and update operations
-- Optional instrumentation reports SM stall conditions
+TX path:
+- Two TX programs:
+  - internal clock mode: `tck_txd.pio` (drives `V24_TXC_DTE`)
+  - external clock mode: `xck_txd.pio` (samples `V24_TXC_DCE`)
+- `tx_put` asserts RTS on first byte and feeds PIO FIFO
+- `tx_poll` deasserts RTS after FIFO-empty/stall plus configurable holdoff
+
+RX path:
+- `rck_rxd.pio` samples RXD using RXC timing
+- Joined RX FIFO for extra buffering headroom
+- `rx_clock_hard_reset` clears/restarts RX SM for recovery
+- `rx_clock_poll_stall` reports FIFO stall events
+
+Runtime updates:
+- `tx_clock_update_settings` applies baud/polarities for active TX SM
+- `rx_clock_update_settings` applies RX polarities
+- Clock mode switching is persisted and applied via reboot policy (not hot-swapped in-place)
 
 ### 9.3 TX Queue (`src/drivers/tx_queue.c`)
 - Queue depth: `TX_FRAME_QUEUE_SIZE = 32`
-- Entry storage: `payload[4000]`, `HDLC_FRAME_T`, per-entry `offset`
-- Tracks serialized bytes written on wire (`tx_wire_bytes`)
-- Emits queue health diagnostics
+- Max frame storage per entry: `TX_FRAME_MAX_SIZE_BYTE = 2048`
+- Tracks per-entry drain offset and cumulative serialized wire bytes
+- Emits queue usage diagnostics and threshold warnings
+
+### 9.4 Baudrate Monitor (`src/system/baudrate_monitor.c`)
+- Edge ISR increments per-pin edge counters
+- Periodic timer computes Hz from first/last edge timestamps
+- EMA smoothing for stability
+- Stale detection when edges stop
 
 ## 10. Configuration and Persistence
 ### 10.1 Persistent Model (`src/system/persistent_config.*`)
-- Flash-backed `config_t` with magic/version validation
-- Includes network, UDP endpoint, V.24, and loglevel settings
+`config_t` fields:
+- magic/version
+- local+remote UDP endpoints
+- network config (`wiz_NetInfo` + broadcast)
+- V.24 config (baud, polarities, external clock)
+- default log level
+
+Storage policy:
+- Uses last flash sector (`FLASH_TARGET_OFFSET`)
+- Erase sector + program one page for writes
+- `config_wipe` erases and zero-programs marker page
+
+```mermaid
+flowchart TD
+    CFG[Runtime config in app_ctx] --> SAVE[EV_SAVE_CONFIG]
+    SAVE --> SNAP[Build config_t snapshot]
+    SNAP --> ERASE[flash_range_erase sector]
+    ERASE --> PROG[flash_range_program page]
+    PROG --> VALID[magic/version valid on next boot]
+```
 
 ### 10.2 Runtime Update Policy
-- `set net ...` and `set v24 ...` paths apply runtime updates
-- Save request is queued after setting changes
-- `save` forces a write; `wipe` clears stored config
+- Net setting changes are applied immediately and enqueue save request.
+- V.24 baud/polarity changes apply immediately and enqueue save request.
+- V.24 clock mode change:
+  - rejected while TX queue is active
+  - marks config changed and requests reboot event after save
 
 ## 11. CLI Design
-### 11.1 Commands
-Implemented top-level commands include:
-- `help`, `status`, `net`, `set`, `get`, `pininfo`, `save`, `wipe`, `reboot`
+### 11.1 Top-level Commands
+Implemented commands:
+- `help`, `status`, `mem`, `net`, `set`, `get`, `pininfo`, `save`, `wipe`, `reboot`
 
-### 11.2 Categories
-Supported configuration categories:
+### 11.2 Categories and Subcommands
+Categories:
 - `gpio`, `net`, `v24`, `loglevel`
 
-### 11.3 Loglevel Interface
+Network subcommands:
+- `ip.local`, `ip.remote`, `ip.gateway`, `udp.port.local`, `udp.port.remote`
+
+V.24 subcommands:
+- `invert`, `baudrate`, `txclock`
+
+Log level:
 - `set loglevel <error|info|debug|trace>`
 - `get loglevel`
-- Alias `tracea` is accepted and mapped to `TRACE`.
+- alias `tracea` maps to `TRACE`
+
+### 11.3 Input Handling
+- CLI poll budget is bounded (`CLI_MAX_CHARS_PER_POLL = 16` chars/loop)
+- Line buffer size is 128 bytes
+- Parsed lines are copied into a small static pool before event enqueue
 
 ## 12. Logging and Diagnostics
-### 12.1 Logging API
-`LOG_ERROR`, `LOG_INFO`, `LOG_DEBUG`, `LOG_TRACE` route through `log_write` and runtime level filtering.
+### 12.1 Logging Architecture
+- Core0 produces logs via `log_write`
+- Core1 drains queue in `log_core1_drain`
+- SPSC ring queue:
+  - depth `128`
+  - effective max queued lines `127`
+- Records dropped-line count and high-water mark
 
-### 12.2 Prompt Coordination
-`log_take_emitted_flag()` indicates whether output occurred and triggers prompt redraw handling in loop logic.
+### 12.2 Logging API and Filtering
+- Macros: `LOG_PLAIN`, `LOG_ERROR`, `LOG_INFO`, `LOG_DEBUG`, `LOG_TRACE`
+- Macro-level and function-level loglevel filtering
+- Prompt redraw driven by `log_take_emitted_flag()`
 
-### 12.3 Status Snapshot (`EV_STATUS`)
-Status output includes:
-- RX/TX frame counters and decode counters
-- Pipeline gap counters
-- TX queue usage and active transmission state
-- Serial RX bytes and serialized TX wire bytes
-- Sync wait/maintenance counters
-- Accumulator internals and reconstructed length
-- Active TX SM stall bit (derived from runtime-selected TX PIO/SM)
+### 12.3 Runtime Status (`status` event)
+Status includes:
+- Traffic counters and rates
+- Decode success/failure and reason breakdown
+- Sync lookahead/consume/hardcap counters
+- Resync counters (idle/hard/no-progress)
+- Accumulator internals
+- RX health counters (stall/drop/hunt idle drops)
+- TX/event/log queue high-water and drops
+- TX SM stall bit from active runtime PIO/SM
 
 ## 13. Build and Test Architecture
 ### 13.1 Firmware Build
-Defined in `CMakeLists.txt`:
-- Target: `ether2serial`
-- Pico SDK + WIZnet integration
+`CMakeLists.txt` defines target `ether2serial` (when `BUILD_TESTS=OFF`):
+- Pico SDK and WIZnet port integration
+- Multicore enabled (`pico_multicore`)
 - PIO header generation for:
   - `pio/tx_clock.pio`
   - `pio/tck_txd.pio`
+  - `pio/xck_txd.pio`
   - `pio/rck_rxd.pio`
   - `pio/led_activity_mirror.pio`
+  - WIZnet `wizchip_qspi_pio.pio`
+- Optional flash helper targets using `picotool`
 
-### 13.2 Unit Tests
-When `BUILD_TESTS=ON`, Unity-based tests compile into `unit_tests`.
-Coverage includes:
+### 13.2 Unit Tests (`BUILD_TESTS=ON`)
+Unity-based `unit_tests` target covers:
 - HDLC common/encoder/decoder/sync
-- Bitstuff encoder/decoder test suites
+- bit-stuff behavior
+- trace-driven sync decoding cases
 - CLI parser
-- Event queue
-- Ringbuffer
+- event queue
+- ringbuffer
+- logging behavior (with `tests/mock_log.c`)
 
 ## 14. Operational Constraints
-- Throughput and latency are bounded by polling loop service rate and configured serial baudrate.
-- Event queue and TX queue are fixed-size; sustained ingress beyond service capacity causes backpressure or drops.
-- Sync accumulator is bounded and may drop oldest data near hard limit to preserve forward progress.
-- Frequent config writes increase flash wear; write policy should be tuned for deployment profile.
-- Board pin usage must respect shared-function conflicts (for example, optional LED mirror pinning vs board control signals).
+- Throughput and latency depend on polling service cadence and configured serial clock rate.
+- Event queue and TX queue are bounded; sustained overload causes push drops/backpressure.
+- Sync accumulator is bounded; hardcap drop policy preserves forward progress near limits.
+- External-clock idle streams can flood raw RX bytes; firmware mitigates with idle-byte filter and no-progress resync.
+- Clock-mode changes require reboot to reinitialize TX PIO program path cleanly.
+- Flash persistence writes are erase/program operations; frequent saves increase flash wear.
+- Watchdog is active in runtime and must be fed by main loop progression.
+
+## 15. Known Gaps / Notes
+- Some legacy event paths (`EV_UDP_RX`, `EV_UDP_TX`, `EV_HDLC_DECODE`) remain for compatibility/testing but are not the primary runtime data-plane path.
+- `src/system/board_pins.h` is currently not used by runtime modules (pin ownership comes from `platform/pinmap.h`).
