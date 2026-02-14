@@ -1,5 +1,7 @@
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -9,6 +11,25 @@
 #define LOG_QUEUE_DEPTH 128U
 #define LOG_QUEUE_MASK (LOG_QUEUE_DEPTH - 1U)
 #define LOG_LINE_MAX 160U
+
+static inline void log_wake_core1(void)
+{
+#if defined(__arm__) || defined(__thumb__)
+#if defined(__clang__) && defined(__has_builtin)
+#if __has_builtin(__builtin_arm_sev)
+    __builtin_arm_sev();
+#else
+    __asm volatile("sev" ::: "memory");
+#endif
+#else
+    __asm volatile("sev" ::: "memory");
+#endif
+#elif defined(__riscv)
+    __sev();
+#else
+    // Host/unit-test build: no-op.
+#endif
+}
 
 #if (LOG_QUEUE_DEPTH & LOG_QUEUE_MASK) != 0
 #error "LOG_QUEUE_DEPTH must be power of two"
@@ -78,7 +99,7 @@ void log_write(log_level_t level, const char* fmt, ...)
     memcpy(global_logstate.queue[head].line, line, LOG_LINE_MAX);
     __dmb(); // publish data before index update
     global_logstate.head = next;
-    uint16_t depth = (uint16_t)((next - global_logstate.tail) & LOG_QUEUE_MASK);
+    uint16_t depth       = (uint16_t)((next - global_logstate.tail) & LOG_QUEUE_MASK);
     if ((uint32_t)depth > global_logstate.high_water_mark)
     {
         global_logstate.high_water_mark = depth;
@@ -87,7 +108,8 @@ void log_write(log_level_t level, const char* fmt, ...)
     {
         global_logstate.log_emitted = true;
     }
-    __sev(); // wake core1 if sleeping
+    // wake core1 if sleeping
+    log_wake_core1();
 }
 
 void log_core1_drain(void)
@@ -97,13 +119,13 @@ void log_core1_drain(void)
     {
         uint16_t tail = global_logstate.tail;
         __dmb();
-        fputs(global_logstate.queue[tail].line, stdout);
+        (void)fputs(global_logstate.queue[tail].line, stdout);
         global_logstate.tail = (uint16_t)((tail + 1U) & LOG_QUEUE_MASK);
         wrote                = true;
     }
     if (wrote)
     {
-        fflush(stdout);
+        (void)fflush(stdout);
     }
 }
 
