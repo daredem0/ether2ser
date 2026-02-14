@@ -70,7 +70,6 @@ typedef struct
     size_t            resume_i;
     uint8_t           resume_bit_pos;
     uint8_t           bit_offset;
-    bool              align_shift_right;
     HDLC_SYNC_STATE_T state;
     uint8_t           sync_byte;
     uint16_t          sync_accumulator;
