@@ -45,7 +45,8 @@ typedef enum
     EV_SET_NET_SETTINGS,
     EV_GET_NET_SETTINGS,
     EV_SET_V24_SETTINGS,
-    EV_GET_V24_SETTINGS
+    EV_GET_V24_SETTINGS,
+    EV_REBOOT
 } event_type_t;
 
 /**
@@ -60,7 +61,9 @@ typedef enum
     NET_PORT_LOCAL,
     NET_PORT_REMOTE,
     V24_BAUDRATE,
-    V24_POLARITIES
+    V24_POLARITIES,
+    V24_CLOCK_MODE,
+    SYS_REBOOT
 } event_queue_data_types_t;
 
 /**
@@ -77,6 +80,7 @@ typedef struct
         uint16_t         port;
         V24_POLARITIES_T polarities;
         V24_BAUDRATE_T   baudrate;
+        bool             v24_clock_mode;
     } value;
 } event_queue_data_t;
 
@@ -88,7 +92,7 @@ typedef struct
     /** Event type. */
     event_type_t type;
     /** Number of valid bytes in payload storage. */
-    size_t       data_len;
+    size_t data_len;
     /** Payload storage union. */
     union
     {

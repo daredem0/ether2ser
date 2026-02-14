@@ -450,6 +450,41 @@ e2s_error_t parse_set_v24_baudrate(const char* args, V24_BAUDRATE_T* baudrate)
     }
 }
 
+e2s_error_t parse_set_v24_clockmode(const char* args, bool* clockmode)
+{
+    if (clockmode == NULL)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+
+    const char* input_str = args;
+    if (input_str == NULL)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+    while (*input_str == ' ')
+    {
+        input_str++;
+    }
+    if (*input_str == '\0')
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+
+    uint32_t clock_mode_value = 0U;
+    if (!parse_u32_strict(input_str, &clock_mode_value))
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+    if (clock_mode_value > 1U)
+    {
+        return E2S_ERR_CLI_USAGE_SET;
+    }
+
+    *clockmode = (clock_mode_value == 1U);
+    return E2S_OK;
+}
+
 const pin_info_t* get_pin_table(void)
 {
     return pin_table;

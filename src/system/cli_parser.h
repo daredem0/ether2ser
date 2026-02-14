@@ -152,4 +152,12 @@ e2s_error_t parse_set_v24_polarities(const char* args, V24_POLARITIES_T* polarit
  */
 e2s_error_t parse_set_v24_baudrate(const char* args, V24_BAUDRATE_T* baudrate);
 
+/**
+ * @brief Parse V.24 tx clock mode argument.
+ * @param args Argument string.
+ * @param clockmode Output clock mode (`0` internal, `1` external).
+ * @return Parse status.
+ */
+e2s_error_t parse_set_v24_clockmode(const char* args, bool* clockmode);
+
 #endif /* CLI_PARSER_H */

@@ -26,6 +26,7 @@ set(SOURCES
     src/protocol/hdlc_encoder.c
     src/protocol/hdlc_decoder.c
     src/protocol/hdlc_sync.c
+    src/platform/watchdog.c
 )
 
 set(STATIC_ANALYSIS_SOURCES

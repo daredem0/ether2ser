@@ -29,6 +29,7 @@
 #include "drivers/tx_queue.h"
 #include "drivers/v24_config.h"
 #include "drivers/w5500_driver.h"
+#include "platform/watchdog.h"
 #include "protocol/hdlc_common.h"
 #include "protocol/hdlc_decoder.h"
 #include "protocol/hdlc_sync.h"
@@ -333,6 +334,36 @@ static void ev_set_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
         rx_clock_update_settings(&(app->v24_config.polarities.rx_polarities));
         app->need_prompt = true;
         break;
+    case V24_CLOCK_MODE:
+        bool external_clock = payload->value.v24_clock_mode;
+
+        if (app->v24_config.external_clock != external_clock)
+        {
+            if (!tx_queue_is_empty(&app->tx_queue))
+            {
+                LOG_ERROR("Cannot change clock mode during ongoing transmission!\r\n");
+                break;
+            }
+            LOG_PLAIN("Switching to %s mode.\r\n", external_clock ? "external" : "internal");
+            app->v24_config.external_clock = external_clock;
+            // For now we just save the new clock setting and reboot. Runtime reconfiguration
+            // is not yet added.
+            request_save_config();
+
+            event_t reboot_event = {
+                .type      = EV_REBOOT,
+                .data.ptr  = NULL,
+                .data_len  = 0,
+                .is_inline = false,
+            };
+            event_queue_push(&reboot_event);
+        }
+        else
+        {
+            LOG_INFO("Already in %s mode.", external_clock ? "external" : "internal");
+            break;
+        }
+        break;
     default:
         break;
     }
@@ -350,6 +381,11 @@ static void ev_get_v24_settings(const event_queue_data_t* payload, app_ctx_t* ap
         print_v24_polarities(&app->v24_config.polarities);
         app->need_prompt = true;
         break;
+    case V24_CLOCK_MODE:
+        LOG_PLAIN("V24 TX Clock: %s\r\n", app->v24_config.external_clock ? "external (XCK Pin 15)"
+                                                                         : "internal (TCK Pin 17)");
+        app->need_prompt = true;
+        break;
     default:
         break;
     }
@@ -359,6 +395,11 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
 {
     switch (event->type)
     {
+    case EV_REBOOT:
+    {
+        reboot();
+        break; // Compiler wants break because dosnt detect trap in reboot
+    }
     case EV_STATUS:
     {
         uint64_t frame_gap = 0;

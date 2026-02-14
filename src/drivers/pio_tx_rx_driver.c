@@ -32,6 +32,7 @@
 #include "drivers/v24_config.h"
 #include "platform/pinmap.h"
 #include "system/common.h"
+#include "system/error.h"
 
 // Generated headers
 #include "led_activity_mirror.pio.h"
@@ -136,7 +137,6 @@ void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 {
     config->polarities = init_polarities();
     reinit_v24_config(config, baudrate);
-    config->external_clock = false;
 }
 
 bool rx_get(uint8_t* data)
@@ -392,4 +392,39 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_CONFIG_T* config)
 {
     config->external_clock ? tx_clock_init_xck(pio, pio_sm, config)
                            : tx_clock_init_tck(pio, pio_sm, config);
+}
+
+e2s_error_t tx_clock_switch_mode(V24_CONFIG_T* config, bool external_clock)
+{
+    if (!config || !v24_runtime.tx_pio)
+    {
+        return E2S_V24_RUNTIME_NOT_INITIALIZED;
+    }
+    if (config->external_clock == external_clock)
+    {
+        return E2S_OK;
+    }
+
+    PIO  pio = v24_runtime.tx_pio;
+    uint sm  = v24_runtime.tx_sm;
+
+    gpio_put(V24_RTS, 0);
+    v24_runtime.rts_set = false;
+
+    pio_sm_set_enabled(pio, sm, false);
+    pio_sm_clear_fifos(pio, sm);
+    pio_sm_restart(pio, sm);
+    pio_sm_clkdiv_restart(pio, sm);
+
+    gpio_set_function(V24_TXC_DTE, GPIO_FUNC_SIO);
+    gpio_set_dir(V24_TXC_DTE, GPIO_IN);
+    gpio_set_function(V24_TXC_DCE, GPIO_FUNC_SIO);
+    gpio_set_dir(V24_TXC_DCE, GPIO_IN);
+
+    // ensure program offsets added once, then reuse
+    // build mode-specific sm_config + pio_sm_init(...)
+
+    config->external_clock = external_clock;
+    tx_clock_update_settings(config);
+    return E2S_OK;
 }

@@ -70,6 +70,8 @@ void init_app(app_ctx_t* app, const config_t* persistent_config)
         };
         w5500_set_network_defaults(&app->net_config);
         init_v24_config(&app->v24_config, V24_BAUD_9600);
+        app->v24_config.external_clock = false;
+
         app->destination_config = (UDP_CONFIG_T){
             .port = DEFAULT_UDP_PORT,
         };

@@ -28,8 +28,7 @@
 
 // Project Headers
 #include "drivers/v24_config.h"
-#include "platform/pinmap.h"
-#include "system/baudrate_monitor.h"
+#include "platform/watchdog.h"
 #include "system/cli_parser.h"
 #include "system/common.h"
 #include "system/error.h"
@@ -105,6 +104,8 @@ static void subcmd_set_v24_baudrate(const char* args);
 static void subcmd_get_v24_baudrate(const char* args);
 static void subcmd_set_v24_inverted(const char* args);
 static void subcmd_get_v24_inverted(const char* args);
+static void subcmd_set_v24_clockmode(const char* args);
+static void subcmd_get_v24_clockmode(const char* args);
 
 // Lookup tables
 static const command_t commands[] = {
@@ -133,15 +134,12 @@ static const subcmd_t net_subcmds[] = {
     {"udp.port.local", subcmd_set_udp_port_local, subcmd_get_udp_port_local, "Local UDP port"},
     {"udp.port.remote", subcmd_set_udp_port_remote, subcmd_get_udp_port_remote, "Remote UDP port"},
 };
-#define INVERT_HELP \
-    "Invert pins.\r\n \
-    You can pass them as a comma seperated list like this:\r\n\
-    \tset v24 invert txd,rxd\r\n\
-    Each pin in the list is inverted, all others are non inverted."
+#define INVERT_HELP "Invert pins (comma-separated, e.g. set v24 invert txd,rxd)"
 static const subcmd_t v24_subcmds[] = {
     {"invert", subcmd_set_v24_inverted, subcmd_get_v24_inverted, INVERT_HELP},
     {"baudrate", subcmd_set_v24_baudrate, subcmd_get_v24_baudrate, "Baudrate"},
-};
+    {"txclock", subcmd_set_v24_clockmode, subcmd_get_v24_clockmode,
+     "<0|1> Internal or external tx clock"}};
 
 #define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
 #define NUM_CATEGORIES ARRAY_LEN(categories)
@@ -223,6 +221,25 @@ static void dispatch_v24_baudrate(const V24_BAUDRATE_T* baudrate)
     memcpy(event.data.bytes, &event_data, sizeof(event_data));
     event_queue_push(&event);
 }
+static void subcmd_set_v24_clockmode(const char* args)
+{
+    bool clockmode;
+    if (parse_set_v24_clockmode(args, &clockmode) != E2S_OK)
+    {
+        LOG_PLAIN("usage: set v24 txclock <0|1> \r\n");
+        return;
+    }
+    event_queue_data_t event_data = {.id = V24_CLOCK_MODE};
+    memcpy(&event_data.value.v24_clock_mode, &clockmode, sizeof(bool));
+
+    event_t event = {
+        .type      = EV_SET_V24_SETTINGS,
+        .data_len  = sizeof(event_data),
+        .is_inline = true,
+    };
+    memcpy(event.data.bytes, &event_data, sizeof(event_data));
+    event_queue_push(&event);
+}
 
 static void subcmd_set_v24_baudrate(const char* args)
 {
@@ -233,6 +250,11 @@ static void subcmd_set_v24_baudrate(const char* args)
         return;
     }
     dispatch_v24_baudrate(&baudrate);
+}
+static void subcmd_get_v24_clockmode(const char* args)
+{
+    (void)args;
+    dispatch_get_request(V24_CLOCK_MODE, EV_GET_V24_SETTINGS);
 }
 
 static void subcmd_get_v24_baudrate(const char* args)
@@ -335,14 +357,10 @@ static void cat_loglevel_get(const char* args)
 static void cmd_reboot(const char* args)
 {
     (void)args;
-    LOG_PLAIN("Rebooting...\r\n");
-    watchdog_reboot(0, 0, FLUSH_LOG_BEFORE_REBOOT_MS); // small delay to let LOG_PLAIN flush
-    // Do not return to the main loop; it calls watchdog_update() and would
-    // keep postponing the reboot forever.
-    while (true)
-    {
-        // wait for watchdog reset
-    }
+
+    (void)args;
+    event_t status_event = {.type = EV_REBOOT, .data.ptr = NULL, .data_len = 0, .is_inline = false};
+    event_queue_push(&status_event);
 }
 
 static void dispatch_ip(const uint8_t* ip_addr, const event_queue_data_types_t type)
