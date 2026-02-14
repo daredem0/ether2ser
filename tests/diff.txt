@@ -1,0 +1,633 @@
+diff --git a/README.md b/README.md
+index 68a9360..493121e 100644
+--- a/README.md
++++ b/README.md
+@@ -69,6 +69,86 @@ set v24 polarities txd,rxd,rts
+ ```
+ - Defaults are defined in `src/drivers/w5500_driver.h`.
+ 
++**Status Output**
++- The `status` command prints live pipeline diagnostics.
++- Example:
++```text
++ether2ser> status
++status: ok
++Current Baudrate estimation on pin 4: 109010.0 Hz
++PIPE STATS
++  Traffic
++    Frames    : udp_rx=420  hdlc_tx=420  hdlc_rx=420  udp_tx=420
++    Backlog   : tx->ready_gap=0  ready->udp_gap=0
++    Serial    : rx_bytes=630410  tx_bytes=630410
++    Rates     : udp_rx=420000/s  hdlc_rx=420000/s  udp_tx=420000/s  fail=0/s  rx_bytes=630410/s
++  Decode / Sync
++    Decode    : frame_ready=420  ok=420  fail=0
++    FailReason: invalid=0  short=0  long=0  unstuff=0  crc=0
++    SyncState : HUNTING
++    SyncWait  : syncing=0  synced=0
++    SyncMaint : consume=420  hardcap_events=0  hardcap_bytes=0
++    Resync    : idle=0  hard=0  no_progress=0
++    Accum     : pos=0  proc=0  state=0  off=0  cand_valid=0  cand_end=0
++    RX Health : acc_pos_max=4  rx_fifo_stall=0  rx_drop_acc_full=0
++  Buffers
++    TX Queue  : used=0/32  active=0
++    HighWater : tx=0  event=1  log=4
++    Drops     : tx=0  event=0  log=0
++    Recons    : len=0
++    PIO TX    : stalled=1
++```
++- Field meanings
++
++`General`
++
++| Name | Meaning | Debug hint |
++|---|---|---|
++| `Current Baudrate estimation` | Measured RX clock frequency from the `v24_rxc` monitor pin. | If this is far from configured baud, debug physical clock/sampling before protocol logic. |
++
++`Traffic`
++
++| Name | Meaning | Debug hint |
++|---|---|---|
++| `Frames` | Stage counters across the pipeline (`udp_rx`, `hdlc_tx`, `hdlc_rx`, `udp_tx`). | Compare columns to locate where frames are being lost. |
++| `udp_rx` | UDP frames accepted from Ethernet. | If low, issue is upstream/network side. |
++| `hdlc_tx` | Frames encoded and queued to serial TX. | `udp_rx` and `hdlc_tx` should track closely. |
++| `hdlc_rx` | HDLC frame candidates detected on serial RX. | Much larger than `hdlc_tx` usually means desync/false framing. |
++| `udp_tx` | Frames successfully decoded and sent via UDP. | Gap to `hdlc_rx` indicates decode/sync failures. |
++| `Backlog` | Gap metrics between stages. | `tx->ready_gap` grows when RX cannot keep up; `ready->udp_gap` grows on decode failures. |
++| `tx->ready_gap` | `hdlc_tx - hdlc_rx`. | Persistent growth means receive/framing lag. |
++| `ready->udp_gap` | `hdlc_rx - udp_tx`. | Persistent growth points at decode integrity issues. |
++| `Serial` | Cumulative byte counters on wire (`rx_bytes`, `tx_bytes`). | Large divergence indicates one direction not flowing cleanly. |
++| `Rates` | Per-second deltas from previous `status`. | First sample or very short interval can look inflated. |
++
++`Decode / Sync`
++
++| Name | Meaning | Debug hint |
++|---|---|---|
++| `Decode` | Decoder outcomes (`frame_ready`, `ok`, `fail`). | `fail` near zero is expected in stable runs. |
++| `frame_ready` | HDLC candidates emitted by sync layer. | If this overshoots TX by a lot, suspect framing alignment/noise. |
++| `ok` | Successful decode + CRC validation. | Should track `udp_tx`. |
++| `fail` | Failed decode attempts. | Use `FailReason` to identify root cause. |
++| `FailReason` | Breakdown (`invalid`, `short`, `long`, `unstuff`, `crc`). | `unstuff` dominance suggests bitstream corruption/alignment; `crc` points to data corruption after framing. |
++| `SyncState` | Current sync FSM state (`HUNTING`, `SYNCING`, `SYNCED`). | Long time in `SYNCING`/`SYNCED` with low progress can indicate stuck candidate flow. |
++| `SyncWait` | Lookahead waits for cross-byte alignment in `SYNCING`/`SYNCED`. | Fast growth indicates frequent boundary stalls. |
++| `SyncMaint` | Maintenance counters (`consume`, `hardcap_events`, `hardcap_bytes`). | `hardcap_*` should remain near zero in healthy operation. |
++| `Resync` | Recovery reason counters (`idle`, `hard`, `no_progress`). | Spikes indicate unstable decode path or over-aggressive thresholds. |
++| `Accum` | Internal accumulator live state (`pos`, `proc`, `state`, `off`, candidate fields). | Non-zero `pos`/`proc` for long periods without progress indicates parser stall. |
++| `RX Health` | RX path health (`acc_pos_max`, `rx_fifo_stall`, `rx_drop_acc_full`). | Rising `rx_fifo_stall` indicates service starvation; rising `rx_drop_acc_full` means accumulator backpressure. |
++
++`Buffers`
++
++| Name | Meaning | Debug hint |
++|---|---|---|
++| `TX Queue` | Current TX queue occupancy (`used/capacity`, `active`). | `used` near capacity indicates sustained overload. |
++| `used` | Number of queued TX frames. | Trend matters more than instantaneous value. |
++| `active` | `1` if one frame is currently being drained to TX FIFO. | `active=0` with `used>0` indicates drain path issue. |
++| `HighWater` | Peak occupancy since boot (`tx`, `event`, `log`). | Useful to size buffers and detect near-overflow phases. |
++| `Drops` | Cumulative dropped items (`tx`, `event`, `log`). | Any non-zero drop counter indicates data/control loss. |
++| `Recons` | Current reconstructed frame length pending decode. | Large lingering values can indicate stuck/incomplete candidate handling. |
++| `PIO TX` | TX PIO stall flag state. | Sticky hardware indicator; useful to correlate with underfeeding/transmit pacing. |
++
+ **Tests**
+ ```bash
+ mkdir -p build-tests
+diff --git a/src/protocol/hdlc_decoder.c b/src/protocol/hdlc_decoder.c
+index 2c645c6..99d5680 100644
+--- a/src/protocol/hdlc_decoder.c
++++ b/src/protocol/hdlc_decoder.c
+@@ -40,12 +40,15 @@ typedef enum
+     HDLC_BIT_ERR
+ } hdlc_decoder_bit_type_t;
+ 
++static hdlc_decode_stats_t hdlc_decode_stats = {0};
++
+ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_capacity,
+                       size_t* payload_length)
+ {
+     if (frame == NULL || payload == NULL || payload_length == NULL || out_capacity == 0 ||
+         frame->payload[0] != HDLC_FLAG_BYTE || frame->payload[frame->length - 1] != HDLC_FLAG_BYTE)
+     {
++        hdlc_decode_stats.invalid_frame++;
+         LOG_DEBUG("Invalid frame\r\n");
+         goto abort;
+     }
+@@ -61,6 +64,7 @@ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t
+         }
+         if (outbyte_ctr >= out_capacity)
+         {
++            hdlc_decode_stats.payload_too_long++;
+             LOG_DEBUG("Payload too long\r\n");
+             goto abort;
+         }
+@@ -71,6 +75,7 @@ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t
+ 
+     if (outbyte_ctr < 2)
+     {
++        hdlc_decode_stats.too_short++;
+         goto abort;
+     }
+ 
+@@ -81,6 +86,7 @@ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t
+     uint16_t recovered_crc = hdlc_crc16(payload, *payload_length);
+     if (crc16 != recovered_crc)
+     {
++        hdlc_decode_stats.crc_mismatch++;
+         goto abort;
+     }
+ 
+@@ -169,6 +175,7 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
+         frame->length < 2 || frame->payload[0] != HDLC_FLAG_BYTE ||
+         frame->payload[frame->length - 1] != HDLC_FLAG_BYTE)
+     {
++        hdlc_decode_stats.invalid_frame++;
+         LOG_DEBUG("Invalid frame\r\n");
+         goto abort;
+     }
+@@ -186,11 +193,13 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
+         }
+         if (bit_result == HDLC_BIT_ERR)
+         {
++            hdlc_decode_stats.unstuff_error++;
+             LOG_DEBUG("Invalid frame\r\n");
+             goto abort;
+         }
+         if (outbyte_ctr >= out_capacity)
+         {
++            hdlc_decode_stats.payload_too_long++;
+             LOG_DEBUG("Payload too long\r\n");
+             goto abort;
+         }
+@@ -199,6 +208,7 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
+ 
+     if (outbyte_ctr < 2)
+     {
++        hdlc_decode_stats.too_short++;
+         goto abort;
+     }
+ 
+@@ -209,6 +219,7 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
+     uint16_t recovered_crc = hdlc_crc16(payload, *payload_length);
+     if (crc16 != recovered_crc)
+     {
++        hdlc_decode_stats.crc_mismatch++;
+         LOG_DEBUG("CRC mismatch\r\n");
+         goto abort;
+     }
+@@ -222,3 +233,17 @@ abort:
+     }
+     return false;
+ }
++
++void hdlc_decode_stats_snapshot(hdlc_decode_stats_t* out_stats)
++{
++    if (out_stats == NULL)
++    {
++        return;
++    }
++    *out_stats = hdlc_decode_stats;
++}
++
++void hdlc_decode_stats_reset(void)
++{
++    hdlc_decode_stats = (hdlc_decode_stats_t){0};
++}
+diff --git a/src/protocol/hdlc_decoder.h b/src/protocol/hdlc_decoder.h
+index 36fd54e..51fdb1e 100644
+--- a/src/protocol/hdlc_decoder.h
++++ b/src/protocol/hdlc_decoder.h
+@@ -24,6 +24,18 @@
+ 
+ // Generated headers
+ 
++/**
++ * @brief Cumulative HDLC decode failure reason counters.
++ */
++typedef struct
++{
++    uint64_t invalid_frame;
++    uint64_t too_short;
++    uint64_t payload_too_long;
++    uint64_t unstuff_error;
++    uint64_t crc_mismatch;
++} hdlc_decode_stats_t;
++
+ /**
+  * @brief Decode an HDLC bit-stuffed frame.
+  * @param frame Input HDLC frame.
+@@ -47,4 +59,15 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
+ bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_capacity,
+                       size_t* payload_length);
+ 
++/**
++ * @brief Copy cumulative HDLC decode statistics.
++ * @param out_stats Destination pointer.
++ */
++void hdlc_decode_stats_snapshot(hdlc_decode_stats_t* out_stats);
++
++/**
++ * @brief Reset cumulative HDLC decode statistics.
++ */
++void hdlc_decode_stats_reset(void);
++
+ #endif /* HDLC_DECODER_H */
+diff --git a/src/system/app_context.h b/src/system/app_context.h
+index a65c466..a693b24 100644
+--- a/src/system/app_context.h
++++ b/src/system/app_context.h
+@@ -62,6 +62,27 @@ typedef struct
+     uint64_t sync_hardcap_drop_events;
+     uint64_t sync_hardcap_drop_bytes;
+ 
++    uint64_t decode_fail_invalid_frame;
++    uint64_t decode_fail_too_short;
++    uint64_t decode_fail_payload_too_long;
++    uint64_t decode_fail_unstuff_error;
++    uint64_t decode_fail_crc_mismatch;
++
++    uint64_t resync_idle_timeout_count;
++    uint64_t resync_hard_fail_count;
++    uint64_t resync_no_progress_count;
++
++    uint64_t tx_queue_used_max;
++    uint64_t tx_queue_drop_frames;
++    uint64_t event_queue_used_max;
++    uint64_t event_queue_drop_events;
++    uint64_t log_drop_lines;
++    uint64_t log_queue_used_max;
++
++    uint64_t accumulator_pos_max;
++    uint64_t rx_fifo_stall_events;
++    uint64_t serial_rx_drop_acc_full;
++
+     uint32_t last_report_ms;
+ } payload_statistics_t;
+ 
+diff --git a/src/system/common.h b/src/system/common.h
+index 2b2533f..6cc6c0e 100644
+--- a/src/system/common.h
++++ b/src/system/common.h
+@@ -113,6 +113,7 @@ bool log_take_emitted_flag(void);
+ 
+ void     log_core1_drain(void);
+ uint32_t log_take_dropped_count(void);
++uint32_t log_get_high_water_mark(void);
+ 
+ // extern log_level_t current_log_level;
+ 
+diff --git a/src/system/event_dispatch.c b/src/system/event_dispatch.c
+index 86c9930..88aa9bd 100644
+--- a/src/system/event_dispatch.c
++++ b/src/system/event_dispatch.c
+@@ -20,6 +20,7 @@
+ #include <string.h>
+ 
+ // Library Headers
++#include "pico/time.h"
+ #include "wizchip_conf.h"
+ #include "wizchip_qspi_pio.h"
+ 
+@@ -373,6 +374,41 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
+             tx_gap = app->stats.hdlc_frame_ready - app->stats.udp_tx_frames;
+         }
+ 
++        static uint64_t prev_udp_rx_frames       = 0U;
++        static uint64_t prev_hdlc_frame_ready    = 0U;
++        static uint64_t prev_udp_tx_frames       = 0U;
++        static uint64_t prev_hdlc_decode_fail    = 0U;
++        static uint64_t prev_serial_rx_bytes     = 0U;
++        uint32_t        report_now_ms            = to_ms_since_boot(get_absolute_time());
++        uint32_t        elapsed_ms               = 0U;
++        if (app->stats.last_report_ms != 0U)
++        {
++            elapsed_ms = report_now_ms - app->stats.last_report_ms;
++        }
++        if (elapsed_ms == 0U)
++        {
++            elapsed_ms = 1U;
++        }
++
++        uint64_t d_udp_rx_frames    = app->stats.udp_rx_frames - prev_udp_rx_frames;
++        uint64_t d_hdlc_frame_ready = app->stats.hdlc_frame_ready - prev_hdlc_frame_ready;
++        uint64_t d_udp_tx_frames    = app->stats.udp_tx_frames - prev_udp_tx_frames;
++        uint64_t d_decode_fail      = app->stats.hdlc_decode_fail - prev_hdlc_decode_fail;
++        uint64_t d_serial_rx_bytes  = app->stats.serial_rx_bytes - prev_serial_rx_bytes;
++
++        uint64_t udp_rx_rate_fps    = (d_udp_rx_frames * 1000U) / elapsed_ms;
++        uint64_t hdlc_rx_rate_fps   = (d_hdlc_frame_ready * 1000U) / elapsed_ms;
++        uint64_t udp_tx_rate_fps    = (d_udp_tx_frames * 1000U) / elapsed_ms;
++        uint64_t decode_fail_rate   = (d_decode_fail * 1000U) / elapsed_ms;
++        uint64_t serial_rx_rate_bps = (d_serial_rx_bytes * 1000U) / elapsed_ms;
++
++        prev_udp_rx_frames    = app->stats.udp_rx_frames;
++        prev_hdlc_frame_ready = app->stats.hdlc_frame_ready;
++        prev_udp_tx_frames    = app->stats.udp_tx_frames;
++        prev_hdlc_decode_fail = app->stats.hdlc_decode_fail;
++        prev_serial_rx_bytes  = app->stats.serial_rx_bytes;
++        app->stats.last_report_ms = report_now_ms;
++
+         LOG_PLAIN("PIPE STATS\r\n");
+         LOG_PLAIN("  Traffic\r\n");
+         LOG_PLAIN("    Frames    : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
+@@ -383,11 +419,20 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
+                   frame_gap, tx_gap);
+         LOG_PLAIN("    Serial    : rx_bytes=%" PRIu64 "  tx_bytes=%" PRIu64 "\r\n",
+                   app->stats.serial_rx_bytes, app->tx_queue.tx_wire_bytes);
++        LOG_PLAIN("    Rates     : udp_rx=%" PRIu64 "/s  hdlc_rx=%" PRIu64 "/s  udp_tx=%" PRIu64
++                  "/s  fail=%" PRIu64 "/s  rx_bytes=%" PRIu64 "/s\r\n",
++                  udp_rx_rate_fps, hdlc_rx_rate_fps, udp_tx_rate_fps, decode_fail_rate,
++                  serial_rx_rate_bps);
+ 
+         LOG_PLAIN("  Decode / Sync\r\n");
+         LOG_PLAIN("    Decode    : frame_ready=%" PRIu64 "  ok=%" PRIu64 "  fail=%" PRIu64 "\r\n",
+                   app->stats.hdlc_frame_ready, app->stats.hdlc_decode_ok,
+                   app->stats.hdlc_decode_fail);
++        LOG_PLAIN("    FailReason: invalid=%" PRIu64 "  short=%" PRIu64 "  long=%" PRIu64
++                  "  unstuff=%" PRIu64 "  crc=%" PRIu64 "\r\n",
++                  app->stats.decode_fail_invalid_frame, app->stats.decode_fail_too_short,
++                  app->stats.decode_fail_payload_too_long, app->stats.decode_fail_unstuff_error,
++                  app->stats.decode_fail_crc_mismatch);
+         LOG_PLAIN("    SyncState : %s\r\n", hdlc_sync_state_name(app->accumulator.state));
+         LOG_PLAIN("    SyncWait  : syncing=%" PRIu64 "  synced=%" PRIu64 "\r\n",
+                   app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
+@@ -395,10 +440,18 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
+                   "  hardcap_bytes=%" PRIu64 "\r\n",
+                   app->stats.sync_candidate_consume, app->stats.sync_hardcap_drop_events,
+                   app->stats.sync_hardcap_drop_bytes);
++        LOG_PLAIN("    Resync    : idle=%" PRIu64 "  hard=%" PRIu64 "  no_progress=%" PRIu64
++                  "\r\n",
++                  app->stats.resync_idle_timeout_count, app->stats.resync_hard_fail_count,
++                  app->stats.resync_no_progress_count);
+         LOG_PLAIN("    Accum     : pos=%zu  proc=%zu  state=%d  off=%u  cand_valid=%d  cand_end=%zu\r\n",
+                   app->accumulator.position, app->accumulator.processed,
+                   (int)app->accumulator.state, app->accumulator.bit_offset,
+                   app->accumulator.candidate_valid ? 1 : 0, app->accumulator.candidate_end);
++        LOG_PLAIN("    RX Health : acc_pos_max=%" PRIu64 "  rx_fifo_stall=%" PRIu64
++                  "  rx_drop_acc_full=%" PRIu64 "\r\n",
++                  app->stats.accumulator_pos_max, app->stats.rx_fifo_stall_events,
++                  app->stats.serial_rx_drop_acc_full);
+ 
+         LOG_PLAIN("  Buffers\r\n");
+         LOG_PLAIN("    TX Queue  : used=%zu/%zu  active=%d\r\n", app->tx_queue.queue_buffer.count,
+@@ -406,6 +459,12 @@ void event_dispatch(const event_t* event, app_ctx_t* app)
+                   (app->tx_queue.current_entry.offset < app->tx_queue.current_entry.frame.length)
+                       ? 1
+                       : 0);
++        LOG_PLAIN("    HighWater : tx=%" PRIu64 "  event=%" PRIu64 "  log=%" PRIu64 "\r\n",
++                  app->stats.tx_queue_used_max, app->stats.event_queue_used_max,
++                  app->stats.log_queue_used_max);
++        LOG_PLAIN("    Drops     : tx=%" PRIu64 "  event=%" PRIu64 "  log=%" PRIu64 "\r\n",
++                  app->stats.tx_queue_drop_frames, app->stats.event_queue_drop_events,
++                  app->stats.log_drop_lines);
+         LOG_PLAIN("    Recons    : len=%zu\r\n", app->reconstructed_frame.length);
+         const v24_runtime_t* v24_runtime = get_v24_runtime();
+         LOG_PLAIN(
+diff --git a/src/system/event_loop.c b/src/system/event_loop.c
+index a5ea7e0..cd72923 100644
+--- a/src/system/event_loop.c
++++ b/src/system/event_loop.c
+@@ -19,6 +19,7 @@
+ #include <string.h>
+ 
+ // Library Headers
++#include "hardware/regs/pio.h"
+ #include "hardware/watchdog.h"
+ #include "pico/time.h"
+ 
+@@ -80,6 +81,10 @@ void event_loop(app_ctx_t* app)
+             }
+             else
+             {
++                if (enqueue_result == E2S_ERR_TX_QUEUE_FULL)
++                {
++                    app->stats.tx_queue_drop_frames++;
++                }
+                 LOG_ERROR("TX Queue Enqueue failed: %d.\r\n", enqueue_result);
+             }
+             memset(app->rx_frame_buffer.payload, 0, app->rx_frame_buffer.length);
+@@ -113,9 +118,16 @@ void event_loop(app_ctx_t* app)
+         {
+             work_done = true;
+             rx_drained++;
+-            hdlc_sync_acc_process_byte(&app->accumulator, rx_byte);
++            if (!hdlc_sync_acc_process_byte(&app->accumulator, rx_byte))
++            {
++                app->stats.serial_rx_drop_acc_full++;
++            }
+         }
+         app->stats.serial_rx_bytes += rx_drained;
++        if (app->accumulator.position > app->stats.accumulator_pos_max)
++        {
++            app->stats.accumulator_pos_max = app->accumulator.position;
++        }
+         uint64_t now_us = to_us_since_boot(get_absolute_time());
+         if (rx_drained > 0U)
+         {
+@@ -129,6 +141,7 @@ void event_loop(app_ctx_t* app)
+         if (frame_in_progress && last_rx_byte_us != 0U &&
+             (now_us - last_rx_byte_us) > HDLC_SYNC_IDLE_TIMEOUT_US)
+         {
++            app->stats.resync_idle_timeout_count++;
+             LOG_DEBUG("HDLC idle timeout resync\r\n");
+             hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
+             hdlc_decode_fail_streak = 0U;
+@@ -166,6 +179,7 @@ void event_loop(app_ctx_t* app)
+                     }
+                     if (hdlc_decode_fail_streak >= HDLC_DECODE_FAIL_STREAK_LIMIT)
+                     {
++                        app->stats.resync_hard_fail_count++;
+                         LOG_DEBUG("HDLC hard resync after %u decode fails\r\n",
+                                   (unsigned)hdlc_decode_fail_streak);
+                         hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
+@@ -187,6 +201,7 @@ void event_loop(app_ctx_t* app)
+             ((app->stats.serial_rx_bytes - last_frame_ready_bytes) >
+              HDLC_SYNC_NO_PROGRESS_MAX_BYTES))
+         {
++            app->stats.resync_no_progress_count++;
+             LOG_DEBUG("HDLC no-progress resync after %" PRIu64 " bytes\r\n",
+                       (app->stats.serial_rx_bytes - last_frame_ready_bytes));
+             hdlc_sync_acc_init(&app->accumulator, HDLC_FLAG_BYTE);
+@@ -212,6 +227,44 @@ void event_loop(app_ctx_t* app)
+         app->stats.sync_hardcap_drop_events    = app->accumulator.hardcap_drop_events;
+         app->stats.sync_hardcap_drop_bytes     = app->accumulator.hardcap_drop_bytes;
+ 
++        hdlc_decode_stats_t decode_stats = {0};
++        hdlc_decode_stats_snapshot(&decode_stats);
++        app->stats.decode_fail_invalid_frame   = decode_stats.invalid_frame;
++        app->stats.decode_fail_too_short       = decode_stats.too_short;
++        app->stats.decode_fail_payload_too_long = decode_stats.payload_too_long;
++        app->stats.decode_fail_unstuff_error   = decode_stats.unstuff_error;
++        app->stats.decode_fail_crc_mismatch    = decode_stats.crc_mismatch;
++
++        size_t tx_queue_count = tx_queue_get_count(&app->tx_queue);
++        if (tx_queue_count > app->stats.tx_queue_used_max)
++        {
++            app->stats.tx_queue_used_max = tx_queue_count;
++        }
++        size_t event_queue_count = event_queue_get_count();
++        if (event_queue_count > app->stats.event_queue_used_max)
++        {
++            app->stats.event_queue_used_max = event_queue_count;
++        }
++        size_t event_queue_hwm = event_queue_get_high_water_mark();
++        if (event_queue_hwm > app->stats.event_queue_used_max)
++        {
++            app->stats.event_queue_used_max = event_queue_hwm;
++        }
++        app->stats.event_queue_drop_events = event_queue_get_push_drop_count();
++        app->stats.log_drop_lines += log_take_dropped_count();
++        app->stats.log_queue_used_max = log_get_high_water_mark();
++
++        const v24_runtime_t* v24_runtime = get_v24_runtime();
++        if (v24_runtime->rx_pio != NULL)
++        {
++            uint32_t rx_stall_mask = (1U << (PIO_FDEBUG_RXSTALL_LSB + v24_runtime->rx_sm));
++            if ((v24_runtime->rx_pio->fdebug & rx_stall_mask) != 0U)
++            {
++                app->stats.rx_fifo_stall_events++;
++                v24_runtime->rx_pio->fdebug = rx_stall_mask;
++            }
++        }
++
+         bool tx_active = !tx_queue_is_empty(&app->tx_queue);
+         int  max_events_per_iteration =
+             tx_active ? EVENT_LOOP_MAX_EVENTS_WHILE_TX_ACTIVE : EVENT_LOOP_MAX_EVENTS_AT_ONCE;
+diff --git a/src/system/event_queue.c b/src/system/event_queue.c
+index f7d1eb2..486f87f 100644
+--- a/src/system/event_queue.c
++++ b/src/system/event_queue.c
+@@ -25,12 +25,25 @@
+ static event_t event_queue[EVENT_QUEUE_CAPACITY];
+ static uint8_t event_queue_write = 0;
+ static uint8_t event_queue_read  = 0;
++static uint8_t event_queue_high_water_mark = 0;
++static uint32_t event_queue_push_drops = 0;
++
++static uint8_t event_queue_count_internal(void)
++{
++    if (event_queue_write >= event_queue_read)
++    {
++        return (uint8_t)(event_queue_write - event_queue_read);
++    }
++    return (uint8_t)(EVENT_QUEUE_CAPACITY - (event_queue_read - event_queue_write));
++}
+ 
+ void event_queue_init(void)
+ {
+     memset(event_queue, 0, sizeof(event_queue));
+     event_queue_write = 0;
+     event_queue_read  = 0;
++    event_queue_high_water_mark = 0;
++    event_queue_push_drops = 0;
+ }
+ 
+ bool event_queue_push(const event_t* event_entry)
+@@ -38,10 +51,16 @@ bool event_queue_push(const event_t* event_entry)
+     uint8_t next_write = (uint8_t)((event_queue_write + 1) % EVENT_QUEUE_CAPACITY);
+     if (next_write == event_queue_read)
+     {
++        event_queue_push_drops++;
+         return false; // full
+     }
+     event_queue[event_queue_write] = *event_entry;
+     event_queue_write              = next_write;
++    uint8_t current_count = event_queue_count_internal();
++    if (current_count > event_queue_high_water_mark)
++    {
++        event_queue_high_water_mark = current_count;
++    }
+     return true;
+ }
+ 
+@@ -67,6 +86,21 @@ bool event_queue_is_full(void)
+     return next_write == event_queue_read;
+ }
+ 
++size_t event_queue_get_count(void)
++{
++    return (size_t)event_queue_count_internal();
++}
++
++size_t event_queue_get_high_water_mark(void)
++{
++    return (size_t)event_queue_high_water_mark;
++}
++
++uint32_t event_queue_get_push_drop_count(void)
++{
++    return event_queue_push_drops;
++}
++
+ bool event_get_payload_ptr(const event_t* event, size_t required_size, const void** out)
+ {
+     if (!event || !out || required_size == 0)
+diff --git a/src/system/event_queue.h b/src/system/event_queue.h
+index 3d88f1a..cc5d2e9 100644
+--- a/src/system/event_queue.h
++++ b/src/system/event_queue.h
+@@ -128,6 +128,24 @@ bool event_queue_is_empty(void);
+  */
+ bool event_queue_is_full(void);
+ 
++/**
++ * @brief Get current number of queued events.
++ * @return Queue fill count.
++ */
++size_t event_queue_get_count(void);
++
++/**
++ * @brief Get peak queue fill count observed since init.
++ * @return High-water mark.
++ */
++size_t event_queue_get_high_water_mark(void);
++
++/**
++ * @brief Get cumulative number of dropped push attempts.
++ * @return Drop counter.
++ */
++uint32_t event_queue_get_push_drop_count(void);
++
+ /**
+  * @brief Resolve payload pointer and validate minimum payload size.
+  * @param event Event to inspect.
+diff --git a/src/system/log.c b/src/system/log.c
+index 6d918aa..1e98201 100644
+--- a/src/system/log.c
++++ b/src/system/log.c
+@@ -25,6 +25,7 @@ typedef struct
+     volatile uint16_t head; // producer writes, consumer reads
+     volatile uint16_t tail; // consumer writes, producer reads
+     volatile uint32_t dropped;
++    volatile uint32_t high_water_mark;
+     bool              log_emitted;
+     log_entry_t       queue[LOG_QUEUE_DEPTH];
+ } global_log_state_t;
+@@ -33,6 +34,7 @@ static global_log_state_t global_logstate = {.current_log_level = LOG_LEVEL_INFO
+                                              .head              = 0U,
+                                              .tail              = 0U,
+                                              .dropped           = 0U,
++                                             .high_water_mark   = 0U,
+                                              .log_emitted       = false};
+ 
+ log_level_t get_loglevel(void)
+@@ -76,6 +78,11 @@ void log_write(log_level_t level, const char* fmt, ...)
+     memcpy(global_logstate.queue[head].line, line, LOG_LINE_MAX);
+     __dmb(); // publish data before index update
+     global_logstate.head = next;
++    uint16_t depth = (uint16_t)((next - global_logstate.tail) & LOG_QUEUE_MASK);
++    if ((uint32_t)depth > global_logstate.high_water_mark)
++    {
++        global_logstate.high_water_mark = depth;
++    }
+     if (level > LOG_LEVEL_PLAIN)
+     {
+         global_logstate.log_emitted = true;
+@@ -107,6 +114,11 @@ uint32_t log_take_dropped_count(void)
+     return dropped;
+ }
+ 
++uint32_t log_get_high_water_mark(void)
++{
++    return global_logstate.high_water_mark;
++}
++
+ bool log_take_emitted_flag(void)
+ {
+     bool flag                   = global_logstate.log_emitted;
