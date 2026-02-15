@@ -60,6 +60,11 @@ def parse_args() -> argparse.Namespace:
         help="Output path for reconstructed image in receiver mode.",
     )
     parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="Preview the received image in a window after completion (receiver only).",
+    )
+    parser.add_argument(
         "--broadcast",
         action="store_true",
         help="Enable SO_BROADCAST for sender (use with broadcast target).",
@@ -201,6 +206,34 @@ def receive_image(sock: socket.socket, args: argparse.Namespace) -> Optional[str
     return args.output
 
 
+def preview_image(path: str) -> None:
+    try:
+        import tkinter as tk
+        from PIL import ImageTk
+    except Exception as exc:  # noqa: BLE001
+        print(f"[preview] tkinter unavailable: {exc}")
+        return
+
+    try:
+        img = Image.open(path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[preview] failed to open image: {exc}")
+        return
+
+    try:
+        root = tk.Tk()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[preview] failed to init tkinter: {exc}")
+        return
+
+    root.title(os.path.basename(path))
+    tk_img = ImageTk.PhotoImage(img)
+    label = tk.Label(root, image=tk_img)
+    label.image = tk_img
+    label.pack()
+    root.mainloop()
+
+
 def main() -> None:
     args = parse_args()
     if args.mode == "sender":
@@ -216,7 +249,9 @@ def main() -> None:
         if args.mode == "sender":
             send_image(sock, args)
         else:
-            receive_image(sock, args)
+            path = receive_image(sock, args)
+            if path and args.preview:
+                preview_image(path)
     finally:
         sock.close()
 
