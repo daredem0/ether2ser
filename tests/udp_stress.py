@@ -246,7 +246,7 @@ class ReceiverStats:
             self.out_of_order += 1
 
         if verbose:
-            print(f"[rx] DATA seq={seq} bytes={payload_len}")
+            print(f"[rx] DATA seq={seq} bytes={len(data)} payload={payload_len}")
         return False
 
 
@@ -293,7 +293,7 @@ def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random
         sock.sendto(packet, target)
         stats.on_send(len(packet), is_start=False, is_end=False)
         if args.verbose:
-            print(f"[tx] DATA seq={seq} bytes={len(packet)}")
+            print(f"[tx] DATA seq={seq} bytes={len(packet)} payload={payload_len}")
         seq += 1
         next_send += interval
 
@@ -372,7 +372,7 @@ def run_both(
                 sock.sendto(packet, target)
                 tx_stats.on_send(len(packet), is_start=False, is_end=False)
                 if args.verbose:
-                    print(f"[tx] DATA seq={seq} bytes={len(packet)}")
+                    print(f"[tx] DATA seq={seq} bytes={len(packet)} payload={payload_len}")
                 seq += 1
                 next_send += interval
                 did_work = True
