@@ -30,6 +30,7 @@ MAX_UDP_PAYLOAD = 65507
 RED = "\033[31m"
 ORANGE = "\033[38;5;214m"
 RESET = "\033[0m"
+CONTROL_PADDING = b"\x00" * 50
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,6 +76,12 @@ def parse_args() -> argparse.Namespace:
         help="Minimum delay between frames in milliseconds (sender/both).",
     )
     parser.add_argument(
+        "--control-frames",
+        type=int,
+        default=1,
+        help="Number of START and END control frames to send each.",
+    )
+    parser.add_argument(
         "--idle-timeout",
         type=float,
         default=DEFAULT_IDLE_TIMEOUT,
@@ -112,6 +119,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--duration must be > 0")
     if args.min_delay_ms < 0:
         parser.error("--min-delay-ms must be >= 0")
+    if args.control_frames <= 0:
+        parser.error("--control-frames must be > 0")
     if args.idle_timeout <= 0:
         parser.error("--idle-timeout must be > 0")
     if args.mode in ("sender", "both"):
@@ -350,16 +359,29 @@ def print_kv_table(title: str, rows: list[tuple[str, str]]) -> None:
     print(border)
 
 
-def send_start(sock: socket.socket, target: Tuple[str, int], total: int, stats: SenderStats) -> None:
-    packet = build_packet(0, total, FLAG_START, 0)
-    sock.sendto(packet, target)
-    stats.on_send(len(packet), is_start=True, is_end=False)
+def send_start(
+    sock: socket.socket, target: Tuple[str, int], total: int, stats: SenderStats, count: int
+) -> None:
+    packet = build_packet(0, total, FLAG_START, 0) + CONTROL_PADDING
+    for idx in range(count):
+        sock.sendto(packet, target)
+        stats.on_send(len(packet), is_start=True, is_end=False)
+        print(f"[tx] START total={total} copy={idx + 1}/{count}")
 
 
-def send_end(sock: socket.socket, target: Tuple[str, int], last_seq: int, total: int, stats: SenderStats) -> None:
-    packet = build_packet(last_seq if last_seq >= 0 else 0, total, FLAG_END, 0)
-    sock.sendto(packet, target)
-    stats.on_send(len(packet), is_start=False, is_end=True)
+def send_end(
+    sock: socket.socket,
+    target: Tuple[str, int],
+    last_seq: int,
+    total: int,
+    stats: SenderStats,
+    count: int,
+) -> None:
+    packet = build_packet(last_seq if last_seq >= 0 else 0, total, FLAG_END, 0) + CONTROL_PADDING
+    for idx in range(count):
+        sock.sendto(packet, target)
+        stats.on_send(len(packet), is_start=False, is_end=True)
+        print(f"[tx] END seq={last_seq if last_seq >= 0 else 0} total={total} copy={idx + 1}/{count}")
 
 
 def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random) -> SenderStats:
@@ -372,7 +394,7 @@ def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random
 
     target = (args.host, args.port)
     stats.start_time = time.monotonic()
-    send_start(sock, target, planned_frames, stats)
+    send_start(sock, target, planned_frames, stats, args.control_frames)
 
     seq = 0
     end_time = stats.start_time + args.duration
@@ -398,7 +420,7 @@ def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random
         seq += 1
         next_send += effective_interval
 
-    send_end(sock, target, seq - 1, seq, stats)
+    send_end(sock, target, seq - 1, seq, stats, args.control_frames)
     stats.end_time = time.monotonic()
     return stats
 
@@ -456,7 +478,7 @@ def run_both(
     target = (args.host, args.port)
 
     tx_stats.start_time = time.monotonic()
-    send_start(sock, target, planned_frames, tx_stats)
+    send_start(sock, target, planned_frames, tx_stats, args.control_frames)
     next_send = tx_stats.start_time
     end_time = tx_stats.start_time + args.duration
 
@@ -486,7 +508,7 @@ def run_both(
                 next_send += effective_interval
                 did_work = True
         elif not end_sent:
-            send_end(sock, target, seq - 1, seq, tx_stats)
+            send_end(sock, target, seq - 1, seq, tx_stats, args.control_frames)
             end_sent = True
             did_work = True
 
@@ -599,6 +621,7 @@ def main() -> None:
         f"mode={args.mode} host={args.host} port={args.port} "
         f"size={args.size} min_size={args.min_size} baudrate={args.baudrate:.1f} "
         f"computed_rate={rate_pps:.3f}/s min_delay_ms={args.min_delay_ms:.3f} "
+        f"control_frames={args.control_frames} "
         f"duration={args.duration:.3f}s "
         f"planned_frames={planned_frames} idle_timeout={args.idle_timeout:.1f}s"
     )
