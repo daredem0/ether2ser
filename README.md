@@ -149,6 +149,60 @@ PIPE STATS
 | `Recons` | Current reconstructed frame length pending decode. | Large lingering values can indicate stuck/incomplete candidate handling. |
 | `PIO TX` | TX PIO stall flag state. | Sticky hardware indicator; useful to correlate with underfeeding/transmit pacing. |
 
+**UDP Test Scripts**
+- `tests/udp_cli_sender.sh`
+  - Interactive shell sender: reads text lines from stdin and sends each line as a UDP datagram with `socat`.
+  - Uses `UDP-DATAGRAM:<ip>:<port>,broadcast`; edit `DEST_IP` and `DEST_PORT` inside the script before use.
+  - Example:
+  ```bash
+  bash tests/udp_cli_sender.sh
+  ```
+
+- `tests/send_receive.py`
+  - Configurable UDP sequence test with `sender`, `receiver`, or `both` mode.
+  - Sender emits framed packets with sequence + timestamp; receiver reports gaps, duplicates, ordering, and rates.
+  - Example (receiver):
+  ```bash
+  python tests/send_receive.py --mode receiver --port 6969 --idle-timeout 10
+  ```
+  - Example (sender):
+  ```bash
+  python tests/send_receive.py --mode sender --host 192.168.29.20 --port 6969 --size 1472 --rate 100 --duration 10
+  ```
+
+- `tests/stress.py`
+  - Legacy quick stress script with hardcoded constants at the top (`HOST`, `PORT`, `SIZE`, `RATE`, `DURATION`).
+  - Sends sequence-tagged packets and prints loss/RTT summary after a short drain period.
+  - Example:
+  ```bash
+  python tests/stress.py
+  ```
+
+- `tests/udp_stress.py`
+  - Extended stress/soak tool with `sender`, `receiver`, or `both` (loopback) mode.
+  - Computes send rate from `baudrate / (frame_size * 8)`, supports random frame sizes (`--min-size` to `--size`),
+    start/end markers, monotonic sequence tracking, loss stats, configurable idle timeout, and optional minimum inter-frame delay (`--min-delay-ms`).
+  - Example (loopback):
+  ```bash
+  python tests/udp_stress.py --mode both --host 127.0.0.1 --port 6969 --baudrate 1000000 --size 1200 --min-size 64 --duration 30 --verbose
+  ```
+  - Example (separate receiver):
+  ```bash
+  python tests/udp_stress.py --mode receiver --port 6969 --idle-timeout 15 --verbose
+  ```
+
+- `tests/image_send_receive.py` (requested as `tests/image_send_and_receive.py`)
+  - Image UDP sender/receiver: sender converts PNG/JPG to grayscale, max `256x256`, chunks with sequence + last-frame flag; receiver reassembles and writes PNG.
+  - Receiver supports `--preview` to open the image after complete reception.
+  - Example (receiver):
+  ```bash
+  python tests/image_send_receive.py --mode receiver --port 6969 --output received.png --preview
+  ```
+  - Example (sender):
+  ```bash
+  python tests/image_send_receive.py --mode sender --host 192.168.29.20 --port 6969 --size 1472 --rate 5 input.jpg
+  ```
+
 **Tests**
 ```bash
 mkdir -p build-tests

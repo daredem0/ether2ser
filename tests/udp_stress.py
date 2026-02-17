@@ -24,6 +24,8 @@ HEADER_STRUCT = struct.Struct("!4sIIB3x")  # magic, seq, total, flags
 HEADER_SIZE = HEADER_STRUCT.size
 
 MAX_UDP_PAYLOAD = 65507
+RED = "\033[31m"
+RESET = "\033[0m"
 
 
 def parse_args() -> argparse.Namespace:
@@ -248,6 +250,8 @@ class ReceiverStats:
         if seq == self.expected_next:
             self.expected_next += 1
         elif seq > self.expected_next:
+            for missed_seq in range(self.expected_next, seq):
+                print(f"{RED}MISSED {missed_seq}{RESET}")
             self.missing_gaps += seq - self.expected_next
             self.expected_next = seq + 1
         else:
