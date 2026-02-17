@@ -83,7 +83,11 @@ Each iteration:
 12. Poll RX FIFO stall flags.
 13. Dispatch control events (up to 20 per loop, or 2 while TX active).
 14. Redraw CLI prompt if output happened.
-15. Sleep `50 us` only when no work was done.
+15. Sleep `50 us` when no work was done.
+
+Implementation note:
+- Current loop bookkeeping marks work as done whenever `tx_queue_drain(...)` returns `E2S_OK`.
+  Since that function returns `E2S_OK` even on no-op iterations, the sleep path is reached less often than intended.
 
 ### 4.3 Runtime Concurrency Diagram
 ```mermaid
@@ -108,7 +112,9 @@ HDLC resync/recovery policies in loop:
 - Idle timeout (`HDLC_SYNC_IDLE_TIMEOUT_US`)
 - Decode fail streak hard resync (`HDLC_DECODE_FAIL_STREAK_LIMIT`)
 - No-progress byte-window resync with different thresholds for internal/external clock
+  (`2048` internal, `12288` external), active only after first successful decode lock
 - External-clock hunting idle-byte suppression for long runs of `0x00/0xFF`
+  (first two bytes kept, subsequent run bytes dropped while in `HUNTING`)
 
 ## 5. Module Decomposition
 ### 5.1 Application Context (`src/system/app_context.h`)
@@ -187,6 +193,7 @@ flowchart LR
 - Payload modes:
   - inline (`bytes[16]`) for small value payloads
   - pointer (`data.ptr`) for external storage
+- Pointer payload ownership/lifetime stays with producer until event consumption
 - Validation helper: `event_get_payload_ptr(event, required_size, out)`
 - Instrumentation: high-water mark + push-drop counter
 
@@ -226,9 +233,12 @@ stateDiagram-v2
 
 Key behavior:
 - Handles non-byte-aligned streams via bit-offset + shift direction
-- Uses short-buffer exhaustive search and fast opening search for longer windows
+- Uses short-buffer exhaustive complete-candidate search (`<= 64` raw bytes) and
+  fast opening-flag search for longer windows
 - Produces encoded candidate frame; decode/accept decision stays in caller
 - Reject strategy advances only one raw byte from candidate start to preserve alternate phases
+- Oversized-candidate guardrail (`2048` aligned bytes) forces false-lock recovery
+- While `HUNTING`, scanned prefix is dropped with one-byte overlap preserved
 - Hardcap drop logic keeps bounded memory
 
 ### 8.3 HDLC Decoder (`src/protocol/hdlc_decoder.c`)
@@ -274,6 +284,7 @@ Runtime updates:
 - Max frame storage per entry: `TX_FRAME_MAX_SIZE_BYTE = 2048`
 - Tracks per-entry drain offset and cumulative serialized wire bytes
 - Emits queue usage diagnostics and threshold warnings
+- `tx_queue_drain(...)` currently returns `E2S_OK` both for progress and for empty/no-op polls
 
 ### 9.4 Baudrate Monitor (`src/system/baudrate_monitor.c`)
 - Edge ISR increments per-pin edge counters
@@ -310,6 +321,7 @@ flowchart TD
 - V.24 clock mode change:
   - rejected while TX queue is active
   - marks config changed and requests reboot event after save
+- Remote UDP port update currently also triggers socket close/reopen in dispatcher path.
 
 ## 11. CLI Design
 ### 11.1 Top-level Commands
@@ -335,11 +347,13 @@ Log level:
 - CLI poll budget is bounded (`CLI_MAX_CHARS_PER_POLL = 16` chars/loop)
 - Line buffer size is 128 bytes
 - Parsed lines are copied into a small static pool before event enqueue
+- CLI line pool size equals event queue capacity; when queue is full, incoming lines are dropped with error log
 
 ## 12. Logging and Diagnostics
 ### 12.1 Logging Architecture
 - Core0 produces logs via `log_write`
 - Core1 drains queue in `log_core1_drain`
+- Core1 waits with `__wfe()` and is woken by producer-side `sev` signal
 - SPSC ring queue:
   - depth `128`
   - effective max queued lines `127`
@@ -374,16 +388,22 @@ Status includes:
   - `pio/led_activity_mirror.pio`
   - WIZnet `wizchip_qspi_pio.pio`
 - Optional flash helper targets using `picotool`
+- Additional example firmware targets are built in the same configuration:
+  - `ex_blink_leds`
+  - `ex_w55_echo`
 
 ### 13.2 Unit Tests (`BUILD_TESTS=ON`)
 Unity-based `unit_tests` target covers:
 - HDLC common/encoder/decoder/sync
 - bit-stuff behavior
-- trace-driven sync decoding cases
+- trace-driven sync decoding cases (`tck_long`, `xck_long4`)
 - CLI parser
 - event queue
 - ringbuffer
 - logging behavior (with `tests/mock_log.c`)
+- byte-alignment and shifted-phase sync scenarios (`tests/test_byte_alignment.c`)
+- bitstuff decoder tests are included into `test_runner.c` as a translation-unit include (`tests/test_hdlc_bitstuff_decoder.c`)
+- Note: `tests/test_tx_queue.c` exists in repository but is not currently linked into `unit_tests` target
 
 ## 14. Operational Constraints
 - Throughput and latency depend on polling service cadence and configured serial clock rate.
@@ -397,3 +417,5 @@ Unity-based `unit_tests` target covers:
 ## 15. Known Gaps / Notes
 - Some legacy event paths (`EV_UDP_RX`, `EV_UDP_TX`, `EV_HDLC_DECODE`) remain for compatibility/testing but are not the primary runtime data-plane path.
 - `src/system/board_pins.h` is currently not used by runtime modules (pin ownership comes from `platform/pinmap.h`).
+- Several `event_queue_push(...)` call sites do not check return value, so control events can be dropped silently under queue pressure.
+- `tx_queue_drain(...)` still contains a legacy fixed FIFO-full probe for `pio0/sm0`; active runtime PIO/SM is otherwise taken from `v24_runtime`.
