@@ -6,6 +6,7 @@ import random
 import socket
 import struct
 import time
+import zlib
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
@@ -22,9 +23,12 @@ FLAG_START = 0x01
 FLAG_END = 0x02
 HEADER_STRUCT = struct.Struct("!4sIIB3x")  # magic, seq, total, flags
 HEADER_SIZE = HEADER_STRUCT.size
+CHECKSUM_STRUCT = struct.Struct("!I")
+CHECKSUM_SIZE = CHECKSUM_STRUCT.size
 
 MAX_UDP_PAYLOAD = 65507
 RED = "\033[31m"
+ORANGE = "\033[38;5;214m"
 RESET = "\033[0m"
 
 
@@ -105,6 +109,12 @@ def parse_args() -> argparse.Namespace:
         parser.error("--min-delay-ms must be >= 0")
     if args.idle_timeout <= 0:
         parser.error("--idle-timeout must be > 0")
+    if args.mode in ("sender", "both"):
+        min_data_size = HEADER_SIZE + CHECKSUM_SIZE
+        if args.size < min_data_size:
+            parser.error(f"--size must be >= {min_data_size} bytes to fit data checksum")
+        if args.min_size < min_data_size:
+            parser.error(f"--min-size must be >= {min_data_size} bytes to fit data checksum")
 
     return args
 
@@ -130,10 +140,20 @@ def make_payload(seq: int, nbytes: int) -> bytes:
     return bytes((((seq * 31) + (i * 17) + (seq >> 8)) & 0xFF) for i in range(nbytes))
 
 
+def compute_checksum(header: bytes, payload: bytes) -> int:
+    return zlib.crc32(header + payload) & 0xFFFFFFFF
+
+
 def build_packet(seq: int, total: int, flags: int, payload_len: int) -> bytes:
     header = HEADER_STRUCT.pack(MAGIC, seq, total, flags)
     if payload_len <= 0:
         return header
+    if flags == 0:
+        if payload_len < CHECKSUM_SIZE:
+            raise ValueError("payload length too small for checksum")
+        payload_data = make_payload(seq, payload_len - CHECKSUM_SIZE)
+        checksum = CHECKSUM_STRUCT.pack(compute_checksum(header, payload_data))
+        return header + payload_data + checksum
     return header + make_payload(seq, payload_len)
 
 
@@ -175,6 +195,7 @@ class ReceiverStats:
     bytes_total: int = 0
     data_bytes_total: int = 0
     invalid_packets: int = 0
+    invalid_checksum_frames: int = 0
     size_min: Optional[int] = None
     size_max: Optional[int] = None
     first_seq: Optional[int] = None
@@ -231,7 +252,28 @@ class ReceiverStats:
                 print(f"[rx] END seq={seq} total={total}")
             return True
 
-        payload_len = len(data) - HEADER_SIZE
+        if len(data) < HEADER_SIZE + CHECKSUM_SIZE:
+            self.invalid_checksum_frames += 1
+            print(f"{ORANGE}INVALID FRAME {seq}{RESET}")
+            if verbose:
+                print(f"[rx] checksum missing seq={seq} bytes={len(data)}")
+            return False
+
+        payload_with_checksum = data[HEADER_SIZE:]
+        payload_data = payload_with_checksum[:-CHECKSUM_SIZE]
+        received_checksum = CHECKSUM_STRUCT.unpack(payload_with_checksum[-CHECKSUM_SIZE:])[0]
+        calculated_checksum = compute_checksum(data[:HEADER_SIZE], payload_data)
+        if received_checksum != calculated_checksum:
+            self.invalid_checksum_frames += 1
+            print(f"{ORANGE}INVALID FRAME {seq}{RESET}")
+            if verbose:
+                print(
+                    f"[rx] checksum mismatch seq={seq} got=0x{received_checksum:08x} "
+                    f"expected=0x{calculated_checksum:08x}"
+                )
+            return False
+
+        payload_len = len(payload_data)
         self.data_packets += 1
         self.data_bytes_total += len(data)
 
@@ -258,7 +300,7 @@ class ReceiverStats:
             self.out_of_order += 1
 
         if verbose:
-            print(f"[rx] DATA seq={seq} bytes={len(data)} payload={payload_len}")
+            print(f"[rx] DATA seq={seq} bytes={len(data)} payload={payload_len} checksum=ok")
         return False
 
 
@@ -307,7 +349,10 @@ def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random
         sock.sendto(packet, target)
         stats.on_send(len(packet), is_start=False, is_end=False)
         if args.verbose:
-            print(f"[tx] DATA seq={seq} bytes={len(packet)} payload={payload_len}")
+            print(
+                f"[tx] DATA seq={seq} bytes={len(packet)} "
+                f"payload={payload_len - CHECKSUM_SIZE} checksum={CHECKSUM_SIZE}"
+            )
         seq += 1
         next_send += effective_interval
 
@@ -388,7 +433,10 @@ def run_both(
                 sock.sendto(packet, target)
                 tx_stats.on_send(len(packet), is_start=False, is_end=False)
                 if args.verbose:
-                    print(f"[tx] DATA seq={seq} bytes={len(packet)} payload={payload_len}")
+                    print(
+                        f"[tx] DATA seq={seq} bytes={len(packet)} "
+                        f"payload={payload_len - CHECKSUM_SIZE} checksum={CHECKSUM_SIZE}"
+                    )
                 seq += 1
                 next_send += effective_interval
                 did_work = True
@@ -455,7 +503,8 @@ def print_receiver_stats(stats: ReceiverStats, stop_reason: str) -> None:
     print(f"[receiver] stats (stop_reason={stop_reason})")
     print(
         f"  packets={stats.packet_count} data_packets={stats.data_packets} "
-        f"start={stats.start_packets} end={stats.end_packets} invalid={stats.invalid_packets}"
+        f"start={stats.start_packets} end={stats.end_packets} invalid={stats.invalid_packets} "
+        f"invalid_checksum={stats.invalid_checksum_frames}"
     )
     print(
         f"  unique_data={unique} dup={stats.duplicates} out_of_order={stats.out_of_order} "
