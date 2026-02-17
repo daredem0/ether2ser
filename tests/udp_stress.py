@@ -63,6 +63,12 @@ def parse_args() -> argparse.Namespace:
         help="Send duration in seconds.",
     )
     parser.add_argument(
+        "--min-delay-ms",
+        type=float,
+        default=0.0,
+        help="Minimum delay between frames in milliseconds (sender/both).",
+    )
+    parser.add_argument(
         "--idle-timeout",
         type=float,
         default=DEFAULT_IDLE_TIMEOUT,
@@ -93,6 +99,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--baudrate must be > 0")
     if args.duration <= 0:
         parser.error("--duration must be > 0")
+    if args.min_delay_ms < 0:
+        parser.error("--min-delay-ms must be >= 0")
     if args.idle_timeout <= 0:
         parser.error("--idle-timeout must be > 0")
 
@@ -269,6 +277,8 @@ def send_end(sock: socket.socket, target: Tuple[str, int], last_seq: int, total:
 def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random) -> SenderStats:
     rate_pps = compute_rate_pps(args.baudrate, args.size)
     interval = 1.0 / rate_pps
+    min_delay = args.min_delay_ms / 1000.0
+    effective_interval = max(interval, min_delay) if min_delay > 0 else interval
     planned_frames = estimate_total_frames(args.duration, rate_pps)
     stats = SenderStats(computed_rate_pps=rate_pps, planned_frames=planned_frames)
 
@@ -295,7 +305,7 @@ def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random
         if args.verbose:
             print(f"[tx] DATA seq={seq} bytes={len(packet)} payload={payload_len}")
         seq += 1
-        next_send += interval
+        next_send += effective_interval
 
     send_end(sock, target, seq - 1, seq, stats)
     stats.end_time = time.monotonic()
@@ -343,6 +353,8 @@ def run_both(
 ) -> Tuple[SenderStats, ReceiverStats, str]:
     rate_pps = compute_rate_pps(args.baudrate, args.size)
     interval = 1.0 / rate_pps
+    min_delay = args.min_delay_ms / 1000.0
+    effective_interval = max(interval, min_delay) if min_delay > 0 else interval
     planned_frames = estimate_total_frames(args.duration, rate_pps)
 
     tx_stats = SenderStats(computed_rate_pps=rate_pps, planned_frames=planned_frames)
@@ -374,7 +386,7 @@ def run_both(
                 if args.verbose:
                     print(f"[tx] DATA seq={seq} bytes={len(packet)} payload={payload_len}")
                 seq += 1
-                next_send += interval
+                next_send += effective_interval
                 did_work = True
         elif not end_sent:
             send_end(sock, target, seq - 1, seq, tx_stats)
@@ -462,7 +474,8 @@ def main() -> None:
     print(
         f"mode={args.mode} host={args.host} port={args.port} "
         f"size={args.size} min_size={args.min_size} baudrate={args.baudrate:.1f} "
-        f"computed_rate={rate_pps:.3f}/s duration={args.duration:.3f}s "
+        f"computed_rate={rate_pps:.3f}/s min_delay_ms={args.min_delay_ms:.3f} "
+        f"duration={args.duration:.3f}s "
         f"planned_frames={planned_frames} idle_timeout={args.idle_timeout:.1f}s"
     )
 
