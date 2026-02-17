@@ -245,8 +245,7 @@ class ReceiverStats:
             self.start_packets += 1
             if total > 0:
                 self.expected_total = total
-            if verbose:
-                print(f"[rx] START total={total}")
+            print(f"[rx] START total={total}")
             return False
 
         if flags & FLAG_END:
@@ -256,8 +255,7 @@ class ReceiverStats:
                 self.expected_total = total
             elif seq >= 0:
                 self.expected_total = seq + 1
-            if verbose:
-                print(f"[rx] END seq={seq} total={total}")
+            print(f"[rx] END seq={seq} total={total}")
             return True
 
         if len(data) < HEADER_SIZE + CHECKSUM_SIZE:
