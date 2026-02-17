@@ -91,6 +91,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print per-packet logs.",
     )
+    parser.add_argument(
+        "--full-seq-list",
+        action="store_true",
+        help="Print full lost/invalid sequence lists in final receiver stats.",
+    )
     args = parser.parse_args()
 
     if args.size < HEADER_SIZE:
@@ -206,7 +211,10 @@ class ReceiverStats:
     missing_gaps: int = 0
     first_rx_time: Optional[float] = None
     last_rx_time: Optional[float] = None
+    run_start_time: Optional[float] = None
+    run_end_time: Optional[float] = None
     seen: set[int] = field(default_factory=set)
+    invalid_checksum_seqs: set[int] = field(default_factory=set)
 
     def on_packet(self, data: bytes, now: float, verbose: bool) -> bool:
         self.packet_count += 1
@@ -254,6 +262,7 @@ class ReceiverStats:
 
         if len(data) < HEADER_SIZE + CHECKSUM_SIZE:
             self.invalid_checksum_frames += 1
+            self.invalid_checksum_seqs.add(seq)
             print(f"{ORANGE}INVALID FRAME {seq}{RESET}")
             if verbose:
                 print(f"[rx] checksum missing seq={seq} bytes={len(data)}")
@@ -265,6 +274,7 @@ class ReceiverStats:
         calculated_checksum = compute_checksum(data[:HEADER_SIZE], payload_data)
         if received_checksum != calculated_checksum:
             self.invalid_checksum_frames += 1
+            self.invalid_checksum_seqs.add(seq)
             print(f"{ORANGE}INVALID FRAME {seq}{RESET}")
             if verbose:
                 print(
@@ -306,6 +316,40 @@ class ReceiverStats:
 
 def choose_frame_size(rng: random.Random, min_size: int, max_size: int) -> int:
     return rng.randint(min_size, max_size)
+
+
+def render_sequence_list(sequences: list[int], max_ranges: Optional[int] = 16) -> str:
+    if not sequences:
+        return "none"
+
+    ranges: list[tuple[int, int]] = []
+    start = sequences[0]
+    prev = sequences[0]
+    for seq in sequences[1:]:
+        if seq == prev + 1:
+            prev = seq
+            continue
+        ranges.append((start, prev))
+        start = seq
+        prev = seq
+    ranges.append((start, prev))
+
+    parts = [f"{a}" if a == b else f"{a}-{b}" for a, b in ranges]
+    if max_ranges is not None and len(parts) > max_ranges:
+        shown = ", ".join(parts[:max_ranges])
+        return f"{shown}, ... ({len(sequences)} total)"
+    return f"{', '.join(parts)} ({len(sequences)} total)"
+
+
+def print_kv_table(title: str, rows: list[tuple[str, str]]) -> None:
+    key_w = max((len(k) for k, _ in rows), default=1)
+    val_w = max((len(v) for _, v in rows), default=1)
+    border = f"+-{'-' * key_w}-+-{'-' * val_w}-+"
+    print(title)
+    print(border)
+    for key, value in rows:
+        print(f"| {key.ljust(key_w)} | {value.ljust(val_w)} |")
+    print(border)
 
 
 def send_start(sock: socket.socket, target: Tuple[str, int], total: int, stats: SenderStats) -> None:
@@ -379,6 +423,7 @@ def recv_available(sock: socket.socket, stats: ReceiverStats, verbose: bool) -> 
 def run_receiver(sock: socket.socket, args: argparse.Namespace) -> Tuple[ReceiverStats, str]:
     stats = ReceiverStats()
     start_wait = time.monotonic()
+    stats.run_start_time = start_wait
     stop_reason = ""
 
     while True:
@@ -394,6 +439,7 @@ def run_receiver(sock: socket.socket, args: argparse.Namespace) -> Tuple[Receive
 
         time.sleep(0.001)
 
+    stats.run_end_time = time.monotonic()
     return stats, stop_reason
 
 
@@ -408,6 +454,7 @@ def run_both(
 
     tx_stats = SenderStats(computed_rate_pps=rate_pps, planned_frames=planned_frames)
     rx_stats = ReceiverStats()
+    rx_stats.run_start_time = time.monotonic()
     target = (args.host, args.port)
 
     tx_stats.start_time = time.monotonic()
@@ -459,6 +506,7 @@ def run_both(
             time.sleep(0.001)
 
     tx_stats.end_time = time.monotonic()
+    rx_stats.run_end_time = tx_stats.end_time
     return tx_stats, rx_stats, stop_reason
 
 
@@ -480,44 +528,69 @@ def print_sender_stats(stats: SenderStats) -> None:
     )
 
 
-def print_receiver_stats(stats: ReceiverStats, stop_reason: str) -> None:
+def print_receiver_stats(stats: ReceiverStats, stop_reason: str, full_seq_list: bool = False) -> None:
     runtime = 0.0
     if stats.first_rx_time is not None and stats.last_rx_time is not None:
         runtime = stats.last_rx_time - stats.first_rx_time
+    total_duration = 0.0
+    if stats.run_start_time is not None and stats.run_end_time is not None:
+        total_duration = stats.run_end_time - stats.run_start_time
     rate = (stats.data_packets / runtime) if runtime > 0.0 else 0.0
     bps = (stats.data_bytes_total * 8.0 / runtime) if runtime > 0.0 else 0.0
     size_min = stats.size_min if stats.size_min is not None else 0
     size_max = stats.size_max if stats.size_max is not None else 0
     unique = len(stats.seen)
+    avg_all = (stats.bytes_total / stats.packet_count) if stats.packet_count else 0.0
+    avg_data = (stats.data_bytes_total / stats.data_packets) if stats.data_packets else 0.0
 
     expected = stats.expected_total
     missing = None
     loss_pct = None
+    lost_sequences: list[int] = []
     if expected is not None and expected >= 0:
-        missing = max(0, expected - unique)
+        lost_sequences = [seq for seq in range(expected) if seq not in stats.seen]
+        missing = len(lost_sequences)
         loss_pct = (missing * 100.0 / expected) if expected > 0 else 0.0
     elif stats.first_seq is not None and stats.last_seq is not None:
-        expected_range = stats.last_seq - stats.first_seq + 1
-        missing = max(0, expected_range - unique)
+        first = stats.first_seq
+        last = stats.last_seq
+        if first is not None and last is not None:
+            lost_sequences = [seq for seq in range(first, last + 1) if seq not in stats.seen]
+            missing = len(lost_sequences)
+
+    invalid_checksum_seqs = sorted(stats.invalid_checksum_seqs)
+    max_ranges = None if full_seq_list else 16
+    lost_text = render_sequence_list(lost_sequences, max_ranges=max_ranges)
+    invalid_text = render_sequence_list(invalid_checksum_seqs, max_ranges=max_ranges)
 
     print(f"[receiver] stats (stop_reason={stop_reason})")
-    print(
-        f"  packets={stats.packet_count} data_packets={stats.data_packets} "
-        f"start={stats.start_packets} end={stats.end_packets} invalid={stats.invalid_packets} "
-        f"invalid_checksum={stats.invalid_checksum_frames}"
-    )
-    print(
-        f"  unique_data={unique} dup={stats.duplicates} out_of_order={stats.out_of_order} "
-        f"missing_gaps={stats.missing_gaps}"
-    )
-    if expected is not None:
-        print(f"  expected_total={expected} missing={missing} loss_pct={loss_pct:.2f}")
-    elif missing is not None:
-        print(f"  missing_estimate={missing} (based on observed seq range)")
-    print(
-        f"  seq_first={stats.first_seq} seq_last={stats.last_seq} "
-        f"rate={rate:.3f}/s rx_bps={bps:.1f} size_min={size_min} size_max={size_max}"
-    )
+    summary_rows = [
+        ("Total duration", f"{total_duration:.3f} s"),
+        ("Active RX duration", f"{runtime:.3f} s"),
+        ("Packets (all/data)", f"{stats.packet_count}/{stats.data_packets}"),
+        ("Start/End frames", f"{stats.start_packets}/{stats.end_packets}"),
+        ("Unique data seq", str(unique)),
+        ("Duplicates", str(stats.duplicates)),
+        ("Out of order", str(stats.out_of_order)),
+        ("Missing gaps seen", str(stats.missing_gaps)),
+        ("Invalid header/magic", str(stats.invalid_packets)),
+        ("Invalid checksum", str(stats.invalid_checksum_frames)),
+        ("Seq first/last", f"{stats.first_seq}/{stats.last_seq}"),
+        ("Expected total", str(expected) if expected is not None else "unknown"),
+        ("Missing count", str(missing) if missing is not None else "unknown"),
+        ("Loss percent", f"{loss_pct:.2f} %" if loss_pct is not None else "unknown"),
+        ("RX rate", f"{rate:.3f} frames/s"),
+        ("RX throughput", f"{bps:.1f} bps"),
+        ("Datagram size min/max", f"{size_min}/{size_max} bytes"),
+        ("Datagram avg (all/data)", f"{avg_all:.1f}/{avg_data:.1f} bytes"),
+    ]
+    print_kv_table("Summary", summary_rows)
+
+    sequence_rows = [
+        ("Lost sequences", lost_text),
+        ("Invalid sequences", invalid_text),
+    ]
+    print_kv_table("Sequence Details", sequence_rows)
 
 
 def main() -> None:
@@ -541,11 +614,11 @@ def main() -> None:
             return
         if args.mode == "receiver":
             rx_stats, stop_reason = run_receiver(sock, args)
-            print_receiver_stats(rx_stats, stop_reason)
+            print_receiver_stats(rx_stats, stop_reason, full_seq_list=args.full_seq_list)
             return
         tx_stats, rx_stats, stop_reason = run_both(sock, args, rng)
         print_sender_stats(tx_stats)
-        print_receiver_stats(rx_stats, stop_reason)
+        print_receiver_stats(rx_stats, stop_reason, full_seq_list=args.full_seq_list)
     finally:
         sock.close()
 
