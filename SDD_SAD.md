@@ -72,22 +72,24 @@ Each iteration:
 1. Feed watchdog.
 2. Poll CLI input (`cli_poll`) and enqueue CLI line events.
 3. Early RX drain from PIO FIFO into HDLC sync accumulator.
-4. Poll UDP RX (`w5500_poll_rx`) and enqueue encoded frames into TX queue.
+4. Sample W5500 UDP socket pressure counters (`w5500_poll_udp_buffer_full_events`).
 5. Poll TX queue stats and drain up to `TX_QUEUE_DRAIN_CHUNK_SIZE` bytes to PIO TX.
 6. If queue empty, run TX completion/RTS holdoff logic (`tx_poll`).
-7. Second RX drain pass.
-8. Apply HDLC idle-timeout resync policy.
-9. Poll HDLC sync for ready frames; decode and forward UDP immediately.
-10. Apply HDLC no-progress resync policy.
-11. Update runtime stats snapshots (decode stats, queue HWM/drops, log drops/HWM).
-12. Poll RX FIFO stall flags.
-13. Dispatch control events (up to 20 per loop, or 2 while TX active).
-14. Redraw CLI prompt if output happened.
-15. Sleep `50 us` when no work was done.
+7. Update UDP RX throttle state from TX queue occupancy (`TX_QUEUE_HIGH_WM` / `TX_QUEUE_LOW_WM`).
+8. Poll UDP RX (`w5500_poll_rx`) and enqueue encoded frames into TX queue only when not throttled.
+9. Second RX drain pass.
+10. Apply HDLC idle-timeout resync policy.
+11. Poll HDLC sync for ready frames; decode and forward UDP immediately.
+12. Apply HDLC no-progress resync policy.
+13. Update runtime stats snapshots (decode stats, queue HWM/drops, log drops/HWM).
+14. Poll RX FIFO stall flags.
+15. Dispatch control events (up to 20 per loop, or 2 while TX active).
+16. Redraw CLI prompt if output happened.
+17. Sleep `50 us` when no work was done.
 
-Implementation note:
-- Current loop bookkeeping marks work as done whenever `tx_queue_drain(...)` returns `E2S_OK`.
-  Since that function returns `E2S_OK` even on no-op iterations, the sleep path is reached less often than intended.
+Implementation notes:
+- TX work bookkeeping now uses actual drain progress (`bytes_drained > 0`) instead of only error code.
+- UDP RX throttling is hysteretic and increments dedicated stats (`udp_rx_throttle_enter`, `udp_rx_throttle_skips`).
 
 ### 4.3 Runtime Concurrency Diagram
 ```mermaid
@@ -255,10 +257,14 @@ Compatibility path:
 ## 9. Driver Design
 ### 9.1 W5500 Driver (`src/drivers/w5500_driver.c`)
 - Initializes WIZnet port layer (PIO SPI + critical section + chip init/check)
+- Applies explicit W5500 socket memory map (`S1` gets `8 KB RX` / `8 KB TX`)
 - Opens non-blocking UDP socket on configured local port
 - Poll-based RX (`recvfrom`) and TX (`sendto`)
 - Local/remote socket reconfigure via close+reopen
 - Broadcast address derived from IP/subnet
+- Samples UDP socket pressure counters each loop:
+  - RX counter increments on transition into "not enough free room for max UDP datagram (`1472 + 8` bytes)"
+  - TX counter increments on transition into "TX free space is zero"
 
 ### 9.2 PIO TX/RX Driver (`src/drivers/pio_tx_rx_driver.c`)
 TX path:
@@ -267,6 +273,9 @@ TX path:
   - external clock mode: `xck_txd.pio` (samples `V24_TXC_DCE`)
 - `tx_put` asserts RTS on first byte and feeds PIO FIFO
 - `tx_poll` deasserts RTS after FIFO-empty/stall plus configurable holdoff
+- CTS edge IRQ handling:
+  - raw GPIO IRQ handler latches `v24_runtime.cts_toggled` on both edges
+  - initialized in `tx_clock_init(...)` (`cts_irq_init`)
 
 RX path:
 - `rck_rxd.pio` samples RXD using RXC timing
@@ -280,11 +289,13 @@ Runtime updates:
 - Clock mode switching is persisted and applied via reboot policy (not hot-swapped in-place)
 
 ### 9.3 TX Queue (`src/drivers/tx_queue.c`)
-- Queue depth: `TX_FRAME_QUEUE_SIZE = 32`
+- Queue depth: `TX_FRAME_QUEUE_SIZE = 64`
 - Max frame storage per entry: `TX_FRAME_MAX_SIZE_BYTE = 2048`
 - Tracks per-entry drain offset and cumulative serialized wire bytes
 - Emits queue usage diagnostics and threshold warnings
-- `tx_queue_drain(...)` currently returns `E2S_OK` both for progress and for empty/no-op polls
+- `tx_queue_drain(...)` reports actual progress through `bytes_drained` output parameter
+- If CTS toggled during an in-progress frame, drain logic rewinds current entry offset to `0`
+  to resend that HDLC frame from the beginning
 
 ### 9.4 Baudrate Monitor (`src/system/baudrate_monitor.c`)
 - Edge ISR increments per-pin edge counters
@@ -373,6 +384,8 @@ Status includes:
 - Accumulator internals
 - RX health counters (stall/drop/hunt idle drops)
 - TX/event/log queue high-water and drops
+- W5500 buffer pressure counters (`rx_no_room_events`, `tx_full_events`)
+- UDP ingress throttle counters (`udp_rx_enter`, `udp_rx_skips`)
 - TX SM stall bit from active runtime PIO/SM
 
 ## 13. Build and Test Architecture
@@ -408,6 +421,7 @@ Unity-based `unit_tests` target covers:
 ## 14. Operational Constraints
 - Throughput and latency depend on polling service cadence and configured serial clock rate.
 - Event queue and TX queue are bounded; sustained overload causes push drops/backpressure.
+- UDP ingress is intentionally throttled from TX queue occupancy with hysteresis (`HIGH_WM=48`, `LOW_WM=12`).
 - Sync accumulator is bounded; hardcap drop policy preserves forward progress near limits.
 - External-clock idle streams can flood raw RX bytes; firmware mitigates with idle-byte filter and no-progress resync.
 - Clock-mode changes require reboot to reinitialize TX PIO program path cleanly.
@@ -418,4 +432,7 @@ Unity-based `unit_tests` target covers:
 - Some legacy event paths (`EV_UDP_RX`, `EV_UDP_TX`, `EV_HDLC_DECODE`) remain for compatibility/testing but are not the primary runtime data-plane path.
 - `src/system/board_pins.h` is currently not used by runtime modules (pin ownership comes from `platform/pinmap.h`).
 - Several `event_queue_push(...)` call sites do not check return value, so control events can be dropped silently under queue pressure.
+- Remote UDP port update path currently reconfigures the same UDP socket using `destination_config`, which can disturb local RX socket binding semantics.
 - `tx_queue_drain(...)` still contains a legacy fixed FIFO-full probe for `pio0/sm0`; active runtime PIO/SM is otherwise taken from `v24_runtime`.
+- CTS toggle handling currently clears `cts_toggled` via cast-through-const access pattern and only in mid-frame rewind path.
+- W5500 RX pressure counter is transition-based (`no-room` enter events), so it does not represent dwell time under sustained overload by itself.
