@@ -34,6 +34,7 @@ V24_PIN_T inputs[] = {V24_DCD, V24_DSR, V24_CTS, V24_RXD, V24_RXC};
 
 V24_POLARITIES_T init_polarities(void)
 {
+    LOG_DEBUG("Initializing default polarities\r\n");
     return (V24_POLARITIES_T){.tx_polarities =
                                   {
                                       .txd_inverted = false,

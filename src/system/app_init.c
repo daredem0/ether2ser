@@ -57,7 +57,7 @@ void init_app(app_ctx_t* app, const config_t* persistent_config)
         app->v24_config         = app->persistent_config.v24_config;
         app->net_config         = app->persistent_config.net_config;
         w5500_set_network(&app->net_config);
-        init_v24_config(&app->v24_config, app->v24_config.baudrate);
+        reinit_v24_config(&app->v24_config, app->v24_config.baudrate);
     }
     else
     {

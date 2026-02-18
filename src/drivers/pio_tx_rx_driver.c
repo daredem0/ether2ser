@@ -174,6 +174,8 @@ void rx_clock_update_settings(V24_RX_POLARITIES_T* polarities)
                         polarities->rxc_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
         gpio_set_inover(V24_RXD,
                         polarities->rxd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+        gpio_set_inover(V24_DCD,
+                        polarities->dcd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
     }
 
     pio_sm_set_enabled(v24_runtime.rx_pio, v24_runtime.rx_sm, true);
@@ -309,8 +311,13 @@ void tx_clock_update_settings(V24_CONFIG_T* config)
     }
     gpio_set_outover(V24_TXD,
                      polarities->txd_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+    gpio_set_outover(V24_DTR,
+                     polarities->dtr_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+    gpio_set_outover(V24_RTS,
+                     polarities->rts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
     gpio_set_inover(V24_CTS,
                     polarities->cts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+
     if (!config->external_clock)
     {
         pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, clkdiv);
@@ -364,7 +371,7 @@ static void tx_clock_init_tck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
 static void tx_clock_init_xck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
 {
     LOG_INFO("Initializing external clock\r\n");
-    LOG_DEBUG("XXC: init pio%u sm%u pin%u\r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm,
+    LOG_DEBUG("TXC: init pio%u sm%u pin%u\r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm,
               (unsigned)V24_TXC_DCE);
 
     pio_sm_claim(pio, pio_sm);
