@@ -296,8 +296,8 @@ static apply_result_t ev_set_v24_settings(const event_queue_data_t* payload, app
         app->need_prompt = true;
         break;
     case V24_POLARITIES:
-        if (memcmp(&app->v24_config.polarities, &payload->value.polarities, sizeof(V24_POLARITIES_T)) !=
-            0)
+        if (memcmp(&app->v24_config.polarities, &payload->value.polarities,
+                   sizeof(V24_POLARITIES_T)) != 0)
         {
             memcpy(&app->v24_config.polarities, &payload->value.polarities,
                    sizeof(V24_POLARITIES_T));
@@ -320,8 +320,8 @@ static apply_result_t ev_set_v24_settings(const event_queue_data_t* payload, app
             }
             LOG_PLAIN("Switching to %s mode.\r\n", external_clock ? "external" : "internal");
             app->v24_config.external_clock = external_clock;
-            result.changed         = true;
-            result.reboot_required = true;
+            result.changed                 = true;
+            result.reboot_required         = true;
         }
         else
         {
@@ -482,10 +482,15 @@ static void print_status_event(app_ctx_t* app, ev_status_stats_t* status_stats)
     LOG_PLAIN("    HighWater : tx=%" PRIu64 "  event=%" PRIu64 "  log=%" PRIu64 "\r\n",
               app->stats.tx_queue_used_max, app->stats.event_queue_used_max,
               app->stats.log_queue_used_max);
+    LOG_PLAIN("    W5500 Buf : rx_no_room_events=%" PRIu64 "  tx_full_events=%" PRIu64 "\r\n",
+              app->stats.udp_rx_buffer_full_counts, app->stats.udp_tx_buffer_full_counts);
     LOG_PLAIN("    Drops     : tx=%" PRIu64 "  event=%" PRIu64 "  log=%" PRIu64 "\r\n",
               app->stats.tx_queue_drop_frames, app->stats.event_queue_drop_events,
               app->stats.log_drop_lines);
     LOG_PLAIN("    Recons    : len=%zu\r\n", app->reconstructed_frame.length);
+    LOG_PLAIN("    Throttle  : udp_rx_enter=%" PRIu64 "  udp_rx_skips=%" PRIu64 "\r\n",
+              app->stats.udp_rx_throttle_enter, app->stats.udp_rx_throttle_skips);
+
     const v24_runtime_t* v24_runtime = get_v24_runtime();
     LOG_PLAIN(
         "    PIO TX    : stalled=%" PRIu32 "\r\n",

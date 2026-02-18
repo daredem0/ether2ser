@@ -359,14 +359,37 @@ def print_kv_table(title: str, rows: list[tuple[str, str]]) -> None:
     print(border)
 
 
+def paced_sendto(
+    sock: socket.socket,
+    target: Tuple[str, int],
+    packet: bytes,
+    next_send: float,
+    interval: float,
+) -> float:
+    now = time.monotonic()
+    if now < next_send:
+        time.sleep(next_send - now)
+    else:
+        next_send = now
+    sock.sendto(packet, target)
+    return next_send + interval
+
+
 def send_start(
-    sock: socket.socket, target: Tuple[str, int], total: int, stats: SenderStats, count: int
-) -> None:
+    sock: socket.socket,
+    target: Tuple[str, int],
+    total: int,
+    stats: SenderStats,
+    count: int,
+    interval: float,
+    next_send: float,
+) -> float:
     packet = build_packet(0, total, FLAG_START, 0) + CONTROL_PADDING
     for idx in range(count):
-        sock.sendto(packet, target)
+        next_send = paced_sendto(sock, target, packet, next_send, interval)
         stats.on_send(len(packet), is_start=True, is_end=False)
         print(f"[tx] START total={total} copy={idx + 1}/{count}")
+    return next_send
 
 
 def send_end(
@@ -376,12 +399,15 @@ def send_end(
     total: int,
     stats: SenderStats,
     count: int,
-) -> None:
+    interval: float,
+    next_send: float,
+) -> float:
     packet = build_packet(last_seq if last_seq >= 0 else 0, total, FLAG_END, 0) + CONTROL_PADDING
     for idx in range(count):
-        sock.sendto(packet, target)
+        next_send = paced_sendto(sock, target, packet, next_send, interval)
         stats.on_send(len(packet), is_start=False, is_end=True)
         print(f"[tx] END seq={last_seq if last_seq >= 0 else 0} total={total} copy={idx + 1}/{count}")
+    return next_send
 
 
 def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random) -> SenderStats:
@@ -394,23 +420,25 @@ def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random
 
     target = (args.host, args.port)
     stats.start_time = time.monotonic()
-    send_start(sock, target, planned_frames, stats, args.control_frames)
+    next_send = stats.start_time
+    next_send = send_start(
+        sock,
+        target,
+        planned_frames,
+        stats,
+        args.control_frames,
+        effective_interval,
+        next_send,
+    )
 
     seq = 0
     end_time = stats.start_time + args.duration
-    next_send = stats.start_time
 
     while time.monotonic() < end_time:
-        now = time.monotonic()
-        if now < next_send:
-            time.sleep(next_send - now)
-        else:
-            next_send = now
-
         frame_size = choose_frame_size(rng, args.min_size, args.size)
         payload_len = frame_size - HEADER_SIZE
         packet = build_packet(seq, 0, 0, payload_len)
-        sock.sendto(packet, target)
+        next_send = paced_sendto(sock, target, packet, next_send, effective_interval)
         stats.on_send(len(packet), is_start=False, is_end=False)
         if args.verbose:
             print(
@@ -418,9 +446,17 @@ def run_sender(sock: socket.socket, args: argparse.Namespace, rng: random.Random
                 f"payload={payload_len - CHECKSUM_SIZE} checksum={CHECKSUM_SIZE}"
             )
         seq += 1
-        next_send += effective_interval
 
-    send_end(sock, target, seq - 1, seq, stats, args.control_frames)
+    next_send = send_end(
+        sock,
+        target,
+        seq - 1,
+        seq,
+        stats,
+        args.control_frames,
+        effective_interval,
+        next_send,
+    )
     stats.end_time = time.monotonic()
     return stats
 
@@ -478,8 +514,16 @@ def run_both(
     target = (args.host, args.port)
 
     tx_stats.start_time = time.monotonic()
-    send_start(sock, target, planned_frames, tx_stats, args.control_frames)
     next_send = tx_stats.start_time
+    next_send = send_start(
+        sock,
+        target,
+        planned_frames,
+        tx_stats,
+        args.control_frames,
+        effective_interval,
+        next_send,
+    )
     end_time = tx_stats.start_time + args.duration
 
     seq = 0
@@ -497,7 +541,7 @@ def run_both(
                 frame_size = choose_frame_size(rng, args.min_size, args.size)
                 payload_len = frame_size - HEADER_SIZE
                 packet = build_packet(seq, 0, 0, payload_len)
-                sock.sendto(packet, target)
+                next_send = paced_sendto(sock, target, packet, next_send, effective_interval)
                 tx_stats.on_send(len(packet), is_start=False, is_end=False)
                 if args.verbose:
                     print(
@@ -505,10 +549,18 @@ def run_both(
                         f"payload={payload_len - CHECKSUM_SIZE} checksum={CHECKSUM_SIZE}"
                     )
                 seq += 1
-                next_send += effective_interval
                 did_work = True
         elif not end_sent:
-            send_end(sock, target, seq - 1, seq, tx_stats, args.control_frames)
+            next_send = send_end(
+                sock,
+                target,
+                seq - 1,
+                seq,
+                tx_stats,
+                args.control_frames,
+                effective_interval,
+                next_send,
+            )
             end_sent = True
             did_work = True
 

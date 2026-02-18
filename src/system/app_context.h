@@ -55,6 +55,10 @@ typedef struct
     uint64_t hdlc_decode_ok;
     uint64_t hdlc_decode_fail;
     uint64_t udp_tx_frames;
+    uint64_t udp_rx_throttle_enter;
+    uint64_t udp_rx_throttle_skips;
+    uint64_t udp_rx_buffer_full_counts;
+    uint64_t udp_tx_buffer_full_counts;
 
     uint64_t sync_lookahead_wait_syncing;
     uint64_t sync_lookahead_wait_synced;

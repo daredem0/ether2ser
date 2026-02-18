@@ -57,7 +57,7 @@ e2s_error_t poll_queue_stats(TX_QUEUE_T* queue)
     {
         if (queue_filling_up)
         {
-            LOG_ERROR("TX Queue Stats: %zu / %zu frames used\r\n", queue->queue_buffer.count,
+            LOG_TRACE("TX Queue Stats: %zu / %zu frames used\r\n", queue->queue_buffer.count,
                       queue->queue_buffer.capacity);
         }
         else
@@ -71,11 +71,11 @@ e2s_error_t poll_queue_stats(TX_QUEUE_T* queue)
 }
 
 static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_T* queue, TX_QUEUE_ENTRY_T* entry,
-                                        size_t bytes_to_drain)
+                                        size_t bytes_to_drain, size_t* bytes_drained)
 {
     // LOG_DEBUG("TX: Draining up to %zu bytes from entry (length: %zu, offset: %zu)\r\n",
     //        bytes_to_drain, entry->frame.length, entry->offset);
-    if (!entry)
+    if (!entry || !bytes_drained)
     {
         // LOG_DEBUG("TX: Entry is NULL\r\n");
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
@@ -83,7 +83,7 @@ static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_T* queue, TX_QUEUE_ENTRY_T* ent
     size_t effective_bytes_to_drain = bytes_to_drain >= entry->frame.length - entry->offset
                                           ? entry->frame.length - entry->offset
                                           : bytes_to_drain;
-    size_t bytes_drained            = 0;
+    *bytes_drained                  = 0;
     for (size_t i = 0; i < effective_bytes_to_drain; i++)
     {
         if (pio_sm_is_tx_fifo_full(pio0, 0))
@@ -94,7 +94,7 @@ static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_T* queue, TX_QUEUE_ENTRY_T* ent
         if (tx_put(entry->frame.payload[entry->offset + i]))
         {
             // LOG_DEBUG("TX: Wrote byte %02X\r\n", entry->frame.payload[entry->offset + i]);
-            bytes_drained++;
+            (*bytes_drained)++;
         }
         else
         {
@@ -103,8 +103,8 @@ static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_T* queue, TX_QUEUE_ENTRY_T* ent
             break;
         }
     }
-    entry->offset += bytes_drained;
-    queue->tx_wire_bytes += bytes_drained;
+    entry->offset += *bytes_drained;
+    queue->tx_wire_bytes += *bytes_drained;
     // LOG_DEBUG("TX: Drained %zu bytes, new offset is %zu\r\n", bytes_drained, entry->offset);
     return E2S_OK;
 }
@@ -124,11 +124,25 @@ bool tx_queue_is_empty(TX_QUEUE_T* queue)
            queue->current_entry.offset >= queue->current_entry.frame.length;
 }
 
-e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain)
+e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* bytes_drained)
 {
-    if (!queue)
+    if (!queue || !bytes_drained)
     {
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
+    }
+
+    /**
+     * This check is done to prevent bits from being lost when cts toggles during an active
+     * transmission. After a cts toggle the bit phase on the receiving end is not deterministic.
+     * Therefore we resend the last hdlc frame completely.
+     */
+    const v24_runtime_t* rt = get_v24_runtime();
+    if (rt->cts_toggled && queue->current_entry.offset > 0 &&
+        queue->current_entry.offset < queue->current_entry.frame.length)
+    {
+        queue->current_entry.offset       = 0;     // resend whole HDLC frame
+        ((v24_runtime_t*)rt)->cts_toggled = false; // or add a proper clear helper
+        return E2S_OK;
     }
     if (queue->current_entry.offset >= queue->current_entry.frame.length)
     {
@@ -145,7 +159,7 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain)
         queue->current_entry.frame.payload  = queue->current_entry.payload;
         queue->current_entry.frame.capacity = sizeof(queue->current_entry.payload);
     }
-    tx_queue_drain_bytes(queue, &queue->current_entry, bytes_to_drain);
+    tx_queue_drain_bytes(queue, &queue->current_entry, bytes_to_drain, bytes_drained);
     if (queue->current_entry.offset > 0 &&
         queue->current_entry.offset < queue->current_entry.frame.length)
     {

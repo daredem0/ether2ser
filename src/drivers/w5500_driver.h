@@ -133,4 +133,7 @@ void w5500_set_network(NETWORK_CONFIG_T* config);
  */
 void w5500_driver_init(void);
 
+void w5500_poll_udp_buffer_full_events(uint64_t* rx_full_enter_events,
+                                       uint64_t* tx_full_enter_events);
+
 #endif /* W5500_DRIVER_H */

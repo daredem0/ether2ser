@@ -36,6 +36,53 @@
 // Socket
 #define IP_SOCKET 0 // Socket number for IPRAW
 #define UDP_SOCKET 1
+#define UDP_MAX_PAYLOAD_BYTES 1472U
+#define UDP_W5500_OVERHEAD_BYTES 8U
+#define UDP_RX_REQUIRED_BYTES (UDP_MAX_PAYLOAD_BYTES + UDP_W5500_OVERHEAD_BYTES)
+
+void w5500_poll_udp_buffer_full_events(uint64_t* rx_full_enter_events,
+                                       uint64_t* tx_full_enter_events)
+{
+    static uint64_t rx_events   = 0;
+    static uint64_t tx_events   = 0;
+    static bool     rx_was_full = false;
+    static bool     tx_was_full = false;
+
+    uint16_t rx_used_bytes = getSn_RX_RSR(UDP_SOCKET);
+    uint16_t rx_cap_bytes  = (uint16_t)getSn_RXBUF_SIZE(UDP_SOCKET) * 1024U;
+
+    uint16_t tx_free_bytes = getSn_TX_FSR(UDP_SOCKET);
+    uint16_t tx_cap_bytes  = (uint16_t)getSn_TXBUF_SIZE(UDP_SOCKET) * 1024U;
+
+    // For UDP RX overload visibility, "full" means there is not enough free
+    // room for one max-size datagram (+ W5500 UDP metadata), which is when
+    // incoming drops can start even before 100% occupancy.
+    uint16_t rx_free_bytes =
+        (rx_used_bytes < rx_cap_bytes) ? (uint16_t)(rx_cap_bytes - rx_used_bytes) : (uint16_t)0;
+    bool rx_is_full = (rx_cap_bytes > 0U) && (rx_free_bytes < UDP_RX_REQUIRED_BYTES);
+    bool tx_is_full = (tx_cap_bytes > 0U) && (tx_free_bytes == 0U);
+
+    if (rx_is_full && !rx_was_full)
+    {
+        rx_events++;
+    }
+    if (tx_is_full && !tx_was_full)
+    {
+        tx_events++;
+    }
+
+    rx_was_full = rx_is_full;
+    tx_was_full = tx_is_full;
+
+    if (rx_full_enter_events)
+    {
+        *rx_full_enter_events = rx_events;
+    }
+    if (tx_full_enter_events)
+    {
+        *tx_full_enter_events = tx_events;
+    }
+}
 
 static void ipv4_calc_broadcast_u8(const uint8_t ip_addr[4], const uint8_t mask[4],
                                    uint8_t bcast[4])
@@ -144,9 +191,27 @@ void w5500_set_network(NETWORK_CONFIG_T* config)
     print_network_information(config->net_info);
 }
 
+static e2s_error_t w5500_apply_socket_mem_map(void)
+{
+    // [0] TX map, [1] RX map, sockets S0..S7, units = KB
+    uint8_t memsize[2][8] = {
+        {1, 8, 1, 1, 1, 1, 1, 2},
+        {1, 8, 1, 1, 1, 1, 1, 2},
+    };
+
+    if (ctlwizchip(CW_INIT_WIZCHIP, (void*)memsize) == -1)
+    {
+        LOG_ERROR("W5500: failed to apply socket memory map\r\n");
+        return E2S_ERR_W5500_INIT_FAILED;
+    }
+
+    LOG_INFO("W5500 socket1 buffers: RX=%uKB TX=%uKB\r\n", getSn_RXBUF_SIZE(UDP_SOCKET),
+             getSn_TXBUF_SIZE(UDP_SOCKET));
+    return E2S_OK;
+}
+
 void w5500_set_network_defaults(NETWORK_CONFIG_T* config)
 {
-
     // Configure network settings
     config->net_info = (wiz_NetInfo){.mac  = DEFAULT_MAC_ADDR,
                                      .ip   = DEFAULT_IP_ADDR,
@@ -171,6 +236,12 @@ void w5500_driver_init(void)
 
     LOG_DEBUG("W5500: Initialize\r\n");
     wizchip_initialize();
+
+    LOG_DEBUG("W5500: Apply socket memory map\r\n");
+    if (w5500_apply_socket_mem_map() != E2S_OK)
+    {
+        fatal_panic(E2S_ERR_W5500_INIT_FAILED);
+    }
 
     LOG_DEBUG("W5500: Verify chip\r\n");
     wizchip_check();

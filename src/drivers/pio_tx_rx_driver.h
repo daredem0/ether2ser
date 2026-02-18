@@ -30,13 +30,14 @@
 
 typedef struct
 {
-    uint32_t tx_rts_holdoff_us;
-    bool     rts_set;
-    PIO      tx_pio;
-    uint     tx_sm;
-    PIO      rx_pio;
-    uint     rx_sm;
-    bool     tx_clock_forced_low;
+    uint32_t      tx_rts_holdoff_us;
+    bool          rts_set;
+    PIO           tx_pio;
+    uint          tx_sm;
+    PIO           rx_pio;
+    uint          rx_sm;
+    bool          tx_clock_forced_low;
+    volatile bool cts_toggled;
 } v24_runtime_t;
 
 /**

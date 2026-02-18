@@ -58,6 +58,30 @@ const v24_runtime_t* get_v24_runtime(void)
     return (const v24_runtime_t*)&v24_runtime;
 }
 
+static void cts_raw_irq_handler(void)
+{
+    uint32_t events = gpio_get_irq_event_mask(V24_CTS);
+    uint32_t mask   = GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE;
+    if (events & mask)
+    {
+        gpio_acknowledge_irq(V24_CTS, events & mask);
+        v24_runtime.cts_toggled = true;
+    }
+}
+
+static void cts_irq_init(void)
+{
+    static bool initialized = false;
+    if (!initialized)
+    {
+        gpio_add_raw_irq_handler_masked(1U << V24_CTS, cts_raw_irq_handler);
+        initialized = true;
+    }
+
+    gpio_set_irq_enabled(V24_CTS, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true);
+    irq_set_enabled(IO_IRQ_BANK0, true);
+}
+
 // NOLINTBEGIN(misc-include-cleaner)
 // These are actualy visible and clang-tidy has an issue
 // with the pico-sdk here
@@ -410,4 +434,5 @@ void tx_clock_init(PIO pio, uint pio_sm, V24_CONFIG_T* config)
 {
     config->external_clock ? tx_clock_init_xck(pio, pio_sm, config)
                            : tx_clock_init_tck(pio, pio_sm, config);
+    cts_irq_init();
 }

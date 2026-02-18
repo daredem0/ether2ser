@@ -29,7 +29,7 @@
 /**
  * @brief Number of frame entries available in the TX queue ring buffer.
  */
-#define TX_FRAME_QUEUE_SIZE 32
+#define TX_FRAME_QUEUE_SIZE 64
 
 /**
  * @brief The maximum size of a hdlc frame in the queue
@@ -100,9 +100,10 @@ bool tx_queue_is_empty(TX_QUEUE_T* queue);
  * @brief Drain up to @p bytes_to_drain bytes from queue into TX FIFO.
  * @param queue TX queue instance.
  * @param bytes_to_drain Maximum bytes to attempt.
+ * @param bytes_drained Pointer to where the number of actually drained bytes is written.
  * @return Error code.
  */
-e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain);
+e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* bytes_drained);
 
 /**
  * @brief Emit queue usage statistics when needed.

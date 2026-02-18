@@ -42,7 +42,10 @@
 #define MAIN_LOOP_SLEEP_MS 1
 #define MAIN_LOOP_SLEEP_US 50
 
-#define TX_QUEUE_DRAIN_CHUNK_SIZE 32
+#define TX_QUEUE_DRAIN_CHUNK_SIZE 32U
+#define TX_QUEUE_HIGH_WM 48U
+#define TX_QUEUE_LOW_WM 12U
+
 #define EVENT_LOOP_MAX_EVENTS_AT_ONCE 20
 #define EVENT_LOOP_MAX_EVENTS_WHILE_TX_ACTIVE 2
 #define HDLC_DECODE_FAIL_STREAK_LIMIT 4U
@@ -97,6 +100,7 @@ typedef struct
     uint64_t last_frame_ready_bytes;
     uint32_t hunt_idle_run_length;
     bool     work_done;
+    bool     udp_rx_throttled;
 } event_loop_runtime_t;
 
 static void drain_rx_until_empty(app_ctx_t* app, event_loop_runtime_t* runtime, size_t* rx_drained)
@@ -159,19 +163,21 @@ static void poll_and_enqueue_udp_rx(app_ctx_t* app, event_loop_runtime_t* event_
     }
 }
 
-static void poll_tx_pipeline(app_ctx_t* app, event_loop_runtime_t* event_loop_runtime)
+static size_t poll_tx_pipeline(app_ctx_t* app, event_loop_runtime_t* event_loop_runtime)
 {
+
+    size_t bytes_drained = 0;
     if (poll_queue_stats(&app->tx_queue) != E2S_OK)
     {
         LOG_ERROR("Poll Queue Stats failed.\r\n");
     }
 
     // Poll the tx queue. This writes out bytes on the serial line
-    if (tx_queue_drain(&app->tx_queue, TX_QUEUE_DRAIN_CHUNK_SIZE) != E2S_OK)
+    if (tx_queue_drain(&app->tx_queue, TX_QUEUE_DRAIN_CHUNK_SIZE, &bytes_drained) != E2S_OK)
     {
         LOG_ERROR("Poll Queue Drain failed.\r\n");
     }
-    else
+    else if (bytes_drained > 0U)
     {
         event_loop_runtime->work_done = true;
     }
@@ -182,6 +188,7 @@ static void poll_tx_pipeline(app_ctx_t* app, event_loop_runtime_t* event_loop_ru
         // Currently we dont evaluate the result, but the api offers it
         (void)tx_poll();
     }
+    return bytes_drained;
 }
 
 static void poll_hdlc_idle_timeout(app_ctx_t* app, event_loop_runtime_t* event_loop_runtime,
@@ -351,6 +358,28 @@ static void poll_and_dispatch_events(app_ctx_t* app)
     }
 }
 
+/**
+ * TODO: This curerntly only schedules tx_drain with rx_udp. Ideally we should add a simple
+ * scheduler to the event loop.
+ */
+static void update_udp_rx_throttle_state(app_ctx_t* app, event_loop_runtime_t* runtime)
+{
+    size_t tx_q_used = tx_queue_get_count(&app->tx_queue);
+
+    if (!runtime->udp_rx_throttled && tx_q_used >= TX_QUEUE_HIGH_WM)
+    {
+        if (runtime->udp_rx_throttled == false)
+        {
+            app->stats.udp_rx_throttle_enter++;
+        }
+        runtime->udp_rx_throttled = true;
+    }
+    else if (runtime->udp_rx_throttled && tx_q_used <= TX_QUEUE_LOW_WM)
+    {
+        runtime->udp_rx_throttled = false;
+    }
+}
+
 void event_loop(app_ctx_t* app)
 {
     static event_loop_runtime_t event_loop_runtime = {.rx_byte                 = 0U,
@@ -358,7 +387,8 @@ void event_loop(app_ctx_t* app)
                                                       .last_rx_byte_us         = 0U,
                                                       .last_frame_ready_bytes  = 0U,
                                                       .hunt_idle_run_length    = 0U,
-                                                      .work_done               = false};
+                                                      .work_done               = false,
+                                                      .udp_rx_throttled        = false};
 
     while (true)
     {
@@ -372,9 +402,20 @@ void event_loop(app_ctx_t* app)
         drain_rx_until_empty(app, &event_loop_runtime, &rx_drained_early);
         update_rx_drain_stats(app, &event_loop_runtime, rx_drained_early,
                               to_us_since_boot(get_absolute_time()));
-        poll_and_enqueue_udp_rx(app, &event_loop_runtime);
 
-        poll_tx_pipeline(app, &event_loop_runtime);
+        w5500_poll_udp_buffer_full_events(&app->stats.udp_rx_buffer_full_counts,
+                                          &app->stats.udp_tx_buffer_full_counts);
+
+        (void)poll_tx_pipeline(app, &event_loop_runtime);
+        update_udp_rx_throttle_state(app, &event_loop_runtime);
+        if (!event_loop_runtime.udp_rx_throttled)
+        {
+            poll_and_enqueue_udp_rx(app, &event_loop_runtime);
+        }
+        else
+        {
+            app->stats.udp_rx_throttle_skips++;
+        }
 
         // Drain RX FIFO into the accumulator buffer
         size_t rx_drained = 0;
@@ -383,7 +424,7 @@ void event_loop(app_ctx_t* app)
         update_rx_drain_stats(app, &event_loop_runtime, rx_drained, now_us);
 
         /** TODO: Its not good that the event loop pokes around in hdlc state.
-         *  We should add a hhelper like hdlc_sync_acc_reset_frame that hides
+         *  We should add a helper like hdlc_sync_acc_reset_frame that hides
          * these details and just call that from here. This shall be refactored
          * in the next iteration.
          */
