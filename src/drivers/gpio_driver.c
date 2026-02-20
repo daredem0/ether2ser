@@ -38,14 +38,14 @@ V24_POLARITIES_T init_polarities(void)
     return (V24_POLARITIES_T){.tx_polarities =
                                   {
                                       .txd_inverted = false,
-                                      .txc_inverted = false,
+                                      .txc_inverted = true,
                                       .cts_inverted = true,
                                       .rts_inverted = true,
                                       .dtr_inverted = true,
                                   },
                               .rx_polarities = {
                                   .rxd_inverted = false,
-                                  .rxc_inverted = false,
+                                  .rxc_inverted = true,
                                   .dcd_inverted = true,
                               }};
 }

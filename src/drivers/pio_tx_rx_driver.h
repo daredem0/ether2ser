@@ -37,7 +37,8 @@ typedef struct
     PIO           rx_pio;
     uint          rx_sm;
     bool          tx_clock_forced_low;
-    volatile bool cts_toggled;
+    /** Monotonic sequence incremented on each observed CTS edge. */
+    volatile uint32_t cts_toggle_seq;
 } v24_runtime_t;
 
 /**
@@ -116,6 +117,12 @@ void rx_clock_update_settings(V24_RX_POLARITIES_T* polarities);
  * @return Pointer to the v24 runtime.
  */
 const v24_runtime_t* get_v24_runtime(void);
+
+/**
+ * @brief Read current CTS edge sequence counter.
+ * @return Monotonic CTS edge sequence value.
+ */
+uint32_t tx_clock_get_cts_toggle_seq(void);
 
 /**
  * @brief Disable RX Path, clear fifos, restart SMs and CLKDIV and enable again.

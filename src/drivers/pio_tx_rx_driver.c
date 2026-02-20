@@ -58,6 +58,11 @@ const v24_runtime_t* get_v24_runtime(void)
     return (const v24_runtime_t*)&v24_runtime;
 }
 
+uint32_t tx_clock_get_cts_toggle_seq(void)
+{
+    return v24_runtime.cts_toggle_seq;
+}
+
 static void cts_raw_irq_handler(void)
 {
     uint32_t events = gpio_get_irq_event_mask(V24_CTS);
@@ -65,7 +70,7 @@ static void cts_raw_irq_handler(void)
     if (events & mask)
     {
         gpio_acknowledge_irq(V24_CTS, events & mask);
-        v24_runtime.cts_toggled = true;
+        v24_runtime.cts_toggle_seq++;
     }
 }
 

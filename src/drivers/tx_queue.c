@@ -40,6 +40,8 @@ e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data)
     RbInit(&(queue->queue_buffer), buffer_data, TX_FRAME_QUEUE_SIZE, sizeof(TX_QUEUE_ENTRY_T));
     queue->queue_touched = false;
     queue->tx_wire_bytes = 0;
+    queue->current_frame_cts_seq_start = 0U;
+    queue->current_frame_cts_seq_valid = false;
     return E2S_OK;
 }
 
@@ -130,20 +132,23 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
     {
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
     }
+    *bytes_drained = 0U;
 
     /**
-     * This check is done to prevent bits from being lost when cts toggles during an active
-     * transmission. After a cts toggle the bit phase on the receiving end is not deterministic.
-     * Therefore we resend the last hdlc frame completely.
+     * Restart only when CTS changed during this frame's transmission window.
+     * Stale edges from idle periods must not retrigger unrelated future frames.
      */
-    const v24_runtime_t* rt = get_v24_runtime();
-    if (rt->cts_toggled && queue->current_entry.offset > 0 &&
-        queue->current_entry.offset < queue->current_entry.frame.length)
+    uint32_t cts_seq = tx_clock_get_cts_toggle_seq();
+    bool frame_mid_send = queue->current_entry.offset > 0 &&
+                          queue->current_entry.offset < queue->current_entry.frame.length;
+    if (frame_mid_send && queue->current_frame_cts_seq_valid &&
+        cts_seq != queue->current_frame_cts_seq_start)
     {
-        queue->current_entry.offset       = 0;     // resend whole HDLC frame
-        ((v24_runtime_t*)rt)->cts_toggled = false; // or add a proper clear helper
+        queue->current_entry.offset       = 0U; // resend whole HDLC frame
+        queue->current_frame_cts_seq_valid = false;
         return E2S_OK;
     }
+
     if (queue->current_entry.offset >= queue->current_entry.frame.length)
     {
         size_t completed_offset = queue->current_entry.offset;
@@ -152,14 +157,31 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
         if (RbPopFront(&(queue->queue_buffer), &queue->current_entry) < 0)
         {
             // TODO: This has to be tested on target
+            queue->current_frame_cts_seq_valid = false;
             return E2S_OK;
         }
         LOG_DEBUG("TX FRAME COMPLETE: offset=%zu length=%zu\n", completed_offset, completed_length);
 
         queue->current_entry.frame.payload  = queue->current_entry.payload;
         queue->current_entry.frame.capacity = sizeof(queue->current_entry.payload);
+        queue->current_frame_cts_seq_valid  = false;
     }
+    size_t offset_before_drain = queue->current_entry.offset;
     tx_queue_drain_bytes(queue, &queue->current_entry, bytes_to_drain, bytes_drained);
+    if (!queue->current_frame_cts_seq_valid && offset_before_drain == 0U && *bytes_drained > 0U)
+    {
+        /*
+         * Capture baseline after first bytes were actually queued to TX.
+         * This avoids false "mid-frame CTS toggle" caused by RTS->CTS settling
+         * edges that can happen during the first drain call.
+         */
+        queue->current_frame_cts_seq_start = tx_clock_get_cts_toggle_seq();
+        queue->current_frame_cts_seq_valid = true;
+    }
+    if (queue->current_entry.offset >= queue->current_entry.frame.length)
+    {
+        queue->current_frame_cts_seq_valid = false;
+    }
     if (queue->current_entry.offset > 0 &&
         queue->current_entry.offset < queue->current_entry.frame.length)
     {

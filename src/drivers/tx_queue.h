@@ -79,6 +79,10 @@ typedef struct
     bool queue_touched;
     /** Total bytes pushed to wire via TX FIFO. */
     uint64_t tx_wire_bytes;
+    /** CTS edge sequence captured when current frame started draining. */
+    uint32_t current_frame_cts_seq_start;
+    /** Whether @ref current_frame_cts_seq_start is valid for current frame. */
+    bool     current_frame_cts_seq_valid;
 } TX_QUEUE_T;
 
 /**
