@@ -144,6 +144,7 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
     if (frame_mid_send && queue->current_frame_cts_seq_valid &&
         cts_seq != queue->current_frame_cts_seq_start)
     {
+        tx_clock_hard_reset();
         queue->current_entry.offset       = 0U; // resend whole HDLC frame
         queue->current_frame_cts_seq_valid = false;
         return E2S_OK;

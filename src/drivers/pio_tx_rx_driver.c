@@ -319,6 +319,21 @@ bool tx_put(uint8_t data)
     return true;
 }
 
+void tx_clock_hard_reset(void)
+{
+    if (v24_runtime.tx_pio == NULL)
+    {
+        return;
+    }
+
+    pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, false);
+    pio_sm_clear_fifos(v24_runtime.tx_pio, v24_runtime.tx_sm);
+    pio_sm_restart(v24_runtime.tx_pio, v24_runtime.tx_sm);
+    pio_sm_clkdiv_restart(v24_runtime.tx_pio, v24_runtime.tx_sm);
+    v24_runtime.tx_pio->fdebug = (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
+    pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, true);
+}
+
 void tx_clock_update_settings(V24_CONFIG_T* config)
 {
     assert(v24_runtime.tx_pio != NULL);

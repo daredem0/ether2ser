@@ -125,6 +125,11 @@ const v24_runtime_t* get_v24_runtime(void);
 uint32_t tx_clock_get_cts_toggle_seq(void);
 
 /**
+ * @brief Hard-reset TX SM state to discard queued/in-flight bytes.
+ */
+void tx_clock_hard_reset(void);
+
+/**
  * @brief Disable RX Path, clear fifos, restart SMs and CLKDIV and enable again.
  */
 void rx_clock_hard_reset(void);
