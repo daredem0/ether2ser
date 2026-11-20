@@ -18,8 +18,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 // Library Headers
+#include "hardware/dma.h"
 #include "hardware/gpio.h"
 #include "hardware/pio.h"
 #include "hardware/platform_defs.h"
@@ -49,9 +51,13 @@
  * This value was empirically determined to be the most stable for this system.
  */
 #define V24_RTS_HOLDOFF_MARGIN 41U
+#define RX_DMA_RING_BITS 12U
+#define RX_DMA_RING_BYTES (1U << RX_DMA_RING_BITS)
+#define RX_DMA_RING_WORDS (RX_DMA_RING_BYTES / sizeof(uint32_t))
 
 // This struct holds the runtime state of the v24 and shall not be exposed
-v24_runtime_t v24_runtime;
+v24_runtime_t v24_runtime = {.rx_dma_chan = -1};
+static uint32_t rx_dma_ring[RX_DMA_RING_WORDS] __attribute__((aligned(RX_DMA_RING_BYTES)));
 
 const v24_runtime_t* get_v24_runtime(void)
 {
@@ -61,6 +67,80 @@ const v24_runtime_t* get_v24_runtime(void)
 uint32_t tx_clock_get_cts_toggle_seq(void)
 {
     return v24_runtime.cts_toggle_seq;
+}
+
+bool tx_clock_get_cts_level(void)
+{
+    bool sampled = gpio_get(V24_CTS) != 0;
+    return v24_runtime.cts_inverted_latched ? !sampled : sampled;
+}
+
+uint32_t rx_dma_get_overflow_words(void)
+{
+    return v24_runtime.rx_dma_overflow_words;
+}
+
+static void rx_dma_configure_and_start(int channel, PIO pio, uint pio_sm)
+{
+    dma_channel_config dma_cfg = dma_channel_get_default_config((uint)channel);
+    channel_config_set_transfer_data_size(&dma_cfg, DMA_SIZE_32);
+    channel_config_set_read_increment(&dma_cfg, false);
+    channel_config_set_write_increment(&dma_cfg, true);
+    channel_config_set_ring(&dma_cfg, true, RX_DMA_RING_BITS);
+    channel_config_set_dreq(&dma_cfg, pio_get_dreq(pio, pio_sm, false));
+
+    dma_channel_configure((uint)channel, &dma_cfg, rx_dma_ring, &pio->rxf[pio_sm], UINT32_MAX,
+                          true);
+}
+
+static bool rx_dma_init(PIO pio, uint pio_sm)
+{
+    if (v24_runtime.rx_dma_chan >= 0)
+    {
+        dma_channel_abort((uint)v24_runtime.rx_dma_chan);
+        dma_channel_unclaim((uint)v24_runtime.rx_dma_chan);
+        v24_runtime.rx_dma_chan = -1;
+    }
+
+    int channel = dma_claim_unused_channel(false);
+    if (channel < 0)
+    {
+        v24_runtime.rx_dma_enabled = false;
+        LOG_ERROR("RX DMA: no free channel, fallback to direct FIFO polling\r\n");
+        return false;
+    }
+
+    memset(rx_dma_ring, 0, sizeof(rx_dma_ring));
+    rx_dma_configure_and_start(channel, pio, pio_sm);
+    v24_runtime.rx_dma_chan           = channel;
+    v24_runtime.rx_dma_enabled        = true;
+    v24_runtime.rx_dma_words_consumed = 0U;
+    v24_runtime.rx_dma_overflow_words = 0U;
+    LOG_INFO("RX DMA: enabled chan=%d ring=%u bytes\r\n", channel, (unsigned)RX_DMA_RING_BYTES);
+    return true;
+}
+
+static void rx_dma_restart(void)
+{
+    if (!v24_runtime.rx_dma_enabled || v24_runtime.rx_dma_chan < 0 || v24_runtime.rx_pio == NULL)
+    {
+        return;
+    }
+
+    dma_channel_abort((uint)v24_runtime.rx_dma_chan);
+    memset(rx_dma_ring, 0, sizeof(rx_dma_ring));
+    rx_dma_configure_and_start(v24_runtime.rx_dma_chan, v24_runtime.rx_pio, v24_runtime.rx_sm);
+    v24_runtime.rx_dma_words_consumed = 0U;
+}
+
+static uint32_t rx_dma_words_produced(void)
+{
+    if (!v24_runtime.rx_dma_enabled || v24_runtime.rx_dma_chan < 0)
+    {
+        return 0U;
+    }
+    uint32_t remaining = dma_channel_hw_addr((uint)v24_runtime.rx_dma_chan)->transfer_count;
+    return UINT32_MAX - remaining;
 }
 
 static void cts_raw_irq_handler(void)
@@ -183,6 +263,33 @@ bool rx_clock_poll_stall(void)
 
 bool rx_get(uint8_t* data)
 {
+    if (!data)
+    {
+        return false;
+    }
+    if (v24_runtime.rx_dma_enabled)
+    {
+        uint32_t produced_words = rx_dma_words_produced();
+        uint32_t consumed_words = v24_runtime.rx_dma_words_consumed;
+        uint32_t available      = produced_words - consumed_words;
+        if (available == 0U)
+        {
+            return false;
+        }
+
+        if (available > RX_DMA_RING_WORDS)
+        {
+            uint32_t overflow_words = available - RX_DMA_RING_WORDS;
+            v24_runtime.rx_dma_overflow_words += overflow_words;
+            consumed_words = produced_words - RX_DMA_RING_WORDS;
+        }
+
+        uint32_t index = consumed_words & (RX_DMA_RING_WORDS - 1U);
+        *data = (uint8_t)(rx_dma_ring[index] >> RX_SHIFT_TO_LSB);
+        v24_runtime.rx_dma_words_consumed = consumed_words + 1U;
+        return true;
+    }
+
     assert(v24_runtime.rx_pio != NULL);
     if (v24_runtime.rx_pio == NULL ||
         pio_sm_is_rx_fifo_empty(v24_runtime.rx_pio, v24_runtime.rx_sm))
@@ -214,11 +321,16 @@ void rx_clock_hard_reset(void)
 {
     if (v24_runtime.rx_pio != NULL)
     {
+        if (v24_runtime.rx_dma_enabled && v24_runtime.rx_dma_chan >= 0)
+        {
+            dma_channel_abort((uint)v24_runtime.rx_dma_chan);
+        }
         pio_sm_set_enabled(v24_runtime.rx_pio, v24_runtime.rx_sm, false);
         pio_sm_clear_fifos(v24_runtime.rx_pio, v24_runtime.rx_sm);
         pio_sm_restart(v24_runtime.rx_pio, v24_runtime.rx_sm);
         pio_sm_clkdiv_restart(v24_runtime.rx_pio, v24_runtime.rx_sm);
         pio_sm_set_enabled(v24_runtime.rx_pio, v24_runtime.rx_sm, true);
+        rx_dma_restart();
     }
 }
 
@@ -251,6 +363,7 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
 
     // This implicitly enables the sm
     rx_clock_update_settings(polarities);
+    (void)rx_dma_init(pio, pio_sm);
     LOG_INFO("RXC: enabled\r\n");
 }
 
@@ -361,6 +474,7 @@ void tx_clock_update_settings(V24_CONFIG_T* config)
                      polarities->rts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
     gpio_set_inover(V24_CTS,
                     polarities->cts_inverted ? GPIO_OVERRIDE_INVERT : GPIO_OVERRIDE_NORMAL);
+    v24_runtime.cts_inverted_latched = polarities->cts_inverted;
 
     if (!config->external_clock)
     {

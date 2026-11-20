@@ -262,6 +262,7 @@ Compatibility path:
 - Poll-based RX (`recvfrom`) and TX (`sendto`)
 - Local/remote socket reconfigure via close+reopen
 - Broadcast address derived from IP/subnet
+- Derives a locally administered unicast MAC as `02:E2:<IPv4 bytes>` whenever the static local IPv4 address is applied
 - Samples UDP socket pressure counters each loop:
   - RX counter increments on transition into "not enough free room for max UDP datagram (`1472 + 8` bytes)"
   - TX counter increments on transition into "TX free space is zero"
@@ -416,7 +417,7 @@ Unity-based `unit_tests` target covers:
 - logging behavior (with `tests/mock_log.c`)
 - byte-alignment and shifted-phase sync scenarios (`tests/test_byte_alignment.c`)
 - bitstuff decoder tests are included into `test_runner.c` as a translation-unit include (`tests/test_hdlc_bitstuff_decoder.c`)
-- Note: `tests/test_tx_queue.c` exists in repository but is not currently linked into `unit_tests` target
+- TX queue framing and CTS-edge restart decisions (`tests/test_tx_queue.c`, using host platform mocks)
 
 ## 14. Operational Constraints
 - Throughput and latency depend on polling service cadence and configured serial clock rate.

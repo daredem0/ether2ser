@@ -131,4 +131,16 @@ e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data);
  */
 size_t tx_queue_get_count(const TX_QUEUE_T* queue);
 
+/**
+ * @brief Enable or disable CTS-edge-triggered mid-frame restart behavior.
+ * @param enabled True to restart current frame on CTS edge, false to ignore CTS edges.
+ */
+void   tx_queue_set_cts_restart_enabled(bool enabled);
+
+/**
+ * @brief Query CTS-edge-triggered restart behavior.
+ * @return True when CTS-triggered frame restart is enabled.
+ */
+bool   tx_queue_get_cts_restart_enabled(void);
+
 #endif /* TX_QUEUE_H */

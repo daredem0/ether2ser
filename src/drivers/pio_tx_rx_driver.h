@@ -39,6 +39,16 @@ typedef struct
     bool          tx_clock_forced_low;
     /** Monotonic sequence incremented on each observed CTS edge. */
     volatile uint32_t cts_toggle_seq;
+    /** DMA channel used to drain RX FIFO (-1 when disabled). */
+    int                rx_dma_chan;
+    /** True when RX DMA path is active. */
+    bool               rx_dma_enabled;
+    /** Number of RX words consumed by software from DMA ring. */
+    uint32_t           rx_dma_words_consumed;
+    /** Number of RX words dropped due DMA ring overwrite. */
+    uint32_t           rx_dma_overflow_words;
+    /** Latched CTS inversion setting used for logical level reporting. */
+    bool               cts_inverted_latched;
 } v24_runtime_t;
 
 /**
@@ -125,6 +135,12 @@ const v24_runtime_t* get_v24_runtime(void);
 uint32_t tx_clock_get_cts_toggle_seq(void);
 
 /**
+ * @brief Read current sampled CTS input level.
+ * @return True if CTS is sampled high, false otherwise.
+ */
+bool     tx_clock_get_cts_level(void);
+
+/**
  * @brief Hard-reset TX SM state to discard queued/in-flight bytes.
  */
 void tx_clock_hard_reset(void);
@@ -139,5 +155,11 @@ void rx_clock_hard_reset(void);
  * @return True if stalled, false otherwise.
  */
 bool rx_clock_poll_stall(void);
+
+/**
+ * @brief Number of RX words dropped because DMA ring was overrun.
+ * @return Cumulative dropped RX words.
+ */
+uint32_t rx_dma_get_overflow_words(void);
 
 #endif /* PIO_TX_RX_DRIVER_H */

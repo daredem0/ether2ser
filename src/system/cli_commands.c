@@ -27,6 +27,7 @@
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
+#include "drivers/tx_queue.h"
 #include "drivers/v24_config.h"
 #include "platform/watchdog.h"
 #include "system/cli_parser.h"
@@ -106,6 +107,8 @@ static void subcmd_set_v24_inverted(const char* args);
 static void subcmd_get_v24_inverted(const char* args);
 static void subcmd_set_v24_clockmode(const char* args);
 static void subcmd_get_v24_clockmode(const char* args);
+static void subcmd_set_v24_ctsrestart(const char* args);
+static void subcmd_get_v24_ctsrestart(const char* args);
 
 // Lookup tables
 static const command_t commands[] = {
@@ -139,7 +142,9 @@ static const subcmd_t v24_subcmds[] = {
     {"invert", subcmd_set_v24_inverted, subcmd_get_v24_inverted, INVERT_HELP},
     {"baudrate", subcmd_set_v24_baudrate, subcmd_get_v24_baudrate, "Baudrate"},
     {"txclock", subcmd_set_v24_clockmode, subcmd_get_v24_clockmode,
-     "<0|1> Internal or external tx clock"}};
+     "<0|1> Internal or external tx clock"},
+    {"ctsrestart", subcmd_set_v24_ctsrestart, subcmd_get_v24_ctsrestart,
+     "<0|1> Restart frame when CTS toggles mid-frame"}};
 
 #define NUM_COMMANDS (sizeof(commands) / sizeof(commands[0]))
 #define NUM_CATEGORIES ARRAY_LEN(categories)
@@ -255,6 +260,28 @@ static void subcmd_get_v24_clockmode(const char* args)
 {
     (void)args;
     dispatch_get_request(V24_CLOCK_MODE, EV_GET_V24_SETTINGS);
+}
+
+static void subcmd_set_v24_ctsrestart(const char* args)
+{
+    bool enabled = false;
+    if (parse_set_v24_clockmode(args, &enabled) != E2S_OK)
+    {
+        LOG_PLAIN("usage: set v24 ctsrestart <0|1>\r\n");
+        return;
+    }
+    tx_queue_set_cts_restart_enabled(enabled);
+    LOG_PLAIN("V24_CTS_RESTART: %u\r\n", enabled ? 1U : 0U);
+}
+
+static void subcmd_get_v24_ctsrestart(const char* args)
+{
+    if (args != NULL && args[0] != '\0')
+    {
+        LOG_PLAIN("usage: get v24 ctsrestart\r\n");
+        return;
+    }
+    LOG_PLAIN("V24_CTS_RESTART: %u\r\n", tx_queue_get_cts_restart_enabled() ? 1U : 0U);
 }
 
 static void subcmd_get_v24_baudrate(const char* args)
@@ -800,8 +827,10 @@ static void cmd_net(const char* args)
     }
     wiz_NetInfo net_info;
     wizchip_getnetinfo(&net_info);
-    LOG_PLAIN("ip=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n", net_info.ip[0], net_info.ip[1], net_info.ip[2],
-              net_info.ip[3], net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
+    LOG_PLAIN("mac=%02x:%02x:%02x:%02x:%02x:%02x ip=%u.%u.%u.%u gw=%u.%u.%u.%u\r\n",
+              net_info.mac[0], net_info.mac[1], net_info.mac[2], net_info.mac[3], net_info.mac[4],
+              net_info.mac[5], net_info.ip[0], net_info.ip[1], net_info.ip[2], net_info.ip[3],
+              net_info.gw[0], net_info.gw[1], net_info.gw[2], net_info.gw[3]);
 }
 
 static void cmd_pininfo(const char* args)

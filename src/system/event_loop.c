@@ -48,6 +48,7 @@
 
 #define EVENT_LOOP_MAX_EVENTS_AT_ONCE 20
 #define EVENT_LOOP_MAX_EVENTS_WHILE_TX_ACTIVE 2
+#define HDLC_DECODE_FRAME_BUDGET_PER_PASS 1U
 #define HDLC_DECODE_FAIL_STREAK_LIMIT 4U
 #define HDLC_SYNC_IDLE_TIMEOUT_US 20000U
 #define HDLC_SYNC_NO_PROGRESS_MAX_BYTES 2048U
@@ -99,7 +100,6 @@ typedef struct
     uint64_t last_rx_byte_us;
     uint64_t last_frame_ready_bytes;
     uint32_t hunt_idle_run_length;
-    bool     work_done;
     bool     udp_rx_throttled;
 } event_loop_runtime_t;
 
@@ -107,7 +107,6 @@ static void drain_rx_until_empty(app_ctx_t* app, event_loop_runtime_t* runtime, 
 {
     while (rx_get(&runtime->rx_byte))
     {
-        runtime->work_done = true;
         (*rx_drained)++;
         if (event_loop_should_drop_hunt_idle_byte(app, runtime->rx_byte,
                                                   &runtime->hunt_idle_run_length))
@@ -137,7 +136,7 @@ static void update_rx_drain_stats(app_ctx_t* app, event_loop_runtime_t* event_lo
     }
 }
 
-static void poll_and_enqueue_udp_rx(app_ctx_t* app, event_loop_runtime_t* event_loop_runtime)
+static void poll_and_enqueue_udp_rx(app_ctx_t* app)
 {
 
     if (w5500_poll_rx(&app->sender_config, &app->rx_frame_buffer))
@@ -147,7 +146,6 @@ static void poll_and_enqueue_udp_rx(app_ctx_t* app, event_loop_runtime_t* event_
             tx_queue_enqueue_udp_frame(&app->tx_queue, &app->rx_frame_buffer);
         if (enqueue_result == E2S_OK)
         {
-            event_loop_runtime->work_done = true;
             app->stats.hdlc_tx_frames++;
         }
         else
@@ -163,7 +161,7 @@ static void poll_and_enqueue_udp_rx(app_ctx_t* app, event_loop_runtime_t* event_
     }
 }
 
-static size_t poll_tx_pipeline(app_ctx_t* app, event_loop_runtime_t* event_loop_runtime)
+static size_t poll_tx_pipeline(app_ctx_t* app)
 {
 
     size_t bytes_drained = 0;
@@ -176,10 +174,6 @@ static size_t poll_tx_pipeline(app_ctx_t* app, event_loop_runtime_t* event_loop_
     if (tx_queue_drain(&app->tx_queue, TX_QUEUE_DRAIN_CHUNK_SIZE, &bytes_drained) != E2S_OK)
     {
         LOG_ERROR("Poll Queue Drain failed.\r\n");
-    }
-    else if (bytes_drained > 0U)
-    {
-        event_loop_runtime->work_done = true;
     }
 
     // If the tx queue is empty check if the fifo is empty to and reset rts
@@ -211,7 +205,6 @@ static void poll_hdlc_idle_timeout(app_ctx_t* app, event_loop_runtime_t* event_l
 
 static void decode_hdlc_to_udp_tx(app_ctx_t* app, event_loop_runtime_t* event_loop_runtime)
 {
-    event_loop_runtime->work_done = true;
     app->stats.hdlc_frame_ready++;
     event_loop_runtime->last_frame_ready_bytes = app->stats.serial_rx_bytes;
     app->tx_frame_buffer.length                = 0;
@@ -256,12 +249,23 @@ static void decode_hdlc_to_udp_tx(app_ctx_t* app, event_loop_runtime_t* event_lo
 
 static void drain_hdlc_frames_to_udp(app_ctx_t* app, event_loop_runtime_t* event_loop_runtime)
 {
-    while (true)
+    uint32_t frames_processed = 0U;
+    while (frames_processed < HDLC_DECODE_FRAME_BUDGET_PER_PASS)
     {
         e2s_error_t acc_result = hdlc_sync_acc_poll(&app->accumulator, &app->reconstructed_frame);
         if (acc_result == E2S_ERR_HDLC_ACC_FRAME_READY)
         {
             decode_hdlc_to_udp_tx(app, event_loop_runtime);
+            frames_processed++;
+
+            // Re-prioritize RX draining between decode/send operations to reduce RX FIFO stalls.
+            size_t rx_drained = 0U;
+            drain_rx_until_empty(app, event_loop_runtime, &rx_drained);
+            if (rx_drained > 0U)
+            {
+                update_rx_drain_stats(app, event_loop_runtime, rx_drained,
+                                      to_us_since_boot(get_absolute_time()));
+            }
             continue;
         }
         if (acc_result != E2S_OK)
@@ -387,9 +391,9 @@ void event_loop(app_ctx_t* app)
                                                       .last_rx_byte_us         = 0U,
                                                       .last_frame_ready_bytes  = 0U,
                                                       .hunt_idle_run_length    = 0U,
-                                                      .work_done               = false,
                                                       .udp_rx_throttled        = false};
 
+    // Core 0 intentionally busy-polls; sleeping consumes bounded RX DMA ring headroom.
     while (true)
     {
         watchdog_update();
@@ -406,11 +410,11 @@ void event_loop(app_ctx_t* app)
         w5500_poll_udp_buffer_full_events(&app->stats.udp_rx_buffer_full_counts,
                                           &app->stats.udp_tx_buffer_full_counts);
 
-        (void)poll_tx_pipeline(app, &event_loop_runtime);
+        (void)poll_tx_pipeline(app);
         update_udp_rx_throttle_state(app, &event_loop_runtime);
         if (!event_loop_runtime.udp_rx_throttled)
         {
-            poll_and_enqueue_udp_rx(app, &event_loop_runtime);
+            poll_and_enqueue_udp_rx(app);
         }
         else
         {
@@ -448,13 +452,5 @@ void event_loop(app_ctx_t* app)
         }
         print_prompt(app);
 
-        if (!event_loop_runtime.work_done)
-        {
-            sleep_us(MAIN_LOOP_SLEEP_US);
-        }
-        else
-        {
-            event_loop_runtime.work_done = false;
-        }
     }
 }

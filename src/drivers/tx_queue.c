@@ -34,6 +34,7 @@
 // Generated headers
 
 #define TX_QUEUE_TX_INPROG_MS 1000U
+static bool s_cts_restart_enabled = true;
 
 e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data)
 {
@@ -141,7 +142,7 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
     uint32_t cts_seq = tx_clock_get_cts_toggle_seq();
     bool frame_mid_send = queue->current_entry.offset > 0 &&
                           queue->current_entry.offset < queue->current_entry.frame.length;
-    if (frame_mid_send && queue->current_frame_cts_seq_valid &&
+    if (s_cts_restart_enabled && frame_mid_send && queue->current_frame_cts_seq_valid &&
         cts_seq != queue->current_frame_cts_seq_start)
     {
         tx_clock_hard_reset();
@@ -198,11 +199,25 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
     return E2S_OK;
 }
 
+void tx_queue_set_cts_restart_enabled(bool enabled)
+{
+    s_cts_restart_enabled = enabled;
+}
+
+bool tx_queue_get_cts_restart_enabled(void)
+{
+    return s_cts_restart_enabled;
+}
+
 e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, const UDP_FRAME_T* frame)
 {
     if (!queue || !frame)
     {
         return E2S_ERR_TX_QUEUE_NOT_INITIALIZED;
+    }
+    if (frame->length > UDP_MAX_PAYLOAD_BYTES)
+    {
+        return E2S_ERR_TX_QUEUE_PAYLOAD_TOO_LARGE;
     }
     if (queue->queue_buffer.count == queue->queue_buffer.capacity)
     {

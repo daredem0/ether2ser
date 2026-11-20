@@ -25,6 +25,7 @@
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
+#include "drivers/mac_address.h"
 #include "drivers/pio_tx_rx_driver.h"
 #include "drivers/tx_queue.h"
 #include "drivers/v24_config.h"
@@ -191,6 +192,7 @@ static bool ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* ap
         {
             memcpy(app->local_config.ip_address, payload->value.ip, 4);
             memcpy(net_info.ip, payload->value.ip, 4);
+            mac_address_from_ipv4(net_info.ip, net_info.mac);
             wizchip_setnetinfo(&net_info);
             changed = true;
         }
@@ -235,10 +237,6 @@ static bool ev_set_net_settings(const event_queue_data_t* payload, app_ctx_t* ap
         if (app->destination_config.port != payload->value.port)
         {
             app->destination_config.port = payload->value.port;
-            if ((err = w5500_reconfigure_udp_socket(&app->destination_config)) != E2S_OK)
-            {
-                fatal_panic(err);
-            }
             changed = true;
         }
         break;
@@ -470,9 +468,11 @@ static void print_status_event(app_ctx_t* app, ev_status_stats_t* status_stats)
         app->accumulator.bit_offset, app->accumulator.candidate_valid ? 1 : 0,
         app->accumulator.candidate_end);
     LOG_PLAIN("    RX Health : acc_pos_max=%" PRIu64 "  rx_fifo_stall=%" PRIu64
-              "  rx_drop_acc_full=%" PRIu64 "  hunt_idle_drop=%" PRIu64 "\r\n",
+              "  rx_drop_acc_full=%" PRIu64 "\r\n",
               app->stats.accumulator_pos_max, app->stats.rx_fifo_stall_events,
-              app->stats.serial_rx_drop_acc_full, app->stats.hunt_idle_drop_bytes);
+              app->stats.serial_rx_drop_acc_full);
+    LOG_PLAIN("               hunt_idle_drop=%" PRIu64 "  dma_ovf_words=%" PRIu32 "\r\n",
+              app->stats.hunt_idle_drop_bytes, rx_dma_get_overflow_words());
 
     LOG_PLAIN("  Buffers\r\n");
     LOG_PLAIN("    TX Queue  : used=%zu/%zu  active=%d\r\n", app->tx_queue.queue_buffer.count,
@@ -499,6 +499,9 @@ static void print_status_event(app_ctx_t* app, ev_status_stats_t* status_stats)
                 (PIO_FDEBUG_TXSTALL_LSB + v24_runtime->tx_sm)) & // NOLINT(misc-include-cleaner)
                1U)
             : 0);
+    LOG_PLAIN("    CTS       : level=%u  edges=%" PRIu32 "  restart=%u\r\n",
+              tx_clock_get_cts_level() ? 1U : 0U, tx_clock_get_cts_toggle_seq(),
+              tx_queue_get_cts_restart_enabled() ? 1U : 0U);
 }
 
 void event_dispatch(const event_t* event, app_ctx_t* app)

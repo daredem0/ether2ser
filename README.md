@@ -68,6 +68,7 @@ set v24 baudrate 9600
 set v24 polarities txd,rxd,rts
 ```
 - Defaults are defined in `src/drivers/w5500_driver.h`.
+- The W5500 MAC is derived from the static IPv4 address as `02:e2:<IPv4 bytes>`. For example, `192.168.29.20` uses `02:e2:c0:a8:1d:14`. Boards on one L2 segment must have distinct IPv4 addresses.
 
 **Status Output**
 - The `status` command prints live pipeline diagnostics.
@@ -203,7 +204,67 @@ PIPE STATS
   python tests/image_send_receive.py --mode sender --host 192.168.29.20 --port 6969 --size 1472 --rate 5 input.jpg
   ```
 
-**Tests**
+**Shared USB consoles (Alacritty + Zellij)**
+
+`tools/serial_console.py` opens one Alacritty window with a Zellij pane for
+each board. A background broker owns the serial ports, so both your panes
+and automation can send complete commands and observe the same output.
+It uses Python 3's standard library on Linux; no pyserial installation is
+needed. Close minicom/other programs using the ports first.
+
+Use `/dev/serial/by-path/` paths: the two currently connected boards report
+the same USB serial number, so their `by-id` names collide. For the current
+USB connections:
+
+```bash
+python3 tools/serial_console.py launch \
+  --device pico-a=/dev/serial/by-path/pci-0000:02:00.0-usb-0:4:1.0 \
+  --device pico-b=/dev/serial/by-path/pci-0000:02:00.0-usb-0:3:1.0
+```
+
+Change the paths if you move USB ports or use another PC. In each pane,
+press empty Enter to synchronize, then type commands such as `status` or
+`net`. Commands are edited locally and submitted as whole lines, so agent
+input cannot be inserted into your unfinished command. Ctrl-C/D closes a
+pane client. The broker stays running when clients/windows close.
+
+From another terminal, or an agent execution tool:
+
+```bash
+python3 tools/serial_console.py status
+python3 tools/serial_console.py sync pico-a
+python3 tools/serial_console.py send pico-a status
+python3 tools/serial_console.py sync pico-b
+python3 tools/serial_console.py send pico-b net --json
+```
+
+Commands to the same board are serialized; the two boards operate
+independently. Command responses include echoed input and any concurrent
+firmware logs. Completion requires a firmware prompt followed by 250 ms
+of quiet; this is a heuristic for the existing text CLI, not a structured
+firmware protocol. Timeout returns partial output and a nonzero exit code,
+does not retry, and requires `sync` before another command. Persistent
+background logging may prevent a quiet prompt. The usual firmware effects
+still apply: `set` can save to flash, and `reboot` interrupts the console.
+
+The broker reconnects to the same USB path after a reboot; synchronize
+again after reconnecting. Logs are in `/tmp/ether2ser-console-UID/` by
+default: each board's `.jsonl` records timestamps, TX source/command, and
+base64-encoded RX bytes. `broker.log` and `terminal.log` contain process
+diagnostics. The directory/socket are private to your user. Logs append
+until removed; `/tmp` can be cleared on reboot. To use a different directory,
+put `--state-dir PATH` **before** the subcommand in every invocation.
+
+```bash
+# Run the broker without a GUI, using the same --device arguments:
+python3 tools/serial_console.py serve --device pico-a=/dev/ttyACM0
+# Release both ports before flashing or switching to another serial tool:
+python3 tools/serial_console.py stop
+# Test the broker with emulated boards, without hardware:
+python3 tests/test_serial_console.py -v
+```
+
+**Native firmware tests**
 ```bash
 mkdir -p build-tests
 cmake -S . -B build-tests -DBUILD_TESTS=ON

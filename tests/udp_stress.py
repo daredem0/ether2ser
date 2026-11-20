@@ -386,7 +386,8 @@ def send_start(
 ) -> float:
     packet = build_packet(0, total, FLAG_START, 0) + CONTROL_PADDING
     for idx in range(count):
-        next_send = paced_sendto(sock, target, packet, next_send, interval)
+        sock.sendto(packet, target)
+        next_send = time.monotonic()
         stats.on_send(len(packet), is_start=True, is_end=False)
         print(f"[tx] START total={total} copy={idx + 1}/{count}")
     return next_send

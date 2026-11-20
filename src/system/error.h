@@ -74,7 +74,8 @@ typedef enum
 
     /* TX Queue */
     E2S_ERR_TX_QUEUE_FULL,
-    E2S_ERR_TX_QUEUE_NOT_INITIALIZED
+    E2S_ERR_TX_QUEUE_NOT_INITIALIZED,
+    E2S_ERR_TX_QUEUE_PAYLOAD_TOO_LARGE
 } e2s_error_t;
 
 /**

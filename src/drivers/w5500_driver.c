@@ -11,6 +11,7 @@
 
 // Related headers
 #include "w5500_driver.h"
+#include "mac_address.h"
 
 // Standard library headers
 #include <stdbool.h>
@@ -36,7 +37,6 @@
 // Socket
 #define IP_SOCKET 0 // Socket number for IPRAW
 #define UDP_SOCKET 1
-#define UDP_MAX_PAYLOAD_BYTES 1472U
 #define UDP_W5500_OVERHEAD_BYTES 8U
 #define UDP_RX_REQUIRED_BYTES (UDP_MAX_PAYLOAD_BYTES + UDP_W5500_OVERHEAD_BYTES)
 
@@ -98,9 +98,9 @@ void w5500_debug_status(void)
     uint8_t phy_cfg = getPHYCFGR(); // PHY config register
     LOG_DEBUG("PHY CFG: 0x%02X (Link %s)\r\n", phy_cfg, (phy_cfg & 0x01) ? "UP" : "DOWN");
 
-    uint8_t mode   = getSn_MR(IP_SOCKET); // Socket mode register
-    uint8_t status = getSn_SR(IP_SOCKET); // Socket status
-    LOG_DEBUG("Socket Mode: 0x%02X, Status: 0x%02X\r\n", mode, status);
+    uint8_t mode   = getSn_MR(UDP_SOCKET);
+    uint8_t status = getSn_SR(UDP_SOCKET);
+    LOG_DEBUG("UDP Socket %u Mode: 0x%02X, Status: 0x%02X\r\n", UDP_SOCKET, mode, status);
 }
 
 void w5500_udp_tx(UDP_CONFIG_T* send_config, const UDP_FRAME_T* frame)
@@ -183,6 +183,7 @@ e2s_error_t w5500_reconfigure_udp_socket(UDP_CONFIG_T* config)
 
 void w5500_set_network(NETWORK_CONFIG_T* config)
 {
+    mac_address_from_ipv4(config->net_info.ip, config->net_info.mac);
     ipv4_calc_broadcast_u8(config->net_info.ip, config->net_info.sn, config->broadcast_address);
     LOG_DEBUG("Derived broadcast address %u.%u.%u.%u\r\n", config->broadcast_address[0],
               config->broadcast_address[1], config->broadcast_address[2],
@@ -213,8 +214,7 @@ static e2s_error_t w5500_apply_socket_mem_map(void)
 void w5500_set_network_defaults(NETWORK_CONFIG_T* config)
 {
     // Configure network settings
-    config->net_info = (wiz_NetInfo){.mac  = DEFAULT_MAC_ADDR,
-                                     .ip   = DEFAULT_IP_ADDR,
+    config->net_info = (wiz_NetInfo){.ip   = DEFAULT_IP_ADDR,
                                      .sn   = DEFAULT_SUBNET_MASK,
                                      .gw   = DEFAULT_GATEWAY_ADDR,
                                      .dns  = DEFAULT_DNS_ADDR,

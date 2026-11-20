@@ -151,6 +151,18 @@ extern void test_log_filtered_message_does_not_set_emitted_flag(void);
 extern void test_log_emitted_message_sets_and_clears_flag(void);
 extern void test_log_trace_visible_only_at_trace_level(void);
 
+// TX queue tests
+extern void test_tx_queue_init_empty(void);
+extern void test_tx_queue_enqueue_single(void);
+extern void test_tx_queue_full_rejected(void);
+extern void test_tx_queue_oversized_payload_rejected(void);
+extern void test_tx_queue_restarts_midframe_after_cts_edge(void);
+extern void test_tx_queue_ignores_cts_edge_when_restart_disabled(void);
+
+// MAC address tests
+extern void test_mac_address_from_ipv4_encodes_unique_local_unicast_address(void);
+extern void test_mac_address_from_ipv4_distinguishes_configured_board_ips(void);
+
 
 void setUp(void) {
     // set stuff up here
@@ -309,6 +321,18 @@ int main(void) {
     RUN_TEST(test_log_filtered_message_does_not_set_emitted_flag);
     RUN_TEST(test_log_emitted_message_sets_and_clears_flag);
     RUN_TEST(test_log_trace_visible_only_at_trace_level);
+
+    // TX queue tests
+    RUN_TEST(test_tx_queue_init_empty);
+    RUN_TEST(test_tx_queue_enqueue_single);
+    RUN_TEST(test_tx_queue_full_rejected);
+    RUN_TEST(test_tx_queue_oversized_payload_rejected);
+    RUN_TEST(test_tx_queue_restarts_midframe_after_cts_edge);
+    RUN_TEST(test_tx_queue_ignores_cts_edge_when_restart_disabled);
+
+    // MAC address tests
+    RUN_TEST(test_mac_address_from_ipv4_encodes_unique_local_unicast_address);
+    RUN_TEST(test_mac_address_from_ipv4_distinguishes_configured_board_ips);
 
     return UNITY_END();
 }

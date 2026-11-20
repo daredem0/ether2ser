@@ -18,6 +18,7 @@ set(SOURCES
     src/system/log.c
     src/system/baudrate_monitor.c
     src/system/persistent_config.c
+    src/drivers/mac_address.c
     src/drivers/w5500_driver.c
     src/drivers/pio_tx_rx_driver.c
     src/drivers/tx_queue.c
@@ -296,6 +297,11 @@ else()
         tests/test_byte_alignment.c
         tests/test_ringbuffer.c
         tests/test_log.c
+        tests/test_mac_address.c
+        tests/test_tx_queue.c
+        tests/mock_tx_queue_platform.c
+        src/drivers/tx_queue.c
+        src/drivers/mac_address.c
         src/protocol/hdlc_common.c
         src/protocol/hdlc_encoder.c
         src/protocol/hdlc_decoder.c
@@ -307,6 +313,9 @@ else()
     )
 
     target_include_directories(unit_tests PRIVATE
+        tests/mocks
+        external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet
+        external/WIZnet-PICO-C/libraries/ioLibrary_Driver/Ethernet/W5500
         external/unity/src
         src
     )

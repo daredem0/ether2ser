@@ -33,12 +33,12 @@
  * @name Default Network Settings
  * @{
  */
-#define DEFAULT_MAC_ADDR {0x00, 0x08, 0xDC, 0x12, 0x34, 0x56}
 #define DEFAULT_IP_ADDR {192, 168, 29, 20}
 #define DEFAULT_SUBNET_MASK {255, 255, 255, 0}
 #define DEFAULT_GATEWAY_ADDR {192, 168, 29, 1}
 #define DEFAULT_DNS_ADDR {8, 8, 8, 8}
 #define DEFAULT_UDP_PORT 6969
+#define UDP_MAX_PAYLOAD_BYTES 1472U
 #define RX_BUF_SIZE 8192
 #define TX_BUF_SIZE 8192
 /** @} */
