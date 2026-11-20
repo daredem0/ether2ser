@@ -654,18 +654,6 @@ static void cat_gpio_get(const char* args)
         return;
     }
 
-    // Only initialize if not already a GPIO function
-    if (gpio_get_function(pin->gpio_num) != GPIO_FUNC_SIO)
-    {
-        gpio_init(pin->gpio_num);
-        gpio_set_dir(pin->gpio_num, GPIO_IN);
-    }
-    // If already GPIO but not configured as input/output, set as input
-    else if (!gpio_is_dir_out(pin->gpio_num))
-    {
-        // Already initialized as GPIO input, no change needed
-    }
-
     int  value     = gpio_get(pin->gpio_num);
     bool is_output = gpio_is_dir_out(pin->gpio_num);
 

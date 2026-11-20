@@ -60,6 +60,19 @@ typedef struct
 void tx_clock_init(PIO pio, uint pio_sm, V24_CONFIG_T* config);
 
 /**
+ * @brief Mark the last byte of the active frame as queued to PIO.
+ *
+ * Clears stale TX-stall state so subsequent completion checks refer to this frame.
+ */
+void tx_frame_queued(void);
+
+/**
+ * @brief Check whether PIO consumed the complete active frame.
+ * @return true after PIO attempts to pull beyond the frame's last byte.
+ */
+bool tx_frame_complete(void);
+
+/**
  * @brief Poll TX completion/holdoff state and manage RTS release.
  * @return true if TX path is idle after polling, false otherwise.
  */

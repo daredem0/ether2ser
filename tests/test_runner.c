@@ -158,11 +158,11 @@ extern void test_tx_queue_full_rejected(void);
 extern void test_tx_queue_oversized_payload_rejected(void);
 extern void test_tx_queue_restarts_midframe_after_cts_edge(void);
 extern void test_tx_queue_ignores_cts_edge_when_restart_disabled(void);
+extern void test_tx_queue_protects_queued_tail_until_pio_completion(void);
 
 // MAC address tests
 extern void test_mac_address_from_ipv4_encodes_unique_local_unicast_address(void);
 extern void test_mac_address_from_ipv4_distinguishes_configured_board_ips(void);
-
 
 void setUp(void) {
     // set stuff up here
@@ -329,6 +329,7 @@ int main(void) {
     RUN_TEST(test_tx_queue_oversized_payload_rejected);
     RUN_TEST(test_tx_queue_restarts_midframe_after_cts_edge);
     RUN_TEST(test_tx_queue_ignores_cts_edge_when_restart_disabled);
+    RUN_TEST(test_tx_queue_protects_queued_tail_until_pio_completion);
 
     // MAC address tests
     RUN_TEST(test_mac_address_from_ipv4_encodes_unique_local_unicast_address);

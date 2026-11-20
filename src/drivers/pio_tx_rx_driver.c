@@ -367,6 +367,26 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
     LOG_INFO("RXC: enabled\r\n");
 }
 
+void tx_frame_queued(void)
+{
+    if (v24_runtime.tx_pio == NULL)
+    {
+        return;
+    }
+    v24_runtime.tx_pio->fdebug =
+        (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
+}
+
+bool tx_frame_complete(void)
+{
+    if (v24_runtime.tx_pio == NULL)
+    {
+        return false;
+    }
+    uint32_t stall_mask = (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
+    return (v24_runtime.tx_pio->fdebug & stall_mask) != 0U;
+}
+
 bool tx_poll(void)
 {
     static bool     deassert_pending     = false;
@@ -378,10 +398,8 @@ bool tx_poll(void)
         return true;
     }
 
-    bool fifo_empty = pio_sm_is_tx_fifo_empty(v24_runtime.tx_pio, v24_runtime.tx_sm);
-    bool stalled =
-        (v24_runtime.tx_pio->fdebug & (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm))) != 0;
-    bool ready_to_deassert = (fifo_empty || stalled);
+    bool ready_to_deassert =
+        pio_sm_is_tx_fifo_empty(v24_runtime.tx_pio, v24_runtime.tx_sm);
 
     uint64_t now_us = to_us_since_boot(get_absolute_time());
 

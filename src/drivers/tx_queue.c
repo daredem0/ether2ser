@@ -38,6 +38,7 @@ static bool s_cts_restart_enabled = true;
 
 e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data)
 {
+    memset(&queue->current_entry, 0, sizeof(queue->current_entry));
     RbInit(&(queue->queue_buffer), buffer_data, TX_FRAME_QUEUE_SIZE, sizeof(TX_QUEUE_ENTRY_T));
     queue->queue_touched = false;
     queue->tx_wire_bytes = 0;
@@ -122,9 +123,7 @@ size_t tx_queue_get_count(const TX_QUEUE_T* queue)
 
 bool tx_queue_is_empty(TX_QUEUE_T* queue)
 {
-    // Queue is empty only if ring buffer is empty AND current entry is fully drained
-    return queue->queue_buffer.count == 0 &&
-           queue->current_entry.offset >= queue->current_entry.frame.length;
+    return queue->queue_buffer.count == 0U && queue->current_entry.frame.length == 0U;
 }
 
 e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* bytes_drained)
@@ -135,62 +134,77 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
     }
     *bytes_drained = 0U;
 
-    /**
-     * Restart only when CTS changed during this frame's transmission window.
-     * Stale edges from idle periods must not retrigger unrelated future frames.
+    bool frame_active = queue->current_entry.frame.length > 0U;
+    bool frame_queued = frame_active &&
+                        queue->current_entry.offset >= queue->current_entry.frame.length;
+    bool frame_complete = frame_queued && tx_frame_complete();
+
+    /*
+     * Protect the frame until PIO has shifted its final byte. The FIFO can be
+     * empty while the PIO output shift register still contains frame bits.
      */
     uint32_t cts_seq = tx_clock_get_cts_toggle_seq();
-    bool frame_mid_send = queue->current_entry.offset > 0 &&
-                          queue->current_entry.offset < queue->current_entry.frame.length;
-    if (s_cts_restart_enabled && frame_mid_send && queue->current_frame_cts_seq_valid &&
+    bool frame_in_flight = frame_active && queue->current_entry.offset > 0U &&
+                           !frame_complete;
+    if (s_cts_restart_enabled && frame_in_flight && queue->current_frame_cts_seq_valid &&
         cts_seq != queue->current_frame_cts_seq_start)
     {
         tx_clock_hard_reset();
-        queue->current_entry.offset       = 0U; // resend whole HDLC frame
+        queue->current_entry.offset        = 0U;
         queue->current_frame_cts_seq_valid = false;
         return E2S_OK;
     }
 
-    if (queue->current_entry.offset >= queue->current_entry.frame.length)
+    if (frame_queued)
     {
-        size_t completed_offset = queue->current_entry.offset;
-        size_t completed_length = queue->current_entry.frame.length;
-
-        if (RbPopFront(&(queue->queue_buffer), &queue->current_entry) < 0)
+        if (!tx_poll())
         {
-            // TODO: This has to be tested on target
-            queue->current_frame_cts_seq_valid = false;
             return E2S_OK;
         }
-        LOG_DEBUG("TX FRAME COMPLETE: offset=%zu length=%zu\n", completed_offset, completed_length);
 
+        LOG_DEBUG("TX FRAME COMPLETE: offset=%zu length=%zu\n",
+                  queue->current_entry.offset, queue->current_entry.frame.length);
+        queue->current_entry.frame.length  = 0U;
+        queue->current_entry.offset        = 0U;
+        queue->current_frame_cts_seq_valid = false;
+        return E2S_OK;
+    }
+
+    if (!frame_active)
+    {
+        if (RbPopFront(&(queue->queue_buffer), &queue->current_entry) < 0)
+        {
+            return E2S_OK;
+        }
         queue->current_entry.frame.payload  = queue->current_entry.payload;
         queue->current_entry.frame.capacity = sizeof(queue->current_entry.payload);
         queue->current_frame_cts_seq_valid  = false;
     }
+
     size_t offset_before_drain = queue->current_entry.offset;
     tx_queue_drain_bytes(queue, &queue->current_entry, bytes_to_drain, bytes_drained);
-    if (!queue->current_frame_cts_seq_valid && offset_before_drain == 0U && *bytes_drained > 0U)
+    if (!queue->current_frame_cts_seq_valid && offset_before_drain == 0U &&
+        *bytes_drained > 0U)
     {
         /*
-         * Capture baseline after first bytes were actually queued to TX.
-         * This avoids false "mid-frame CTS toggle" caused by RTS->CTS settling
-         * edges that can happen during the first drain call.
+         * Capture after the first bytes were queued, excluding the RTS-to-CTS
+         * settling edge from this frame's restart window.
          */
         queue->current_frame_cts_seq_start = tx_clock_get_cts_toggle_seq();
         queue->current_frame_cts_seq_valid = true;
     }
-    if (queue->current_entry.offset >= queue->current_entry.frame.length)
+    if (queue->current_entry.offset >= queue->current_entry.frame.length &&
+        offset_before_drain < queue->current_entry.frame.length)
     {
-        queue->current_frame_cts_seq_valid = false;
+        tx_frame_queued();
     }
-    if (queue->current_entry.offset > 0 &&
+    if (queue->current_entry.offset > 0U &&
         queue->current_entry.offset < queue->current_entry.frame.length)
     {
-        static uint32_t last_log = 0;
+        static uint32_t last_log = 0U;
         uint32_t        now      = to_ms_since_boot(get_absolute_time());
         if (now - last_log > TX_QUEUE_TX_INPROG_MS)
-        { // Log once per second
+        {
             LOG_TRACE("TX IN PROGRESS: offset=%zu/%zu\r\n", queue->current_entry.offset,
                       queue->current_entry.frame.length);
             last_log = now;
