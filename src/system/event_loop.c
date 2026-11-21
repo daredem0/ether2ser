@@ -37,6 +37,7 @@
 #include "system/error.h"
 #include "system/event_dispatch.h"
 #include "system/event_queue.h"
+#include "system/event_scheduler.h"
 // Generated headers
 
 #define MAIN_LOOP_SLEEP_MS 1
@@ -46,8 +47,6 @@
 #define TX_QUEUE_HIGH_WM 48U
 #define TX_QUEUE_LOW_WM 12U
 
-#define EVENT_LOOP_MAX_EVENTS_AT_ONCE 20
-#define EVENT_LOOP_MAX_EVENTS_WHILE_TX_ACTIVE 2
 #define HDLC_DECODE_FRAME_BUDGET_PER_PASS 1U
 #define HDLC_DECODE_FAIL_STREAK_LIMIT 4U
 #define HDLC_SYNC_IDLE_TIMEOUT_US 20000U
@@ -176,12 +175,6 @@ static size_t poll_tx_pipeline(app_ctx_t* app)
         LOG_ERROR("Poll Queue Drain failed.\r\n");
     }
 
-    // If the tx queue is empty check if the fifo is empty to and reset rts
-    if (tx_queue_is_empty(&app->tx_queue))
-    {
-        // Currently we dont evaluate the result, but the api offers it
-        (void)tx_poll();
-    }
     return bytes_drained;
 }
 
@@ -214,8 +207,17 @@ static void decode_hdlc_to_udp_tx(app_ctx_t* app, event_loop_runtime_t* event_lo
     {
         app->stats.hdlc_decode_ok++;
         event_loop_runtime->hdlc_decode_fail_streak = 0;
-        w5500_udp_tx(&app->destination_config, &app->tx_frame_buffer);
-        app->stats.udp_tx_frames++;
+        app->stats.udp_tx_attempt_frames++;
+        e2s_error_t tx_result = w5500_udp_tx(&app->destination_config, &app->tx_frame_buffer);
+        if (tx_result == E2S_OK)
+        {
+            app->stats.udp_tx_success_frames++;
+        }
+        else
+        {
+            app->stats.udp_tx_failed_frames++;
+            LOG_ERROR("UDP TX failed: %d\r\n", (int)tx_result);
+        }
         hdlc_sync_acc_consume_candidate(&app->accumulator, true);
     }
     else
@@ -350,14 +352,10 @@ static void update_statistics(app_ctx_t* app)
     app->stats.log_queue_used_max = log_get_high_water_mark();
 }
 
-static void poll_and_dispatch_events(app_ctx_t* app)
+static void poll_and_dispatch_events(app_ctx_t* app, uint8_t event_budget)
 {
-    bool tx_active = !tx_queue_is_empty(&app->tx_queue);
-    int  max_events_per_iteration =
-        tx_active ? EVENT_LOOP_MAX_EVENTS_WHILE_TX_ACTIVE : EVENT_LOOP_MAX_EVENTS_AT_ONCE;
-
     event_t event_item;
-    for (int i = 0; i < max_events_per_iteration && event_queue_pop(&event_item); i++)
+    for (uint8_t i = 0U; i < event_budget && event_queue_pop(&event_item); i++)
     {
         event_dispatch(&event_item, app);
     }
@@ -399,6 +397,12 @@ void event_loop(app_ctx_t* app)
     {
         watchdog_update();
 
+        /*
+         * Peer RTS reaches local CTS before the clock holdoff expires. Reset
+         * the PIO input shifter at that physical frame boundary so idle clock
+         * transitions cannot splice stale bits into the first received byte.
+         */
+        (void)rx_clock_poll_frame_start();
         // Drain RX early in the loop to reduce risk of RX FIFO stalling under continuous clock.
         size_t rx_drained_early = 0;
         drain_rx_until_empty(app, &event_loop_runtime, &rx_drained_early);
@@ -445,13 +449,17 @@ void event_loop(app_ctx_t* app)
 
         /*
          * USB CDC output can block core 0 longer than the external-clock TX
-         * FIFO covers. Service CLI events and prompts only between frames so
-         * the PIO never starves while the peer keeps sampling XCK.
+         * FIFO covers. Service CLI events and prompts only when no physical
+         * frame is active. A queued backlog receives a small frame-boundary
+         * budget; a fully idle pipeline receives the full control budget.
          */
-        if (tx_queue_is_empty(&app->tx_queue))
+        uint8_t event_budget =
+            event_scheduler_control_budget(tx_queue_has_active_frame(&app->tx_queue),
+                                           tx_queue_is_empty(&app->tx_queue));
+        if (event_budget > 0U)
         {
             cli_poll();
-            poll_and_dispatch_events(app);
+            poll_and_dispatch_events(app, event_budget);
             if (log_take_emitted_flag())
             {
                 app->need_prompt = true;

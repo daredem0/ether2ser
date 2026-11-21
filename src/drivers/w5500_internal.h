@@ -1,0 +1,6 @@
+#ifndef W5500_INTERNAL_H
+#define W5500_INTERNAL_H
+
+#define W5500_UDP_SOCKET 1U
+
+#endif /* W5500_INTERNAL_H */

@@ -32,6 +32,7 @@
 // Project Headers
 #include "drivers/gpio_driver.h"
 #include "drivers/v24_config.h"
+#include "drivers/v24_tx_state.h"
 #include "platform/pinmap.h"
 #include "system/common.h"
 
@@ -55,25 +56,31 @@
 #define RX_DMA_RING_BYTES (1U << RX_DMA_RING_BITS)
 #define RX_DMA_RING_WORDS (RX_DMA_RING_BYTES / sizeof(uint32_t))
 
-// This struct holds the runtime state of the v24 and shall not be exposed
-v24_runtime_t v24_runtime = {.rx_dma_chan = -1};
+typedef struct
+{
+    PIO               tx_pio;
+    uint              tx_sm;
+    PIO               rx_pio;
+    uint              rx_sm;
+    volatile uint32_t cts_toggle_seq;
+    volatile uint32_t rx_frame_start_seq;
+    uint32_t          rx_frame_start_seen;
+    int               rx_dma_chan;
+    bool              rx_dma_enabled;
+    uint32_t          rx_dma_words_consumed;
+    uint32_t          rx_dma_overflow_words;
+    bool              cts_inverted_latched;
+} v24_runtime_t;
+
+static v24_runtime_t  v24_runtime = {.rx_dma_chan = -1};
+static v24_tx_state_t v24_tx_state = {
+    .phase               = V24_TX_PHASE_IDLE,
+    .cts_restart_enabled = true,
+};
+static v24_tx_event_t v24_tx_pending_event;
 static uint32_t rx_dma_ring[RX_DMA_RING_WORDS] __attribute__((aligned(RX_DMA_RING_BYTES)));
-static bool     tx_deassert_pending;
-static uint64_t tx_deassert_deadline_us;
-static uint64_t tx_assert_earliest_us;
-static uint64_t tx_data_earliest_us;
 
-const v24_runtime_t* get_v24_runtime(void)
-{
-    return (const v24_runtime_t*)&v24_runtime;
-}
-
-uint32_t tx_clock_get_cts_toggle_seq(void)
-{
-    return v24_runtime.cts_toggle_seq;
-}
-
-bool tx_clock_get_cts_level(void)
+static bool v24_tx_get_cts_level(void)
 {
     bool sampled = gpio_get(V24_CTS) != 0;
     return v24_runtime.cts_inverted_latched ? !sampled : sampled;
@@ -155,6 +162,10 @@ static void cts_raw_irq_handler(void)
     {
         gpio_acknowledge_irq(V24_CTS, events & mask);
         v24_runtime.cts_toggle_seq++;
+        if (gpio_get(V24_CTS) != 0)
+        {
+            v24_runtime.rx_frame_start_seq++;
+        }
     }
 }
 
@@ -235,17 +246,20 @@ void led_mirror_init(void)
 
 void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
 {
-    config->baudrate              = (baudrate >= V24_BAUD_1200) ? baudrate : V24_BAUD_1200;
-    uint32_t t_bit_us             = (US_PER_SECOND + (uint32_t)baudrate - 1U) / (uint32_t)baudrate;
-    v24_runtime.tx_rts_holdoff_us = V24_RTS_HOLDOFF_MARGIN * t_bit_us; // start conservative
-    if (v24_runtime.tx_rts_holdoff_us < V24_RTS_MIN_HOLDOFF)
+    config->baudrate  = (baudrate >= V24_BAUD_1200) ? baudrate : V24_BAUD_1200;
+    uint32_t t_bit_us = (US_PER_SECOND + (uint32_t)config->baudrate - 1U) /
+                        (uint32_t)config->baudrate;
+    uint32_t holdoff_us = V24_RTS_HOLDOFF_MARGIN * t_bit_us;
+    if (holdoff_us < V24_RTS_MIN_HOLDOFF)
     {
-        v24_runtime.tx_rts_holdoff_us = V24_RTS_MIN_HOLDOFF;
+        holdoff_us = V24_RTS_MIN_HOLDOFF;
     }
-    v24_runtime.rts_set = false;
-    tx_deassert_pending = false;
-    tx_assert_earliest_us = 0U;
-    tx_data_earliest_us = 0U;
+    if (v24_runtime.tx_pio != NULL)
+    {
+        gpio_put(V24_RTS, 0);
+    }
+    v24_tx_state_reconfigure(&v24_tx_state, holdoff_us);
+    v24_tx_pending_event = V24_TX_EVENT_NONE;
 }
 
 void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
@@ -341,6 +355,19 @@ void rx_clock_hard_reset(void)
     }
 }
 
+bool rx_clock_poll_frame_start(void)
+{
+    uint32_t frame_start_seq = v24_runtime.rx_frame_start_seq;
+    if (frame_start_seq == v24_runtime.rx_frame_start_seen)
+    {
+        return false;
+    }
+
+    v24_runtime.rx_frame_start_seen = frame_start_seq;
+    rx_clock_hard_reset();
+    return true;
+}
+
 void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
 {
     LOG_INFO("RXC: init pio%u sm%u pin%u\r\n", (unsigned)pio_get_index(pio), (unsigned)pio_sm,
@@ -374,99 +401,18 @@ void rx_clock_init(PIO pio, uint pio_sm, V24_RX_POLARITIES_T* polarities)
     LOG_INFO("RXC: enabled\r\n");
 }
 
-void tx_frame_queued(void)
+static uint32_t v24_tx_stall_mask(void)
 {
-    if (v24_runtime.tx_pio == NULL)
-    {
-        return;
-    }
-    v24_runtime.tx_pio->fdebug =
-        (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
+    return 1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm);
 }
 
-bool tx_frame_complete(void)
+static bool v24_tx_pio_frame_complete(void)
 {
-    if (v24_runtime.tx_pio == NULL)
-    {
-        return false;
-    }
-    uint32_t stall_mask = (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
-    return (v24_runtime.tx_pio->fdebug & stall_mask) != 0U;
+    return v24_runtime.tx_pio != NULL &&
+           (v24_runtime.tx_pio->fdebug & v24_tx_stall_mask()) != 0U;
 }
 
-bool tx_poll(void)
-{
-    if (!v24_runtime.rts_set)
-    {
-        tx_deassert_pending = false;
-        return true;
-    }
-
-    bool ready_to_deassert =
-        pio_sm_is_tx_fifo_empty(v24_runtime.tx_pio, v24_runtime.tx_sm);
-
-    uint64_t now_us = to_us_since_boot(get_absolute_time());
-
-    if (!ready_to_deassert)
-    {
-        tx_deassert_pending = false;
-        return false;
-    }
-
-    if (!tx_deassert_pending)
-    {
-        tx_deassert_pending     = true;
-        tx_deassert_deadline_us = now_us + v24_runtime.tx_rts_holdoff_us;
-        return false;
-    }
-
-    if (now_us < tx_deassert_deadline_us)
-    {
-        return false;
-    }
-
-    gpio_put(V24_RTS, 0);
-    v24_runtime.rts_set  = false;
-    tx_deassert_pending = false;
-    tx_assert_earliest_us = now_us + v24_runtime.tx_rts_holdoff_us;
-    return true;
-}
-
-bool tx_put(uint8_t data)
-{
-    assert(v24_runtime.tx_pio != NULL);
-    if (v24_runtime.tx_pio == NULL)
-    {
-        return false;
-    }
-    if (!v24_runtime.rts_set)
-    {
-        uint64_t now_us = to_us_since_boot(get_absolute_time());
-        if (now_us < tx_assert_earliest_us)
-        {
-            return false;
-        }
-
-        // Assert RTS first, then allow the looped-back CTS signal to settle.
-        v24_runtime.tx_pio->fdebug = (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
-        gpio_set_dir(V24_RTS, GPIO_OUT);
-        gpio_put(V24_RTS, 1);
-        v24_runtime.rts_set = true;
-        tx_deassert_pending = false;
-        tx_data_earliest_us = now_us + v24_runtime.tx_rts_holdoff_us;
-        return false;
-    }
-    if (to_us_since_boot(get_absolute_time()) < tx_data_earliest_us ||
-        pio_sm_is_tx_fifo_full(v24_runtime.tx_pio, v24_runtime.tx_sm))
-    {
-        return false;
-    }
-    pio_sm_put(v24_runtime.tx_pio, v24_runtime.tx_sm, data);
-    tx_deassert_pending = false;
-    return true;
-}
-
-void tx_clock_hard_reset(void)
+static void v24_tx_reset_pio(void)
 {
     if (v24_runtime.tx_pio == NULL)
     {
@@ -477,8 +423,109 @@ void tx_clock_hard_reset(void)
     pio_sm_clear_fifos(v24_runtime.tx_pio, v24_runtime.tx_sm);
     pio_sm_restart(v24_runtime.tx_pio, v24_runtime.tx_sm);
     pio_sm_clkdiv_restart(v24_runtime.tx_pio, v24_runtime.tx_sm);
-    v24_runtime.tx_pio->fdebug = (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
     pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, true);
+}
+
+static void v24_tx_apply_actions(v24_tx_action_t actions)
+{
+    if ((actions & V24_TX_ACTION_RESET_PIO) != 0U)
+    {
+        v24_tx_reset_pio();
+    }
+    if ((actions & V24_TX_ACTION_CLEAR_STALL) != 0U && v24_runtime.tx_pio != NULL)
+    {
+        v24_runtime.tx_pio->fdebug = v24_tx_stall_mask();
+    }
+    if ((actions & V24_TX_ACTION_ASSERT_RTS) != 0U)
+    {
+        gpio_set_dir(V24_RTS, GPIO_OUT);
+        gpio_put(V24_RTS, 1);
+    }
+    if ((actions & V24_TX_ACTION_DEASSERT_RTS) != 0U)
+    {
+        gpio_put(V24_RTS, 0);
+    }
+}
+
+static v24_tx_event_t v24_tx_event_from_actions(v24_tx_action_t actions)
+{
+    if ((actions & V24_TX_ACTION_RESTART_FRAME) != 0U)
+    {
+        return V24_TX_EVENT_RESTART_FRAME;
+    }
+    if ((actions & V24_TX_ACTION_FRAME_COMPLETE) != 0U)
+    {
+        return V24_TX_EVENT_FRAME_COMPLETE;
+    }
+    return V24_TX_EVENT_NONE;
+}
+
+bool v24_tx_try_write(uint8_t data)
+{
+    assert(v24_runtime.tx_pio != NULL);
+    if (v24_runtime.tx_pio == NULL ||
+        pio_sm_is_tx_fifo_full(v24_runtime.tx_pio, v24_runtime.tx_sm))
+    {
+        return false;
+    }
+
+    uint64_t now_us = to_us_since_boot(get_absolute_time());
+    v24_tx_action_t actions =
+        v24_tx_state_request_write(&v24_tx_state, now_us, v24_runtime.cts_toggle_seq);
+    v24_tx_apply_actions(actions);
+    v24_tx_pending_event = v24_tx_event_from_actions(actions);
+    if ((actions & V24_TX_ACTION_ALLOW_WRITE) == 0U)
+    {
+        return false;
+    }
+
+    pio_sm_put(v24_runtime.tx_pio, v24_runtime.tx_sm, data);
+    return true;
+}
+
+void v24_tx_mark_frame_queued(void)
+{
+    v24_tx_apply_actions(v24_tx_state_frame_queued(&v24_tx_state));
+}
+
+v24_tx_event_t v24_tx_poll(void)
+{
+    if (v24_tx_pending_event != V24_TX_EVENT_NONE)
+    {
+        v24_tx_event_t event = v24_tx_pending_event;
+        v24_tx_pending_event = V24_TX_EVENT_NONE;
+        return event;
+    }
+
+    uint64_t now_us = to_us_since_boot(get_absolute_time());
+    v24_tx_action_t actions =
+        v24_tx_state_poll(&v24_tx_state, now_us, v24_runtime.cts_toggle_seq,
+                          v24_tx_pio_frame_complete());
+    v24_tx_apply_actions(actions);
+    return v24_tx_event_from_actions(actions);
+}
+
+void v24_tx_set_cts_restart_enabled(bool enabled)
+{
+    v24_tx_state_set_cts_restart(&v24_tx_state, enabled);
+}
+
+bool v24_tx_get_cts_restart_enabled(void)
+{
+    return v24_tx_state.cts_restart_enabled;
+}
+
+void v24_tx_status_snapshot(v24_tx_status_t* status)
+{
+    if (status == NULL)
+    {
+        return;
+    }
+
+    status->pio_stalled         = v24_tx_pio_frame_complete();
+    status->cts_level           = v24_tx_get_cts_level();
+    status->cts_edge_count      = v24_runtime.cts_toggle_seq;
+    status->cts_restart_enabled = v24_tx_state.cts_restart_enabled;
 }
 
 void tx_clock_update_settings(V24_CONFIG_T* config)
@@ -518,6 +565,15 @@ void tx_clock_update_settings(V24_CONFIG_T* config)
     {
         // pio_sm_set_clkdiv(v24_runtime.tx_pio, v24_runtime.tx_sm, 1.0f);
     }
+    /*
+     * Runtime updates happen only at a physical frame boundary. Restart the
+     * SM and divider so the next frame cannot inherit a stalled instruction
+     * or fractional divider phase from the previous baud/polarity setting.
+     */
+    pio_sm_clear_fifos(v24_runtime.tx_pio, v24_runtime.tx_sm);
+    pio_sm_restart(v24_runtime.tx_pio, v24_runtime.tx_sm);
+    pio_sm_clkdiv_restart(v24_runtime.tx_pio, v24_runtime.tx_sm);
+    v24_runtime.tx_pio->fdebug = v24_tx_stall_mask();
     pio_sm_set_enabled(v24_runtime.tx_pio, v24_runtime.tx_sm, true);
 }
 
@@ -557,7 +613,7 @@ static void tx_clock_init_tck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
 
     // This implicitly activates the sm
     tx_clock_update_settings(config);
-    LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
+    LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_tx_state.holdoff_us);
     LOG_INFO("TXC: enabled\r\n");
 }
 
@@ -597,7 +653,7 @@ static void tx_clock_init_xck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
 
     // This implicitly activates the sm
     tx_clock_update_settings(config);
-    LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_runtime.tx_rts_holdoff_us);
+    LOG_INFO("Setting RTS Holdoff to %u us\r\n", (unsigned)v24_tx_state.holdoff_us);
     LOG_INFO("XCK: enabled\r\n");
 }
 

@@ -20,8 +20,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Library Headers
-#include "hardware/pio.h"
 
 // Project Headers
 #include "drivers/pio_tx_rx_driver.h"
@@ -34,7 +32,6 @@
 // Generated headers
 
 #define TX_QUEUE_TX_INPROG_MS 1000U
-static bool s_cts_restart_enabled = true;
 
 e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data)
 {
@@ -42,8 +39,6 @@ e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data)
     RbInit(&(queue->queue_buffer), buffer_data, TX_FRAME_QUEUE_SIZE, sizeof(TX_QUEUE_ENTRY_T));
     queue->queue_touched = false;
     queue->tx_wire_bytes = 0;
-    queue->current_frame_cts_seq_start = 0U;
-    queue->current_frame_cts_seq_valid = false;
     return E2S_OK;
 }
 
@@ -90,12 +85,7 @@ static e2s_error_t tx_queue_drain_bytes(TX_QUEUE_T* queue, TX_QUEUE_ENTRY_T* ent
     *bytes_drained                  = 0;
     for (size_t i = 0; i < effective_bytes_to_drain; i++)
     {
-        if (pio_sm_is_tx_fifo_full(pio0, 0))
-        {
-            // LOG_DEBUG("TX: TX FIFO is full, stopping drain\r\n");
-            // break;
-        }
-        if (tx_put(entry->frame.payload[entry->offset + i]))
+        if (v24_tx_try_write(entry->frame.payload[entry->offset + i]))
         {
             // LOG_DEBUG("TX: Wrote byte %02X\r\n", entry->frame.payload[entry->offset + i]);
             (*bytes_drained)++;
@@ -126,6 +116,11 @@ bool tx_queue_is_empty(TX_QUEUE_T* queue)
     return queue->queue_buffer.count == 0U && queue->current_entry.frame.length == 0U;
 }
 
+bool tx_queue_has_active_frame(const TX_QUEUE_T* queue)
+{
+    return queue != NULL && queue->current_entry.frame.length != 0U;
+}
+
 e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* bytes_drained)
 {
     if (!queue || !bytes_drained)
@@ -134,44 +129,27 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
     }
     *bytes_drained = 0U;
 
-    bool frame_active = queue->current_entry.frame.length > 0U;
-    bool frame_queued = frame_active &&
-                        queue->current_entry.offset >= queue->current_entry.frame.length;
-    bool frame_complete = frame_queued && tx_frame_complete();
-
-    /*
-     * Protect the frame until PIO has shifted its final byte. The FIFO can be
-     * empty while the PIO output shift register still contains frame bits.
-     */
-    uint32_t cts_seq = tx_clock_get_cts_toggle_seq();
-    bool frame_in_flight = frame_active && queue->current_entry.offset > 0U &&
-                           !frame_complete;
-    if (s_cts_restart_enabled && frame_in_flight && queue->current_frame_cts_seq_valid &&
-        cts_seq != queue->current_frame_cts_seq_start)
+    v24_tx_event_t tx_event = v24_tx_poll();
+    if (tx_event == V24_TX_EVENT_RESTART_FRAME &&
+        queue->current_entry.frame.length != 0U)
     {
-        tx_clock_hard_reset();
-        queue->current_entry.offset        = 0U;
-        queue->current_frame_cts_seq_valid = false;
+        queue->current_entry.offset = 0U;
+        return E2S_OK;
+    }
+    if (tx_event == V24_TX_EVENT_FRAME_COMPLETE &&
+        queue->current_entry.frame.length != 0U)
+    {
+        LOG_DEBUG("TX FRAME COMPLETE: offset=%zu length=%zu\n",
+                  queue->current_entry.offset, queue->current_entry.frame.length);
+        queue->current_entry.frame.length = 0U;
+        queue->current_entry.offset       = 0U;
         return E2S_OK;
     }
 
-    if (frame_queued)
+    bool frame_active = queue->current_entry.frame.length != 0U;
+    if (frame_active &&
+        queue->current_entry.offset >= queue->current_entry.frame.length)
     {
-        if (!frame_complete)
-        {
-            return E2S_OK;
-        }
-
-        if (!tx_poll())
-        {
-            return E2S_OK;
-        }
-
-        LOG_DEBUG("TX FRAME COMPLETE: offset=%zu length=%zu\n",
-                  queue->current_entry.offset, queue->current_entry.frame.length);
-        queue->current_entry.frame.length  = 0U;
-        queue->current_entry.offset        = 0U;
-        queue->current_frame_cts_seq_valid = false;
         return E2S_OK;
     }
 
@@ -183,25 +161,14 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
         }
         queue->current_entry.frame.payload  = queue->current_entry.payload;
         queue->current_entry.frame.capacity = sizeof(queue->current_entry.payload);
-        queue->current_frame_cts_seq_valid  = false;
     }
 
     size_t offset_before_drain = queue->current_entry.offset;
     tx_queue_drain_bytes(queue, &queue->current_entry, bytes_to_drain, bytes_drained);
-    if (!queue->current_frame_cts_seq_valid && offset_before_drain == 0U &&
-        *bytes_drained > 0U)
-    {
-        /*
-         * Capture after the first bytes were queued, excluding the RTS-to-CTS
-         * settling edge from this frame's restart window.
-         */
-        queue->current_frame_cts_seq_start = tx_clock_get_cts_toggle_seq();
-        queue->current_frame_cts_seq_valid = true;
-    }
     if (queue->current_entry.offset >= queue->current_entry.frame.length &&
         offset_before_drain < queue->current_entry.frame.length)
     {
-        tx_frame_queued();
+        v24_tx_mark_frame_queued();
     }
     if (queue->current_entry.offset > 0U &&
         queue->current_entry.offset < queue->current_entry.frame.length)
@@ -218,15 +185,6 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
     return E2S_OK;
 }
 
-void tx_queue_set_cts_restart_enabled(bool enabled)
-{
-    s_cts_restart_enabled = enabled;
-}
-
-bool tx_queue_get_cts_restart_enabled(void)
-{
-    return s_cts_restart_enabled;
-}
 
 e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, const UDP_FRAME_T* frame)
 {

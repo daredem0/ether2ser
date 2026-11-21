@@ -54,7 +54,9 @@ typedef struct
     uint64_t hdlc_frame_ready;
     uint64_t hdlc_decode_ok;
     uint64_t hdlc_decode_fail;
-    uint64_t udp_tx_frames;
+    uint64_t udp_tx_attempt_frames;
+    uint64_t udp_tx_success_frames;
+    uint64_t udp_tx_failed_frames;
     uint64_t udp_rx_throttle_enter;
     uint64_t udp_rx_throttle_skips;
     uint64_t udp_rx_buffer_full_counts;

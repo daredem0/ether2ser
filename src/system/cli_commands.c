@@ -27,7 +27,7 @@
 #include "wizchip_qspi_pio.h"
 
 // Project Headers
-#include "drivers/tx_queue.h"
+#include "drivers/pio_tx_rx_driver.h"
 #include "drivers/v24_config.h"
 #include "platform/watchdog.h"
 #include "system/cli_parser.h"
@@ -270,7 +270,7 @@ static void subcmd_set_v24_ctsrestart(const char* args)
         LOG_PLAIN("usage: set v24 ctsrestart <0|1>\r\n");
         return;
     }
-    tx_queue_set_cts_restart_enabled(enabled);
+    v24_tx_set_cts_restart_enabled(enabled);
     LOG_PLAIN("V24_CTS_RESTART: %u\r\n", enabled ? 1U : 0U);
 }
 
@@ -281,7 +281,7 @@ static void subcmd_get_v24_ctsrestart(const char* args)
         LOG_PLAIN("usage: get v24 ctsrestart\r\n");
         return;
     }
-    LOG_PLAIN("V24_CTS_RESTART: %u\r\n", tx_queue_get_cts_restart_enabled() ? 1U : 0U);
+    LOG_PLAIN("V24_CTS_RESTART: %u\r\n", v24_tx_get_cts_restart_enabled() ? 1U : 0U);
 }
 
 static void subcmd_get_v24_baudrate(const char* args)

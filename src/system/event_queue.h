@@ -35,9 +35,6 @@ typedef enum
 {
     EV_NONE = 0,
     EV_CLI_LINE,
-    EV_UDP_RX,
-    EV_UDP_TX,
-    EV_HDLC_DECODE,
     EV_SAVE_CONFIG,
     EV_STATUS,
     EV_MEM,

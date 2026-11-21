@@ -79,7 +79,8 @@ status: ok
 Current Baudrate estimation on pin 4: 109010.0 Hz
 PIPE STATS
   Traffic
-    Frames    : udp_rx=420  hdlc_tx=420  hdlc_rx=420  udp_tx=420
+    Frames    : udp_rx=420  hdlc_tx=420  hdlc_rx=420
+    UDP TX    : attempts=420  ok=420  fail=0
     Backlog   : tx->ready_gap=0  ready->udp_gap=0
     Serial    : rx_bytes=630410  tx_bytes=630410
     Rates     : udp_rx=420000/s  hdlc_rx=420000/s  udp_tx=420000/s  fail=0/s  rx_bytes=630410/s
@@ -111,16 +112,16 @@ PIPE STATS
 
 | Name | Meaning | Debug hint |
 |---|---|---|
-| `Frames` | Stage counters across the pipeline (`udp_rx`, `hdlc_tx`, `hdlc_rx`, `udp_tx`). | Compare columns to locate where frames are being lost. |
+| `Frames` | Stage counters across the pipeline (`udp_rx`, `hdlc_tx`, `hdlc_rx`). | Compare columns to locate where frames are being lost. |
 | `udp_rx` | UDP frames accepted from Ethernet. | If low, issue is upstream/network side. |
 | `hdlc_tx` | Frames encoded and queued to serial TX. | `udp_rx` and `hdlc_tx` should track closely. |
 | `hdlc_rx` | HDLC frame candidates detected on serial RX. | Much larger than `hdlc_tx` usually means desync/false framing. |
-| `udp_tx` | Frames successfully decoded and sent via UDP. | Gap to `hdlc_rx` indicates decode/sync failures. |
-| `Backlog` | Gap metrics between stages. | `tx->ready_gap` grows when RX cannot keep up; `ready->udp_gap` grows on decode failures. |
+| `UDP TX` | W5500 send outcomes: every decoded datagram increments `attempts`, exact-length vendor sends increment `ok`, and negative or short sends increment `fail`. | Healthy traffic has `attempts == ok` and `fail == 0`; host receipt remains the end-to-end delivery proof. |
+| `Backlog` | Gap metrics between stages. | `tx->ready_gap` grows when RX cannot keep up; `ready->udp_gap` includes decode failures and failed UDP sends. |
 | `tx->ready_gap` | `hdlc_tx - hdlc_rx`. | Persistent growth means receive/framing lag. |
-| `ready->udp_gap` | `hdlc_rx - udp_tx`. | Persistent growth points at decode integrity issues. |
+| `ready->udp_gap` | `hdlc_rx - UDP TX ok`. | Persistent growth points at decode integrity or UDP send failures. |
 | `Serial` | Cumulative byte counters on wire (`rx_bytes`, `tx_bytes`). | Large divergence indicates one direction not flowing cleanly. |
-| `Rates` | Per-second deltas from previous `status`. | First sample or very short interval can look inflated. |
+| `Rates` | Per-second deltas from previous `status`; `udp_tx` uses successful sends. | First sample or very short interval can look inflated. |
 
 `Decode / Sync`
 
@@ -128,7 +129,7 @@ PIPE STATS
 |---|---|---|
 | `Decode` | Decoder outcomes (`frame_ready`, `ok`, `fail`). | `fail` near zero is expected in stable runs. |
 | `frame_ready` | HDLC candidates emitted by sync layer. | If this overshoots TX by a lot, suspect framing alignment/noise. |
-| `ok` | Successful decode + CRC validation. | Should track `udp_tx`. |
+| `ok` | Successful decode + CRC validation. | Should track UDP TX `attempts`. |
 | `fail` | Failed decode attempts. | Use `FailReason` to identify root cause. |
 | `FailReason` | Breakdown (`invalid`, `short`, `long`, `unstuff`, `crc`). | `unstuff` dominance suggests bitstream corruption/alignment; `crc` points to data corruption after framing. |
 | `SyncState` | Current sync FSM state (`HUNTING`, `SYNCING`, `SYNCED`). | Long time in `SYNCING`/`SYNCED` with low progress can indicate stuck candidate flow. |

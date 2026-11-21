@@ -85,8 +85,9 @@ void w5500_debug_status(void);
  * @brief Send one UDP frame through W5500.
  * @param send_config Destination endpoint.
  * @param frame Frame payload to send.
+ * @return E2S_OK only when the vendor driver reports the exact datagram length.
  */
-void w5500_udp_tx(UDP_CONFIG_T* send_config, const UDP_FRAME_T* frame);
+e2s_error_t w5500_udp_tx(UDP_CONFIG_T* send_config, const UDP_FRAME_T* frame);
 
 /**
  * @brief Poll W5500 for received UDP data.

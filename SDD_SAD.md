@@ -70,22 +70,21 @@ Startup sequence:
 ### 4.2 Main Loop (`src/system/event_loop.c`)
 Each iteration:
 1. Feed watchdog.
-2. Poll CLI input (`cli_poll`) and enqueue CLI line events.
-3. Early RX drain from PIO FIFO into HDLC sync accumulator.
-4. Sample W5500 UDP socket pressure counters (`w5500_poll_udp_buffer_full_events`).
-5. Poll TX queue stats and drain up to `TX_QUEUE_DRAIN_CHUNK_SIZE` bytes to PIO TX.
-6. If queue empty, run TX completion/RTS holdoff logic (`tx_poll`).
-7. Update UDP RX throttle state from TX queue occupancy (`TX_QUEUE_HIGH_WM` / `TX_QUEUE_LOW_WM`).
-8. Poll UDP RX (`w5500_poll_rx`) and enqueue encoded frames into TX queue only when not throttled.
-9. Second RX drain pass.
-10. Apply HDLC idle-timeout resync policy.
-11. Poll HDLC sync for ready frames; decode and forward UDP immediately.
-12. Apply HDLC no-progress resync policy.
-13. Update runtime stats snapshots (decode stats, queue HWM/drops, log drops/HWM).
-14. Poll RX FIFO stall flags.
-15. Dispatch control events (up to 20 per loop, or 2 while TX active).
-16. Redraw CLI prompt if output happened.
-17. Sleep `50 us` when no work was done.
+2. Early RX drain from PIO FIFO into HDLC sync accumulator.
+3. Sample W5500 UDP socket pressure counters (`w5500_poll_udp_buffer_full_events`).
+4. Poll TX queue stats and drain up to `TX_QUEUE_DRAIN_CHUNK_SIZE` bytes to PIO TX.
+5. Update UDP RX throttle state from TX queue occupancy (`TX_QUEUE_HIGH_WM` / `TX_QUEUE_LOW_WM`).
+6. Poll UDP RX (`w5500_poll_rx`) and enqueue encoded frames into TX queue only when not throttled.
+7. Second RX drain pass.
+8. Apply HDLC idle-timeout resync policy.
+9. Poll HDLC sync for ready frames; decode and forward UDP immediately.
+10. Apply HDLC no-progress resync policy.
+11. Update runtime stats snapshots (decode stats, queue HWM/drops, log drops/HWM).
+12. Poll RX FIFO stall flags.
+13. Derive a bounded control budget from the physical TX state: zero while a frame is active, two events at a frame boundary with queued backlog, or twenty events when fully idle.
+14. At a nonzero control budget, poll CLI input, dispatch at most the budgeted events, consume the log-output flag, and redraw the prompt.
+
+Queued traffic cannot starve the control plane: `tx_queue_drain()` exposes an iteration with no active physical frame before selecting the next queued entry. CLI polling at that boundary remains nonblocking and bounded.
 
 Implementation notes:
 - TX work bookkeeping now uses actual drain progress (`bytes_drained > 0`) instead of only error code.
@@ -142,8 +141,9 @@ HDLC resync/recovery policies in loop:
 - `protocol/hdlc_encoder.*`: bit-stuffed HDLC encoding
 - `protocol/hdlc_sync.*`: bit-phase synchronization and frame candidate assembly
 - `protocol/hdlc_decoder.*`: unstuffing + CRC validation
-- `drivers/pio_tx_rx_driver.*`: PIO TX/RX engines, RTS gating, clock/polarity updates
-- `drivers/tx_queue.*`: HDLC frame queue + partial-drain tracking
+- `drivers/v24_tx_state.*`: hardware-independent physical TX lifecycle and CTS restart policy
+- `drivers/pio_tx_rx_driver.*`: sole GPIO/PIO adapter for V.24 TX/RX, clock and polarity updates
+- `drivers/tx_queue.*`: encoded HDLC frame storage and retry offsets
 
 ### 5.4 Support Modules
 - `system/log.c` + `system/common.h`: logging API/macros + async queue
@@ -157,7 +157,7 @@ HDLC resync/recovery policies in loop:
 1. `w5500_poll_rx` fills `app->rx_frame_buffer`.
 2. `tx_queue_enqueue_udp_frame` encodes to HDLC (`hdlc_encode(..., lsb_first=true)`).
 3. Encoded frame is queued as `TX_QUEUE_ENTRY_T`.
-4. `tx_queue_drain` pushes bytes via `tx_put` into TX PIO FIFO.
+4. `tx_queue_drain` feeds bytes through `v24_tx_try_write` and retains the active entry until `V24_TX_EVENT_FRAME_COMPLETE`; peer RTS assertion reaches local CTS before clocking and resets the RX PIO input shifter at the physical frame boundary.
 5. TX PIO emits bits on TXD with internal (TCK) or external (XCK) clock mode.
 
 ```mermaid
@@ -175,8 +175,9 @@ flowchart LR
 2. `hdlc_sync_acc_process_byte` appends raw bytes to accumulator.
 3. `hdlc_sync_acc_poll` returns aligned candidate frame when closed by flag.
 4. `hdlc_decode(..., lsb_first=true)` unstuff/CRC-checks.
-5. On success, `w5500_udp_tx` forwards payload to configured destination.
-6. Candidate region is consumed by `hdlc_sync_acc_consume_candidate(accept)`.
+5. On successful decode, increment the UDP TX attempt counter and call `w5500_udp_tx`.
+6. Count an exact-length vendor send as success; count negative or short results as failure and log the failure.
+7. Consume the decoded candidate after either send result. UDP datagrams are not retried, avoiding duplicates and unbounded latency.
 
 ```mermaid
 flowchart LR
@@ -204,7 +205,6 @@ Implemented event types:
 - CLI/status/memory: `EV_CLI_LINE`, `EV_STATUS`, `EV_MEM`
 - Persistence/reboot: `EV_SAVE_CONFIG`, `EV_WIPE_CONFIG`, `EV_REBOOT`
 - Settings: `EV_SET_NET_SETTINGS`, `EV_GET_NET_SETTINGS`, `EV_SET_V24_SETTINGS`, `EV_GET_V24_SETTINGS`
-- Legacy/data-path events still handled: `EV_UDP_RX`, `EV_UDP_TX`, `EV_HDLC_DECODE`
 
 ## 8. Protocol Design
 ### 8.1 HDLC Encoder (`src/protocol/hdlc_encoder.c`)
@@ -255,14 +255,11 @@ Compatibility path:
 - `hdlc_decode_byte` supports escaped-byte framing
 
 ## 9. Driver Design
-### 9.1 W5500 Driver (`src/drivers/w5500_driver.c`)
-- Initializes WIZnet port layer (PIO SPI + critical section + chip init/check)
-- Applies explicit W5500 socket memory map (`S1` gets `8 KB RX` / `8 KB TX`)
-- Opens non-blocking UDP socket on configured local port
-- Poll-based RX (`recvfrom`) and TX (`sendto`)
-- Local/remote socket reconfigure via close+reopen
-- Broadcast address derived from IP/subnet
-- Derives a locally administered unicast MAC as `02:E2:<IPv4 bytes>` whenever the static local IPv4 address is applied
+### 9.1 W5500 Driver (`src/drivers/w5500_driver.c`, `src/drivers/w5500_socket_io.c`)
+- `w5500_driver.c` initializes the WIZnet port layer, PIO SPI, chip, network settings, socket memory and socket lifecycle.
+- `w5500_socket_io.c` owns testable UDP send/receive calls. TX rejects null/empty/oversized frames and returns `E2S_OK` only when `sendto_W5x00` reports the exact requested datagram length.
+- The shared private `W5500_UDP_SOCKET` constant keeps initialization, telemetry and socket I/O on hardware socket 1.
+- UDP TX statistics separate attempts, successful exact-length sends and failures. The decoded candidate is consumed after success or failure; no datagram retry is attempted.
 - Samples UDP socket pressure counters each loop:
   - RX counter increments on transition into "not enough free room for max UDP datagram (`1472 + 8` bytes)"
   - TX counter increments on transition into "TX free space is zero"
@@ -272,11 +269,12 @@ TX path:
 - Two TX programs:
   - internal clock mode: `tck_txd.pio` (drives `V24_TXC_DTE`)
   - external clock mode: `xck_txd.pio` (samples `V24_TXC_DCE`)
-- `tx_put` asserts RTS on first byte and feeds PIO FIFO
-- `tx_poll` deasserts RTS after FIFO-empty/stall plus configurable holdoff
-- CTS edge IRQ handling:
-  - raw GPIO IRQ handler latches `v24_runtime.cts_toggled` on both edges
-  - initialized in `tx_clock_init(...)` (`cts_irq_init`)
+- `v24_tx_state.*` owns the allocation-free physical phases: idle, RTS settle, sending, PIO draining, RTS hold and inter-frame hold.
+- `pio_tx_rx_driver.c` is the sole adapter from state actions to GPIO/PIO. `v24_tx_try_write` checks FIFO capacity before an `ALLOW_WRITE` transition, so an allowed byte is always written.
+- The final byte is marked with `v24_tx_mark_frame_queued`; `v24_tx_poll` reports restart or physical frame completion only after PIO completion, the 41-bit-time RTS hold, RTS deassertion and the inter-frame hold.
+- The RTS holdoff has a 200 us floor. Both TX PIO programs use the joined eight-word FIFO.
+- CTS edges are counted by the GPIO IRQ. Edges before the first accepted byte are ignored; edges during sending or draining restart the PIO and frame only when runtime CTS restart is enabled.
+- `v24_tx_status_snapshot` exposes PIO stall, logical CTS level, edge count and restart policy without exposing PIO pointers.
 
 RX path:
 - `rck_rxd.pio` samples RXD using RXC timing
@@ -285,18 +283,16 @@ RX path:
 - `rx_clock_poll_stall` reports FIFO stall events
 
 Runtime updates:
-- `tx_clock_update_settings` applies baud/polarities for active TX SM
+- `tx_clock_update_settings` applies baud/polarities for active TX SM while preserving the CTS restart setting
 - `rx_clock_update_settings` applies RX polarities
 - Clock mode switching is persisted and applied via reboot policy (not hot-swapped in-place)
 
 ### 9.3 TX Queue (`src/drivers/tx_queue.c`)
 - Queue depth: `TX_FRAME_QUEUE_SIZE = 64`
 - Max frame storage per entry: `TX_FRAME_MAX_SIZE_BYTE = 2048`
-- Tracks per-entry drain offset and cumulative serialized wire bytes
-- Emits queue usage diagnostics and threshold warnings
-- `tx_queue_drain(...)` reports actual progress through `bytes_drained` output parameter
-- If CTS toggled during an in-progress frame, drain logic rewinds current entry offset to `0`
-  to resend that HDLC frame from the beginning
+- Owns encoded-frame storage, the current retry offset and cumulative serialized wire bytes; it does not inspect PIO or CTS state
+- `tx_queue_drain(...)` reports actual progress through `bytes_drained`, rewinds the current offset on `V24_TX_EVENT_RESTART_FRAME`, and releases the entry only on `V24_TX_EVENT_FRAME_COMPLETE`
+- The active-frame predicate remains true through PIO drain and both hold phases, allowing control work only at a physical frame boundary
 
 ### 9.4 Baudrate Monitor (`src/system/baudrate_monitor.c`)
 - Edge ISR increments per-pin edge counters
@@ -356,8 +352,8 @@ Log level:
 - alias `tracea` maps to `TRACE`
 
 ### 11.3 Input Handling
-- CLI poll budget is bounded (`CLI_MAX_CHARS_PER_POLL = 16` chars/loop)
-- Line buffer size is 128 bytes
+- CLI polling occurs only at a physical frame boundary or while the TX pipeline is idle
+- Each safe poll consumes at most the complete fixed 128-byte input budget, allowing one already-buffered maximum-length command to reach the event queue at one boundary
 - Parsed lines are copied into a small static pool before event enqueue
 - CLI line pool size equals event queue capacity; when queue is full, incoming lines are dropped with error log
 
@@ -417,7 +413,9 @@ Unity-based `unit_tests` target covers:
 - logging behavior (with `tests/mock_log.c`)
 - byte-alignment and shifted-phase sync scenarios (`tests/test_byte_alignment.c`)
 - bitstuff decoder tests are included into `test_runner.c` as a translation-unit include (`tests/test_hdlc_bitstuff_decoder.c`)
-- TX queue framing and CTS-edge restart decisions (`tests/test_tx_queue.c`, using host platform mocks)
+- TX queue ownership and high-level V.24 event handling (`tests/test_tx_queue.c`, using host platform mocks)
+- V.24 physical lifecycle and CTS restart policy (`tests/test_v24_tx_state.c`)
+- Control budgets (`tests/test_event_scheduler.c`) and exact W5500 send outcomes (`tests/test_w5500_socket_io.c`)
 
 ## 14. Operational Constraints
 - Throughput and latency depend on polling service cadence and configured serial clock rate.
@@ -430,7 +428,6 @@ Unity-based `unit_tests` target covers:
 - Watchdog is active in runtime and must be fed by main loop progression.
 
 ## 15. Known Gaps / Notes
-- Some legacy event paths (`EV_UDP_RX`, `EV_UDP_TX`, `EV_HDLC_DECODE`) remain for compatibility/testing but are not the primary runtime data-plane path.
 - `src/system/board_pins.h` is currently not used by runtime modules (pin ownership comes from `platform/pinmap.h`).
 - Several `event_queue_push(...)` call sites do not check return value, so control events can be dropped silently under queue pressure.
 - Remote UDP port update path currently reconfigures the same UDP socket using `destination_config`, which can disturb local RX socket binding semantics.

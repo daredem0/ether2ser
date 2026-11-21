@@ -41,17 +41,6 @@
  */
 #define TX_FRAME_MAX_SIZE_BYTE 2048
 
-/**
- * @brief Convenience macro to declare and initialize a TX queue and backing storage.
- * @param var_name Base variable name for queue and storage symbols.
- */
-#define TX_QUEUE_DECLARE_AND_INIT(var_name)                                            \
-    TX_QUEUE_T var_name;                                                               \
-    uint8_t    var_name##_buffer_data[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)]; \
-    Ringbuffer var_name##_ringbuf;                                                     \
-    RbInit(&var_name##_ringbuf, var_name##_buffer_data, TX_FRAME_QUEUE_SIZE,           \
-           sizeof(TX_QUEUE_ENTRY_T));                                                  \
-    tx_queue_init(&var_name, &var_name##_ringbuf)
 
 /**
  * @brief One queued HDLC frame plus drain offset state.
@@ -79,10 +68,6 @@ typedef struct
     bool queue_touched;
     /** Total bytes pushed to wire via TX FIFO. */
     uint64_t tx_wire_bytes;
-    /** CTS edge sequence captured when current frame started draining. */
-    uint32_t current_frame_cts_seq_start;
-    /** Whether @ref current_frame_cts_seq_start is valid for current frame. */
-    bool     current_frame_cts_seq_valid;
 } TX_QUEUE_T;
 
 /**
@@ -99,6 +84,13 @@ e2s_error_t tx_queue_enqueue_udp_frame(TX_QUEUE_T* queue, const UDP_FRAME_T* fra
  * @return true if no pending or active bytes remain.
  */
 bool tx_queue_is_empty(TX_QUEUE_T* queue);
+
+/**
+ * @brief Check whether a physical frame lifecycle is still active.
+ * @param queue TX queue instance.
+ * @return true from frame selection through physical completion and hold time.
+ */
+bool tx_queue_has_active_frame(const TX_QUEUE_T* queue);
 
 /**
  * @brief Drain up to @p bytes_to_drain bytes from queue into TX FIFO.
@@ -131,16 +123,5 @@ e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data);
  */
 size_t tx_queue_get_count(const TX_QUEUE_T* queue);
 
-/**
- * @brief Enable or disable CTS-edge-triggered mid-frame restart behavior.
- * @param enabled True to restart current frame on CTS edge, false to ignore CTS edges.
- */
-void   tx_queue_set_cts_restart_enabled(bool enabled);
-
-/**
- * @brief Query CTS-edge-triggered restart behavior.
- * @return True when CTS-triggered frame restart is enabled.
- */
-bool   tx_queue_get_cts_restart_enabled(void);
 
 #endif /* TX_QUEUE_H */

@@ -28,28 +28,20 @@
 
 // Generated headers
 
+typedef enum
+{
+    V24_TX_EVENT_NONE = 0,
+    V24_TX_EVENT_RESTART_FRAME,
+    V24_TX_EVENT_FRAME_COMPLETE,
+} v24_tx_event_t;
+
 typedef struct
 {
-    uint32_t      tx_rts_holdoff_us;
-    bool          rts_set;
-    PIO           tx_pio;
-    uint          tx_sm;
-    PIO           rx_pio;
-    uint          rx_sm;
-    bool          tx_clock_forced_low;
-    /** Monotonic sequence incremented on each observed CTS edge. */
-    volatile uint32_t cts_toggle_seq;
-    /** DMA channel used to drain RX FIFO (-1 when disabled). */
-    int                rx_dma_chan;
-    /** True when RX DMA path is active. */
-    bool               rx_dma_enabled;
-    /** Number of RX words consumed by software from DMA ring. */
-    uint32_t           rx_dma_words_consumed;
-    /** Number of RX words dropped due DMA ring overwrite. */
-    uint32_t           rx_dma_overflow_words;
-    /** Latched CTS inversion setting used for logical level reporting. */
-    bool               cts_inverted_latched;
-} v24_runtime_t;
+    bool     pio_stalled;
+    bool     cts_level;
+    uint32_t cts_edge_count;
+    bool     cts_restart_enabled;
+} v24_tx_status_t;
 
 /**
  * @brief Initialize TX clock/data PIO state machine.
@@ -60,30 +52,29 @@ typedef struct
 void tx_clock_init(PIO pio, uint pio_sm, V24_CONFIG_T* config);
 
 /**
- * @brief Mark the last byte of the active frame as queued to PIO.
- *
- * Clears stale TX-stall state so subsequent completion checks refer to this frame.
- */
-void tx_frame_queued(void);
-
-/**
- * @brief Check whether PIO consumed the complete active frame.
- * @return true after PIO attempts to pull beyond the frame's last byte.
- */
-bool tx_frame_complete(void);
-
-/**
- * @brief Poll TX completion/holdoff state and manage RTS release.
- * @return true if TX path is idle after polling, false otherwise.
- */
-bool tx_poll(void);
-
-/**
- * @brief Queue one byte to the TX PIO FIFO.
+ * @brief Try to queue one byte to the V.24 TX path.
  * @param data Byte to transmit.
- * @return true if accepted, false if FIFO/full-state prevents enqueue.
+ * @return true only when the byte was written to the PIO FIFO.
  */
-bool tx_put(uint8_t data);
+bool v24_tx_try_write(uint8_t data);
+
+/** @brief Mark the final byte of the active frame as queued. */
+void v24_tx_mark_frame_queued(void);
+
+/**
+ * @brief Advance the physical TX lifecycle.
+ * @return Queue-facing restart or completion event, if any.
+ */
+v24_tx_event_t v24_tx_poll(void);
+
+/** @brief Configure CTS-edge-triggered frame restart policy. */
+void v24_tx_set_cts_restart_enabled(bool enabled);
+
+/** @brief Return the current CTS-edge-triggered restart policy. */
+bool v24_tx_get_cts_restart_enabled(void);
+
+/** @brief Copy TX diagnostics without exposing PIO internals. */
+void v24_tx_status_snapshot(v24_tx_status_t* status);
 
 /**
  * @brief Initialize RX clock/data PIO state machine.
@@ -135,33 +126,17 @@ void tx_clock_update_settings(V24_CONFIG_T* config);
  */
 void rx_clock_update_settings(V24_RX_POLARITIES_T* polarities);
 
-/**
- * @brief Returns a pointer to the v24 runtime.
- * @return Pointer to the v24 runtime.
- */
-const v24_runtime_t* get_v24_runtime(void);
-
-/**
- * @brief Read current CTS edge sequence counter.
- * @return Monotonic CTS edge sequence value.
- */
-uint32_t tx_clock_get_cts_toggle_seq(void);
-
-/**
- * @brief Read current sampled CTS input level.
- * @return True if CTS is sampled high, false otherwise.
- */
-bool     tx_clock_get_cts_level(void);
-
-/**
- * @brief Hard-reset TX SM state to discard queued/in-flight bytes.
- */
-void tx_clock_hard_reset(void);
 
 /**
  * @brief Disable RX Path, clear fifos, restart SMs and CLKDIV and enable again.
  */
 void rx_clock_hard_reset(void);
+
+/**
+ * @brief Reset RX byte assembly after a peer RTS assertion and before its clock starts.
+ * @return True when a pending frame-start edge caused an RX reset.
+ */
+bool rx_clock_poll_frame_start(void);
 
 /**
  * @brief Poll RX FIFO stall events and update the provided event counter.

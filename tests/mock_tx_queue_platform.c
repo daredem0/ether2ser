@@ -5,38 +5,27 @@
 #include "mock_tx_queue_platform.h"
 #include "pico/time.h"
 
-PIO pio0 = (PIO)0;
-
-static uint32_t cts_sequence;
-static uint32_t hard_reset_count;
-static uint32_t frame_queued_count;
-static bool     frame_complete;
-static bool     poll_idle;
-static uint32_t poll_count;
+static v24_tx_event_t tx_event;
+static bool           write_enabled;
+static uint32_t       frame_queued_count;
+static uint32_t       poll_count;
 
 void mock_tx_queue_platform_reset(void)
 {
-    cts_sequence       = 0U;
-    hard_reset_count   = 0U;
+    tx_event           = V24_TX_EVENT_NONE;
+    write_enabled      = true;
     frame_queued_count = 0U;
-    frame_complete     = false;
-    poll_idle          = false;
     poll_count         = 0U;
 }
 
-void mock_tx_queue_set_cts_sequence(uint32_t sequence)
+void mock_tx_queue_set_event(v24_tx_event_t event)
 {
-    cts_sequence = sequence;
+    tx_event = event;
 }
 
-void mock_tx_queue_set_frame_complete(bool complete)
+void mock_tx_queue_set_write_enabled(bool enabled)
 {
-    frame_complete = complete;
-}
-
-void mock_tx_queue_set_poll_idle(bool idle)
-{
-    poll_idle = idle;
+    write_enabled = enabled;
 }
 
 uint32_t mock_tx_queue_frame_queued_count(void)
@@ -44,54 +33,28 @@ uint32_t mock_tx_queue_frame_queued_count(void)
     return frame_queued_count;
 }
 
-uint32_t mock_tx_queue_hard_reset_count(void)
-{
-    return hard_reset_count;
-}
-
 uint32_t mock_tx_queue_poll_count(void)
 {
     return poll_count;
 }
 
-bool pio_sm_is_tx_fifo_full(PIO pio, uint sm)
-{
-    (void)pio;
-    (void)sm;
-    return false;
-}
-
-bool tx_put(uint8_t data)
+bool v24_tx_try_write(uint8_t data)
 {
     (void)data;
-    return true;
+    return write_enabled;
 }
 
-void tx_frame_queued(void)
+void v24_tx_mark_frame_queued(void)
 {
     frame_queued_count++;
-    frame_complete = false;
 }
 
-bool tx_frame_complete(void)
-{
-    return frame_complete;
-}
-
-bool tx_poll(void)
+v24_tx_event_t v24_tx_poll(void)
 {
     poll_count++;
-    return poll_idle;
-}
-
-uint32_t tx_clock_get_cts_toggle_seq(void)
-{
-    return cts_sequence;
-}
-
-void tx_clock_hard_reset(void)
-{
-    hard_reset_count++;
+    v24_tx_event_t event = tx_event;
+    tx_event             = V24_TX_EVENT_NONE;
+    return event;
 }
 
 absolute_time_t get_absolute_time(void)

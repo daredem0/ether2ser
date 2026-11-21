@@ -157,9 +157,30 @@ extern void test_tx_queue_enqueue_single(void);
 extern void test_tx_queue_full_rejected(void);
 extern void test_tx_queue_oversized_payload_rejected(void);
 extern void test_tx_queue_restarts_midframe_after_cts_edge(void);
-extern void test_tx_queue_ignores_cts_edge_when_restart_disabled(void);
 extern void test_tx_queue_protects_queued_tail_until_pio_completion(void);
 extern void test_tx_queue_waits_for_rts_release_between_queued_frames(void);
+
+// Event scheduler tests
+extern void test_event_scheduler_blocks_control_during_active_frame(void);
+extern void test_event_scheduler_services_boundary_with_backlog(void);
+extern void test_event_scheduler_services_full_idle_budget(void);
+extern void test_tx_queue_active_frame_covers_physical_completion(void);
+extern void test_tx_queue_active_frame_clears_before_next_queued_entry(void);
+
+// V.24 TX state tests
+extern void test_v24_tx_state_asserts_rts_and_waits_for_settle(void);
+extern void test_v24_tx_state_ignores_cts_edges_before_first_byte(void);
+extern void test_v24_tx_state_restarts_on_cts_edge_while_sending(void);
+extern void test_v24_tx_state_restarts_on_cts_edge_while_draining(void);
+extern void test_v24_tx_state_ignores_cts_restart_when_disabled(void);
+extern void test_v24_tx_state_completes_after_rts_and_interframe_holds(void);
+extern void test_v24_tx_state_reconfigure_resets_lifecycle_and_preserves_restart(void);
+
+// W5500 socket I/O tests
+extern void test_w5500_udp_tx_accepts_exact_length_send(void);
+extern void test_w5500_udp_tx_rejects_negative_send(void);
+extern void test_w5500_udp_tx_rejects_short_send(void);
+extern void test_w5500_udp_tx_rejects_invalid_frame(void);
 
 // MAC address tests
 extern void test_mac_address_from_ipv4_encodes_unique_local_unicast_address(void);
@@ -329,9 +350,30 @@ int main(void) {
     RUN_TEST(test_tx_queue_full_rejected);
     RUN_TEST(test_tx_queue_oversized_payload_rejected);
     RUN_TEST(test_tx_queue_restarts_midframe_after_cts_edge);
-    RUN_TEST(test_tx_queue_ignores_cts_edge_when_restart_disabled);
     RUN_TEST(test_tx_queue_protects_queued_tail_until_pio_completion);
     RUN_TEST(test_tx_queue_waits_for_rts_release_between_queued_frames);
+
+    // Event scheduler tests
+    RUN_TEST(test_event_scheduler_blocks_control_during_active_frame);
+    RUN_TEST(test_event_scheduler_services_boundary_with_backlog);
+    RUN_TEST(test_event_scheduler_services_full_idle_budget);
+    RUN_TEST(test_tx_queue_active_frame_covers_physical_completion);
+    RUN_TEST(test_tx_queue_active_frame_clears_before_next_queued_entry);
+
+    // V.24 TX state tests
+    RUN_TEST(test_v24_tx_state_asserts_rts_and_waits_for_settle);
+    RUN_TEST(test_v24_tx_state_ignores_cts_edges_before_first_byte);
+    RUN_TEST(test_v24_tx_state_restarts_on_cts_edge_while_sending);
+    RUN_TEST(test_v24_tx_state_restarts_on_cts_edge_while_draining);
+    RUN_TEST(test_v24_tx_state_ignores_cts_restart_when_disabled);
+    RUN_TEST(test_v24_tx_state_completes_after_rts_and_interframe_holds);
+    RUN_TEST(test_v24_tx_state_reconfigure_resets_lifecycle_and_preserves_restart);
+
+    // W5500 socket I/O tests
+    RUN_TEST(test_w5500_udp_tx_accepts_exact_length_send);
+    RUN_TEST(test_w5500_udp_tx_rejects_negative_send);
+    RUN_TEST(test_w5500_udp_tx_rejects_short_send);
+    RUN_TEST(test_w5500_udp_tx_rejects_invalid_frame);
 
     // MAC address tests
     RUN_TEST(test_mac_address_from_ipv4_encodes_unique_local_unicast_address);

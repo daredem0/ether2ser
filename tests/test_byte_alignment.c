@@ -168,6 +168,7 @@ void test_byte_aligned_hdlc_frame(void){
     }
 }
 
+
 void test_hdlc_sync_incomplete_frame_not_ready(void)
 {
     HDLC_SYNC_ACCUMULATOR_T accumulator;

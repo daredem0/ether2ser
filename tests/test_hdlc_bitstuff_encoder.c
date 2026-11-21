@@ -10,7 +10,7 @@ static size_t extract_frame_bits(const HDLC_FRAME_T* frame, bool lsb_first, uint
                                  size_t max_bits)
 {
     size_t bit_count = 0;
-    for (size_t i = 1; i + 1 < frame->length; i++)
+    for (size_t i = 1; i + 1U < frame->length; i++)
     {
         uint8_t byte = frame->payload[i];
         for (uint8_t b = 0; b < 8; b++)
