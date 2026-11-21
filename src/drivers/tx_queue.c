@@ -157,6 +157,11 @@ e2s_error_t tx_queue_drain(TX_QUEUE_T* queue, size_t bytes_to_drain, size_t* byt
 
     if (frame_queued)
     {
+        if (!frame_complete)
+        {
+            return E2S_OK;
+        }
+
         if (!tx_poll())
         {
             return E2S_OK;

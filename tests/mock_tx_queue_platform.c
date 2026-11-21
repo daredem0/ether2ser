@@ -12,6 +12,7 @@ static uint32_t hard_reset_count;
 static uint32_t frame_queued_count;
 static bool     frame_complete;
 static bool     poll_idle;
+static uint32_t poll_count;
 
 void mock_tx_queue_platform_reset(void)
 {
@@ -20,6 +21,7 @@ void mock_tx_queue_platform_reset(void)
     frame_queued_count = 0U;
     frame_complete     = false;
     poll_idle          = false;
+    poll_count         = 0U;
 }
 
 void mock_tx_queue_set_cts_sequence(uint32_t sequence)
@@ -45,6 +47,11 @@ uint32_t mock_tx_queue_frame_queued_count(void)
 uint32_t mock_tx_queue_hard_reset_count(void)
 {
     return hard_reset_count;
+}
+
+uint32_t mock_tx_queue_poll_count(void)
+{
+    return poll_count;
 }
 
 bool pio_sm_is_tx_fifo_full(PIO pio, uint sm)
@@ -73,6 +80,7 @@ bool tx_frame_complete(void)
 
 bool tx_poll(void)
 {
+    poll_count++;
     return poll_idle;
 }
 

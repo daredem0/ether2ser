@@ -10,5 +10,6 @@ void mock_tx_queue_set_frame_complete(bool complete);
 void mock_tx_queue_set_poll_idle(bool idle);
 uint32_t mock_tx_queue_frame_queued_count(void);
 uint32_t mock_tx_queue_hard_reset_count(void);
+uint32_t mock_tx_queue_poll_count(void);
 
 #endif /* TESTS_MOCK_TX_QUEUE_PLATFORM_H */

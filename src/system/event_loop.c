@@ -200,6 +200,7 @@ static void poll_hdlc_idle_timeout(app_ctx_t* app, event_loop_runtime_t* event_l
         event_loop_runtime->hdlc_decode_fail_streak = 0U;
         memset(app->reconstructed_frame.payload, 0, app->reconstructed_frame.length);
         app->reconstructed_frame.length = 0U;
+        rx_clock_hard_reset();
     }
 }
 
@@ -398,9 +399,6 @@ void event_loop(app_ctx_t* app)
     {
         watchdog_update();
 
-        // Poll the event queue
-        cli_poll();
-
         // Drain RX early in the loop to reduce risk of RX FIFO stalling under continuous clock.
         size_t rx_drained_early = 0;
         drain_rx_until_empty(app, &event_loop_runtime, &rx_drained_early);
@@ -445,12 +443,21 @@ void event_loop(app_ctx_t* app)
             (app->stats.rx_fifo_stall_events)++;
         }
 
-        poll_and_dispatch_events(app);
-        if (log_take_emitted_flag())
+        /*
+         * USB CDC output can block core 0 longer than the external-clock TX
+         * FIFO covers. Service CLI events and prompts only between frames so
+         * the PIO never starves while the peer keeps sampling XCK.
+         */
+        if (tx_queue_is_empty(&app->tx_queue))
         {
-            app->need_prompt = true;
+            cli_poll();
+            poll_and_dispatch_events(app);
+            if (log_take_emitted_flag())
+            {
+                app->need_prompt = true;
+            }
+            print_prompt(app);
         }
-        print_prompt(app);
 
     }
 }

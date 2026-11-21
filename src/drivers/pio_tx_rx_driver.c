@@ -58,6 +58,10 @@
 // This struct holds the runtime state of the v24 and shall not be exposed
 v24_runtime_t v24_runtime = {.rx_dma_chan = -1};
 static uint32_t rx_dma_ring[RX_DMA_RING_WORDS] __attribute__((aligned(RX_DMA_RING_BYTES)));
+static bool     tx_deassert_pending;
+static uint64_t tx_deassert_deadline_us;
+static uint64_t tx_assert_earliest_us;
+static uint64_t tx_data_earliest_us;
 
 const v24_runtime_t* get_v24_runtime(void)
 {
@@ -239,6 +243,9 @@ void reinit_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
         v24_runtime.tx_rts_holdoff_us = V24_RTS_MIN_HOLDOFF;
     }
     v24_runtime.rts_set = false;
+    tx_deassert_pending = false;
+    tx_assert_earliest_us = 0U;
+    tx_data_earliest_us = 0U;
 }
 
 void init_v24_config(V24_CONFIG_T* config, V24_BAUDRATE_T baudrate)
@@ -389,12 +396,9 @@ bool tx_frame_complete(void)
 
 bool tx_poll(void)
 {
-    static bool     deassert_pending     = false;
-    static uint64_t deassert_deadline_us = 0;
-
     if (!v24_runtime.rts_set)
     {
-        deassert_pending = false;
+        tx_deassert_pending = false;
         return true;
     }
 
@@ -405,25 +409,26 @@ bool tx_poll(void)
 
     if (!ready_to_deassert)
     {
-        deassert_pending = false;
+        tx_deassert_pending = false;
         return false;
     }
 
-    if (!deassert_pending)
+    if (!tx_deassert_pending)
     {
-        deassert_pending     = true;
-        deassert_deadline_us = now_us + v24_runtime.tx_rts_holdoff_us;
+        tx_deassert_pending     = true;
+        tx_deassert_deadline_us = now_us + v24_runtime.tx_rts_holdoff_us;
         return false;
     }
 
-    if (now_us < deassert_deadline_us)
+    if (now_us < tx_deassert_deadline_us)
     {
         return false;
     }
 
     gpio_put(V24_RTS, 0);
-    v24_runtime.rts_set = false;
-    deassert_pending    = false;
+    v24_runtime.rts_set  = false;
+    tx_deassert_pending = false;
+    tx_assert_earliest_us = now_us + v24_runtime.tx_rts_holdoff_us;
     return true;
 }
 
@@ -436,17 +441,28 @@ bool tx_put(uint8_t data)
     }
     if (!v24_runtime.rts_set)
     {
-        // Indicate ready to send by setting RTS
+        uint64_t now_us = to_us_since_boot(get_absolute_time());
+        if (now_us < tx_assert_earliest_us)
+        {
+            return false;
+        }
+
+        // Assert RTS first, then allow the looped-back CTS signal to settle.
         v24_runtime.tx_pio->fdebug = (1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm));
         gpio_set_dir(V24_RTS, GPIO_OUT);
         gpio_put(V24_RTS, 1);
         v24_runtime.rts_set = true;
+        tx_deassert_pending = false;
+        tx_data_earliest_us = now_us + v24_runtime.tx_rts_holdoff_us;
+        return false;
     }
-    if (pio_sm_is_tx_fifo_full(v24_runtime.tx_pio, v24_runtime.tx_sm))
+    if (to_us_since_boot(get_absolute_time()) < tx_data_earliest_us ||
+        pio_sm_is_tx_fifo_full(v24_runtime.tx_pio, v24_runtime.tx_sm))
     {
         return false;
     }
     pio_sm_put(v24_runtime.tx_pio, v24_runtime.tx_sm, data);
+    tx_deassert_pending = false;
     return true;
 }
 
@@ -535,6 +551,7 @@ static void tx_clock_init_tck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
     sm_config_set_out_pins(&sm_config, V24_TXD, 1);
     sm_config_set_jmp_pin(&sm_config, V24_CTS);
     sm_config_set_out_shift(&sm_config, true, true, CHAR_BIT);
+    sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_TX);
 
     pio_sm_init(pio, pio_sm, offset, &sm_config);
 
@@ -573,6 +590,8 @@ static void tx_clock_init_xck(PIO pio, uint pio_sm, V24_CONFIG_T* config)
     sm_config_set_jmp_pin(&sm_config, V24_CTS);
     // xck_txd.pio uses explicit `pull block` and emits exactly 8 bits/byte.
     sm_config_set_out_shift(&sm_config, true, false, CHAR_BIT);
+    // Eight TX words cover bounded core-0 work without starving a frame mid-byte stream.
+    sm_config_set_fifo_join(&sm_config, PIO_FIFO_JOIN_TX);
 
     pio_sm_init(pio, pio_sm, offset, &sm_config);
 
