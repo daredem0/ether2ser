@@ -77,6 +77,8 @@ set v24 polarities txd,rxd,rts
 ether2ser> status
 status: ok
 Current Baudrate estimation on pin 4: 109010.0 Hz
+Current Baudrate estimation on pin 0: 108940.0 Hz
+Current Baudrate estimation based on DMA: 109008 Hz
 PIPE STATS
   Traffic
     Frames    : udp_rx=420  hdlc_tx=420  hdlc_rx=420
@@ -111,7 +113,8 @@ PIPE STATS
 
 | Name | Meaning | Debug hint |
 |---|---|---|
-| `Current Baudrate estimation` | Measured RX clock frequency from the `v24_rxc` monitor pin. | If this is far from configured baud, debug physical clock/sampling before protocol logic. |
+| `Current Baudrate estimation on pin …` | Measured clock frequency from the GPIO edge monitor on the named pin. | If this is far from configured baud, debug physical clock/sampling before protocol logic. GPIO edge monitoring can undercount at high external-clock rates. |
+| `Current Baudrate estimation based on DMA` | Effective RX clock frequency calculated as the serial DMA byte rate multiplied by eight. The first sample uses byte count divided by uptime; later samples cover the interval since the previous `status`. | Prefer this estimate over GPIO edge monitoring when continuous external clock and idle data are present. Very short sampling intervals reduce precision. |
 
 `Traffic`
 

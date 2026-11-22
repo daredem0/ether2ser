@@ -366,6 +366,7 @@ typedef struct
     uint64_t udp_tx_rate_fps;
     uint64_t decode_fail_rate;
     uint64_t serial_rx_rate_bps;
+    uint64_t dma_baudrate_hz;
 } ev_status_stats_t;
 
 static void ev_status(app_ctx_t* app, ev_status_stats_t* status_stats)
@@ -387,15 +388,21 @@ static void ev_status(app_ctx_t* app, ev_status_stats_t* status_stats)
     static uint64_t prev_udp_tx_success      = 0U;
     static uint64_t prev_hdlc_decode_fail    = 0U;
     static uint64_t prev_serial_rx_bytes     = 0U;
-    uint32_t        report_now_ms            = to_ms_since_boot(get_absolute_time());
-    uint32_t        elapsed_ms               = 0U;
+    uint32_t report_now_ms  = to_ms_since_boot(get_absolute_time());
+    uint32_t elapsed_ms     = 0U;
+    uint32_t dma_elapsed_ms = report_now_ms;
     if (app->stats.last_report_ms != 0U)
     {
-        elapsed_ms = report_now_ms - app->stats.last_report_ms;
+        elapsed_ms     = report_now_ms - app->stats.last_report_ms;
+        dma_elapsed_ms = elapsed_ms;
     }
     if (elapsed_ms == 0U)
     {
         elapsed_ms = 1U;
+    }
+    if (dma_elapsed_ms == 0U)
+    {
+        dma_elapsed_ms = 1U;
     }
 
     uint64_t d_udp_rx_frames    = app->stats.udp_rx_frames - prev_udp_rx_frames;
@@ -409,7 +416,7 @@ static void ev_status(app_ctx_t* app, ev_status_stats_t* status_stats)
     status_stats->udp_tx_rate_fps    = (d_udp_tx_success * 1000U) / elapsed_ms;
     status_stats->decode_fail_rate   = (d_decode_fail * 1000U) / elapsed_ms;
     status_stats->serial_rx_rate_bps = (d_serial_rx_bytes * 1000U) / elapsed_ms;
-
+    status_stats->dma_baudrate_hz    = (d_serial_rx_bytes * 8000U) / dma_elapsed_ms;
     prev_udp_rx_frames        = app->stats.udp_rx_frames;
     prev_hdlc_frame_ready     = app->stats.hdlc_frame_ready;
     prev_udp_tx_success       = app->stats.udp_tx_success_frames;
@@ -486,6 +493,8 @@ static void print_status_event(app_ctx_t* app, ev_status_stats_t* status_stats)
         LOG_PLAIN("Current Baudrate estimation on pin %d: %.1f Hz\r\n", V24_TXC_DCE,
                   baudrate_estimator_get_current_estimation(V24_TXC_DCE));
     }
+    LOG_PLAIN("Current Baudrate estimation based on DMA: %" PRIu64 " Hz\r\n",
+              status_stats->dma_baudrate_hz);
     LOG_PLAIN("PIPE STATS\r\n");
     LOG_PLAIN("  Traffic\r\n");
     LOG_PLAIN("    Frames    : udp_rx=%" PRIu64 "  hdlc_tx=%" PRIu64 "  hdlc_rx=%" PRIu64
