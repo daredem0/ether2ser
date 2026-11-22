@@ -63,6 +63,7 @@ cmake --build build --target flash_elf_ex_blink_leds
 ```text
 help [resource]
 status
+version
 mem
 net
 config
@@ -75,6 +76,7 @@ get|set net <setting> [value]
 get|set v24 <setting> [value]
 get|set loglevel [value]
 save
+reset stats
 wipe wipe
 reboot
 ```
@@ -102,16 +104,21 @@ save
 - REST paths are the command resource paths with dots replaced by slashes:
 ```text
 GET  /api/v1/status
+GET  /api/v1/system/version
 GET  /api/v1/config
 PUT  /api/v1/system/mode       {"value":"gpio"}
 PUT  /api/v1/gpio/rts          {"value":1}
 PUT  /api/v1/v24/baudrate      {"value":16000}
 POST /api/v1/actions/save
+POST /api/v1/actions/reset-stats
 POST /api/v1/actions/wipe      {"confirm":"wipe"}
 POST /api/v1/actions/reboot
 ```
 - HTTP responses are JSON and close the connection. Effects that can disrupt the
   connection are applied only after the TCP connection has closed.
+- `reset stats` and `POST /api/v1/actions/reset-stats` clear cumulative runtime
+  counters, first-failure diagnostics, and sampled-rate baselines without
+  changing configuration, queued frames, or live V.24 state.
 - The HTTP service has no authentication or TLS. Use it only on the trusted,
   isolated LAN assumed by this firmware.
 - Defaults are defined in `src/drivers/w5500_driver.h`.

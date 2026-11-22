@@ -60,6 +60,20 @@ void test_management_cli_parses_actions_and_wipe_confirmation(void)
                           management_cli_parse("wipe", &request, &path));
 }
 
+void test_management_cli_parses_reset_stats_action(void)
+{
+    management_request_t request;
+    const char* path = NULL;
+
+    TEST_ASSERT_EQUAL_INT(
+        MANAGEMENT_RESULT_OK,
+        management_cli_parse_human("reset stats", &request, &path));
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_METHOD_ACTION, request.method);
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_RESOURCE_ACTION_RESET_STATS,
+                          request.resource);
+    TEST_ASSERT_EQUAL_STRING("actions.reset-stats", path);
+}
+
 void test_management_cli_rejects_unknown_trailing_and_oversized_lines(void)
 {
     management_request_t request;
@@ -128,6 +142,32 @@ void test_management_cli_human_commands_accept_original_category_syntax(void)
     TEST_ASSERT_EQUAL_INT(MANAGEMENT_RESOURCE_SYSTEM_LOGLEVEL, request.resource);
 }
 
+void test_management_cli_exposes_firmware_version(void)
+{
+    management_request_t request;
+    const char* path = NULL;
+
+    TEST_ASSERT_EQUAL_INT(
+        MANAGEMENT_RESULT_OK,
+        management_cli_parse_human("version", &request, &path));
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_RESOURCE_SYSTEM_VERSION, request.resource);
+    TEST_ASSERT_EQUAL_STRING("system.version", path);
+
+    TEST_ASSERT_EQUAL_INT(
+        MANAGEMENT_RESULT_OK,
+        management_cli_parse("get system.version", &request, &path));
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_RESOURCE_SYSTEM_VERSION, request.resource);
+
+    management_response_t response = {
+        .result = MANAGEMENT_RESULT_OK,
+        .value = {.kind = MANAGEMENT_VALUE_TEXT, .data.text = "v9.8.7-test"},
+    };
+    char output[256];
+    TEST_ASSERT_TRUE(management_cli_format_response(
+        3U, "system.version", &response, output, sizeof(output)));
+    TEST_ASSERT_NOT_NULL(strstr(output, "system.version=v9.8.7-test\r\n"));
+}
+
 void test_management_cli_formats_framed_success_and_error(void)
 {
     management_response_t response = {
@@ -148,14 +188,30 @@ void test_management_cli_formats_framed_success_and_error(void)
     TEST_ASSERT_EQUAL_STRING("@response 8 end error conflict\r\n", output);
 }
 
+void test_management_cli_formats_inverted_signals_for_humans(void)
+{
+    char output[32];
+
+    TEST_ASSERT_TRUE(management_cli_format_inverted_signals(0x5EU, output,
+                                                             sizeof(output)));
+    TEST_ASSERT_EQUAL_STRING("tck,cts,rts,dtr,rck", output);
+    TEST_ASSERT_NULL(strstr(output, "0x"));
+
+    TEST_ASSERT_TRUE(management_cli_format_inverted_signals(0U, output,
+                                                             sizeof(output)));
+    TEST_ASSERT_EQUAL_STRING("none", output);
+}
+
 void test_management_cli_help_is_human_readable(void)
 {
     const char* help = management_cli_help_overview();
     TEST_ASSERT_NOT_NULL(help);
     TEST_ASSERT_NOT_NULL(strstr(help, "Read-only views:\r\n"));
     TEST_ASSERT_NOT_NULL(strstr(help, "  status"));
+    TEST_ASSERT_NOT_NULL(strstr(help, "  version"));
     TEST_ASSERT_NOT_NULL(strstr(help, "  mode <bridge|gpio>"));
     TEST_ASSERT_NOT_NULL(strstr(help, "Actions:\r\n"));
+    TEST_ASSERT_NOT_NULL(strstr(help, "  reset stats"));
     TEST_ASSERT_NOT_NULL(strstr(help, "Pins:\r\n"));
     TEST_ASSERT_NOT_NULL(strstr(help, "Baudrates:\r\n"));
     TEST_ASSERT_NULL(strstr(help, "methods=0x"));
@@ -172,4 +228,7 @@ void test_management_cli_help_provides_targeted_usage(void)
         "  get gpio <signal>\r\n"
         "  set gpio <signal> <0|1>  (gpio mode, outputs only)\r\n",
         management_cli_help_usage(MANAGEMENT_RESOURCE_GPIO));
+    TEST_ASSERT_EQUAL_STRING(
+        "  reset stats\r\n",
+        management_cli_help_usage(MANAGEMENT_RESOURCE_ACTION_RESET_STATS));
 }

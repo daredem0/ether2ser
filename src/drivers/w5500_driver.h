@@ -136,5 +136,6 @@ void w5500_driver_init(void);
 
 void w5500_poll_udp_buffer_full_events(uint64_t* rx_full_enter_events,
                                        uint64_t* tx_full_enter_events);
+void w5500_reset_udp_buffer_statistics(void);
 
 #endif /* W5500_DRIVER_H */

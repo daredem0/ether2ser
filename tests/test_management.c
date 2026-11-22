@@ -36,6 +36,33 @@ void test_management_catalog_exposes_common_mode_and_status_resources(void)
     TEST_ASSERT_EQUAL_INT(MANAGEMENT_VALUE_MODE, mode->value_kind);
 }
 
+void test_management_get_version_returns_runtime_version(void)
+{
+    const management_resource_descriptor_t* descriptor =
+        management_catalog_find("system.version");
+    TEST_ASSERT_NOT_NULL(descriptor);
+    TEST_ASSERT_BITS_HIGH(MANAGEMENT_METHOD_MASK(MANAGEMENT_METHOD_GET),
+                          descriptor->method_mask);
+    TEST_ASSERT_BITS_LOW(MANAGEMENT_METHOD_MASK(MANAGEMENT_METHOD_SET),
+                         descriptor->method_mask);
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_VALUE_TEXT, descriptor->value_kind);
+
+    management_runtime_view_t runtime = {
+        .firmware_version = "v9.8.7-test",
+    };
+    management_request_t request = {
+        .method   = MANAGEMENT_METHOD_GET,
+        .resource = MANAGEMENT_RESOURCE_SYSTEM_VERSION,
+    };
+    management_response_t response;
+
+    TEST_ASSERT_EQUAL_INT(
+        MANAGEMENT_RESULT_OK,
+        management_execute(&request, &runtime, &response));
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_VALUE_TEXT, response.value.kind);
+    TEST_ASSERT_EQUAL_STRING("v9.8.7-test", response.value.data.text);
+}
+
 void test_management_get_mode_returns_runtime_mode(void)
 {
     const management_runtime_view_t runtime = {.operating_mode = OPERATING_MODE_GPIO,
@@ -174,5 +201,27 @@ void test_management_local_ip_is_accepted_without_forcing_reboot(void)
                           management_execute(&request, &runtime, &response));
     TEST_ASSERT_EQUAL_INT(MANAGEMENT_EFFECT_SET, response.effect.kind);
     TEST_ASSERT_TRUE(response.effect.persist);
+    TEST_ASSERT_FALSE(response.effect.reboot);
+}
+
+void test_management_reset_stats_prepares_runtime_effect(void)
+{
+    const management_resource_descriptor_t* descriptor =
+        management_catalog_find("actions.reset-stats");
+    TEST_ASSERT_NOT_NULL(descriptor);
+    TEST_ASSERT_BITS_HIGH(MANAGEMENT_METHOD_MASK(MANAGEMENT_METHOD_ACTION),
+                          descriptor->method_mask);
+
+    const management_runtime_view_t runtime = {0};
+    const management_request_t request = {
+        .method   = MANAGEMENT_METHOD_ACTION,
+        .resource = MANAGEMENT_RESOURCE_ACTION_RESET_STATS,
+    };
+    management_response_t response;
+
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_RESULT_OK,
+                          management_execute(&request, &runtime, &response));
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_EFFECT_RESET_STATS, response.effect.kind);
+    TEST_ASSERT_FALSE(response.effect.persist);
     TEST_ASSERT_FALSE(response.effect.reboot);
 }

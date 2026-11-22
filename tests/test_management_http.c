@@ -29,6 +29,30 @@ void test_management_http_maps_get_and_nested_paths(void)
     TEST_ASSERT_EQUAL_STRING("pin", path);
 }
 
+void test_management_http_exposes_firmware_version(void)
+{
+    management_request_t request;
+    const char* path = NULL;
+    TEST_ASSERT_EQUAL_INT(
+        MANAGEMENT_HTTP_PARSE_READY,
+        parse_text("GET /api/v1/system/version HTTP/1.1\r\nHost: device\r\n\r\n",
+                   &request, &path));
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_RESOURCE_SYSTEM_VERSION, request.resource);
+    TEST_ASSERT_EQUAL_STRING("system.version", path);
+
+    management_response_t response = {
+        .result = MANAGEMENT_RESULT_OK,
+        .value = {.kind = MANAGEMENT_VALUE_TEXT, .data.text = "v9.8.7-test"},
+    };
+    char output[512];
+    size_t length = 0U;
+    TEST_ASSERT_TRUE(management_http_format_response(
+        path, &response, output, sizeof(output), &length));
+    TEST_ASSERT_NOT_NULL(strstr(
+        output,
+        "{\"result\":\"ok\",\"path\":\"system.version\",\"value\":\"v9.8.7-test\"}"));
+}
+
 void test_management_http_maps_put_values_through_common_request_semantics(void)
 {
     management_request_t request;
@@ -79,6 +103,22 @@ void test_management_http_maps_actions_and_enforces_wipe_confirmation(void)
         MANAGEMENT_HTTP_PARSE_BAD_REQUEST,
         parse_text("POST /api/v1/actions/wipe HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
                    &request, &path));
+}
+
+void test_management_http_maps_reset_stats_action(void)
+{
+    management_request_t request;
+    const char* path = NULL;
+
+    TEST_ASSERT_EQUAL_INT(
+        MANAGEMENT_HTTP_PARSE_READY,
+        parse_text(
+            "POST /api/v1/actions/reset-stats HTTP/1.1\r\nContent-Length: 0\r\n\r\n",
+            &request, &path));
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_METHOD_ACTION, request.method);
+    TEST_ASSERT_EQUAL_INT(MANAGEMENT_RESOURCE_ACTION_RESET_STATS,
+                          request.resource);
+    TEST_ASSERT_EQUAL_STRING("actions.reset-stats", path);
 }
 
 void test_management_http_rejects_incomplete_oversized_and_unsupported_requests(void)

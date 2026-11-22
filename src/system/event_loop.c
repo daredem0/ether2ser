@@ -72,6 +72,7 @@ typedef struct
     uint8_t  hdlc_decode_fail_streak;
     uint64_t last_rx_byte_us;
     uint64_t last_frame_ready_bytes;
+    uint32_t statistics_generation_seen;
     bool     udp_rx_throttled;
 } event_loop_runtime_t;
 
@@ -369,16 +370,27 @@ static void update_udp_rx_throttle_state(app_ctx_t* app, event_loop_runtime_t* r
 
 void event_loop(app_ctx_t* app)
 {
-    static event_loop_runtime_t event_loop_runtime = {.rx_byte                 = 0U,
-                                                      .hdlc_decode_fail_streak = 0U,
-                                                      .last_rx_byte_us         = 0U,
-                                                      .last_frame_ready_bytes  = 0U,
-                                                      .udp_rx_throttled        = false};
+    static event_loop_runtime_t event_loop_runtime = {
+        .rx_byte                    = 0U,
+        .hdlc_decode_fail_streak    = 0U,
+        .last_rx_byte_us            = 0U,
+        .last_frame_ready_bytes     = 0U,
+        .statistics_generation_seen = 0U,
+        .udp_rx_throttled           = false,
+    };
 
     // Core 0 intentionally busy-polls; sleeping consumes bounded RX DMA ring headroom.
     while (true)
     {
         watchdog_update();
+        if (event_loop_runtime.statistics_generation_seen !=
+            app->statistics_generation)
+        {
+            event_loop_runtime.last_frame_ready_bytes = app->stats.serial_rx_bytes;
+            event_loop_runtime.hdlc_decode_fail_streak = 0U;
+            event_loop_runtime.statistics_generation_seen =
+                app->statistics_generation;
+        }
 
         if (app->operating_mode == OPERATING_MODE_GPIO)
         {

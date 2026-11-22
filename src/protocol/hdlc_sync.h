@@ -87,6 +87,11 @@ typedef struct
 void        hdlc_sync_acc_init(HDLC_SYNC_ACCUMULATOR_T* accumulator, uint8_t sync_byte);
 
 /**
+ * @brief Reset cumulative synchronizer statistics without changing decode state.
+ */
+void hdlc_sync_acc_reset_statistics(HDLC_SYNC_ACCUMULATOR_T* accumulator);
+
+/**
  * @brief Append one received raw byte to the accumulator.
  * @param accumulator Accumulator instance.
  * @param byte Received raw byte.

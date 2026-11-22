@@ -77,6 +77,7 @@ typedef struct
     runtime_metrics_t     runtime_metrics;
     management_http_server_t http_server;
     payload_statistics_t stats;
+    uint32_t                 statistics_generation;
     // ... anything else the event loop touches
 } app_ctx_t;
 

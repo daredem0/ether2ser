@@ -12,6 +12,57 @@
 
 #define MANAGEMENT_CLI_BUFFER_SIZE (MANAGEMENT_CLI_MAX_LINE + 1U)
 #define IPV4_COMPONENT_COUNT 4U
+static const char* const invert_signal_names[] = {
+    "txd", "tck", "cts", "rts", "dtr", "rxd", "rck", "dcd",
+};
+
+bool management_cli_format_inverted_signals(uint32_t mask, char* output,
+                                            size_t output_capacity)
+{
+    const size_t signal_count =
+        sizeof(invert_signal_names) / sizeof(invert_signal_names[0]);
+    const uint32_t allowed_mask = (1UL << signal_count) - 1UL;
+    if (output == NULL || output_capacity == 0U || (mask & ~allowed_mask) != 0U)
+    {
+        return false;
+    }
+
+    if (mask == 0U)
+    {
+        static const char none[] = "none";
+        if (sizeof(none) > output_capacity)
+        {
+            return false;
+        }
+        memcpy(output, none, sizeof(none));
+        return true;
+    }
+
+    size_t used = 0U;
+    for (size_t i = 0U; i < signal_count; i++)
+    {
+        if ((mask & (1UL << i)) == 0U)
+        {
+            continue;
+        }
+        const size_t separator_length = used == 0U ? 0U : 1U;
+        const size_t name_length = strlen(invert_signal_names[i]);
+        if (used + separator_length + name_length + 1U > output_capacity)
+        {
+            output[0] = '\0';
+            return false;
+        }
+        if (separator_length != 0U)
+        {
+            output[used++] = ',';
+        }
+        memcpy(&output[used], invert_signal_names[i], name_length);
+        used += name_length;
+        output[used] = '\0';
+    }
+    return true;
+}
+
 
 static bool parse_u32(const char* text, uint32_t* value)
 {
@@ -102,7 +153,6 @@ static bool parse_on_off(const char* text, bool* value)
 
 static bool parse_invert_mask(char* text, uint32_t* mask)
 {
-    static const char* names[] = {"txd", "tck", "cts", "rts", "dtr", "rxd", "rck", "dcd"};
     *mask = 0U;
     if (strcmp(text, "none") == 0)
     {
@@ -114,9 +164,11 @@ static bool parse_invert_mask(char* text, uint32_t* mask)
          token = strtok_r(NULL, ",", &save))
     {
         bool found = false;
-        for (size_t i = 0U; i < (sizeof(names) / sizeof(names[0])); i++)
+        for (size_t i = 0U;
+             i < (sizeof(invert_signal_names) / sizeof(invert_signal_names[0]));
+             i++)
         {
-            if (strcmp(token, names[i]) == 0)
+            if (strcmp(token, invert_signal_names[i]) == 0)
             {
                 *mask |= 1UL << i;
                 found = true;
@@ -303,7 +355,8 @@ management_result_t management_cli_parse(const char* line, management_request_t*
         return MANAGEMENT_RESULT_INVALID_VALUE;
     }
 
-    if (strcmp(verb, "save") == 0 || strcmp(verb, "reboot") == 0 || strcmp(verb, "wipe") == 0)
+    if (strcmp(verb, "save") == 0 || strcmp(verb, "reboot") == 0 ||
+        strcmp(verb, "reset") == 0 || strcmp(verb, "wipe") == 0)
     {
         request->method = MANAGEMENT_METHOD_ACTION;
         if (strcmp(verb, "save") == 0 && path == NULL)
@@ -316,6 +369,13 @@ management_result_t management_cli_parse(const char* line, management_request_t*
         {
             request->resource = MANAGEMENT_RESOURCE_ACTION_REBOOT;
             *canonical_path   = "actions.reboot";
+            return MANAGEMENT_RESULT_OK;
+        }
+        if (strcmp(verb, "reset") == 0 && path != NULL && value == NULL &&
+            strcmp(path, "stats") == 0)
+        {
+            request->resource = MANAGEMENT_RESOURCE_ACTION_RESET_STATS;
+            *canonical_path   = "actions.reset-stats";
             return MANAGEMENT_RESULT_OK;
         }
         if (strcmp(verb, "wipe") == 0 && path != NULL && value == NULL &&
@@ -417,6 +477,11 @@ static int translate_human_command(const char* line, char* output, size_t capaci
         {
             return write_human_translation(output, capacity, "get memory");
         }
+        if (strcmp(tokens[0], "version") == 0)
+        {
+            return write_human_translation(output, capacity,
+                                           "get system.version");
+        }
         if ((strcmp(tokens[0], "net") == 0) ||
             (strcmp(tokens[0], "config") == 0) ||
             (strcmp(tokens[0], "v24") == 0) ||
@@ -444,6 +509,11 @@ static int translate_human_command(const char* line, char* output, size_t capaci
         if (strcmp(tokens[1], "loglevel") == 0)
         {
             return write_human_translation(output, capacity, "help system.loglevel");
+        }
+        if (strcmp(tokens[1], "version") == 0)
+        {
+            return write_human_translation(output, capacity,
+                                           "help system.version");
         }
         if (strcmp(tokens[1], "mem") == 0)
         {
@@ -559,6 +629,7 @@ const char* management_cli_help_overview(void)
            "  help [topic]                     Show this menu or topic help\r\n"
            "  status                           Show bridge health and counters\r\n"
            "  mem                              Show RAM and flash usage\r\n"
+           "  version                          Show firmware version\r\n"
            "  net                              Show network configuration\r\n"
            "  config                           Show complete configuration\r\n"
            "  v24                              Show V.24 configuration\r\n"
@@ -567,7 +638,7 @@ const char* management_cli_help_overview(void)
            "  pininfo <signal>                 Show one GPIO pin\r\n"
            "\r\n"
            "Read-only views:\r\n"
-           "  status, mem, net, config, v24, pins\r\n"
+           "  status, version, mem, net, config, v24, pins\r\n"
            "\r\n"
            "Configuration:\r\n"
            "  get|set gpio <signal> [0|1]\r\n"
@@ -579,6 +650,7 @@ const char* management_cli_help_overview(void)
            "\r\n"
            "Actions:\r\n"
            "  save                             Persist runtime settings\r\n"
+           "  reset stats                      Reset benchmark counters\r\n"
            "  reboot                           Reboot the device\r\n"
            "  wipe wipe                        Erase persisted configuration\r\n"
            "\r\n"
@@ -641,6 +713,8 @@ const char* management_cli_help_usage(management_resource_t resource)
     case MANAGEMENT_RESOURCE_V24_CTS_RESTART:
         return "  get v24 ctsrestart\r\n"
                "  set v24 ctsrestart <on|off>\r\n";
+    case MANAGEMENT_RESOURCE_SYSTEM_VERSION:
+        return "  version\r\n";
     case MANAGEMENT_RESOURCE_SYSTEM_LOGLEVEL:
         return "  get loglevel\r\n"
                "  set loglevel <error|info|debug|trace>\r\n";
@@ -656,6 +730,8 @@ const char* management_cli_help_usage(management_resource_t resource)
                "  set gpio <signal> <0|1>  (gpio mode, outputs only)\r\n";
     case MANAGEMENT_RESOURCE_ACTION_SAVE:
         return "  save\r\n";
+    case MANAGEMENT_RESOURCE_ACTION_RESET_STATS:
+        return "  reset stats\r\n";
     case MANAGEMENT_RESOURCE_ACTION_WIPE:
         return "  wipe wipe\r\n";
     case MANAGEMENT_RESOURCE_ACTION_REBOOT:
@@ -751,7 +827,15 @@ bool management_cli_format_response(uint32_t sequence, const char* canonical_pat
     case MANAGEMENT_VALUE_NONE:
     case MANAGEMENT_VALUE_IPV4:
     case MANAGEMENT_VALUE_IPV4_CIDR:
+        break;
     case MANAGEMENT_VALUE_TEXT:
+        if (response->value.data.text == NULL ||
+            !append_text(output, output_capacity, &used, "%s=%s\r\n",
+                         canonical_path, response->value.data.text))
+        {
+            return false;
+        }
+        break;
     default:
         break;
     }

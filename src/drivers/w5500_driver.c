@@ -38,15 +38,14 @@
 #define IP_SOCKET 0 // Socket number for IPRAW
 #define UDP_W5500_OVERHEAD_BYTES 8U
 #define UDP_RX_REQUIRED_BYTES (UDP_MAX_PAYLOAD_BYTES + UDP_W5500_OVERHEAD_BYTES)
+static uint64_t udp_rx_buffer_full_events;
+static uint64_t udp_tx_buffer_full_events;
+static bool     udp_rx_buffer_was_full;
+static bool     udp_tx_buffer_was_full;
 
 void w5500_poll_udp_buffer_full_events(uint64_t* rx_full_enter_events,
                                        uint64_t* tx_full_enter_events)
 {
-    static uint64_t rx_events   = 0;
-    static uint64_t tx_events   = 0;
-    static bool     rx_was_full = false;
-    static bool     tx_was_full = false;
-
     uint16_t rx_used_bytes = getSn_RX_RSR(W5500_UDP_SOCKET);
     uint16_t rx_cap_bytes  = (uint16_t)getSn_RXBUF_SIZE(W5500_UDP_SOCKET) * 1024U;
 
@@ -61,26 +60,32 @@ void w5500_poll_udp_buffer_full_events(uint64_t* rx_full_enter_events,
     bool rx_is_full = (rx_cap_bytes > 0U) && (rx_free_bytes < UDP_RX_REQUIRED_BYTES);
     bool tx_is_full = (tx_cap_bytes > 0U) && (tx_free_bytes == 0U);
 
-    if (rx_is_full && !rx_was_full)
+    if (rx_is_full && !udp_rx_buffer_was_full)
     {
-        rx_events++;
+        udp_rx_buffer_full_events++;
     }
-    if (tx_is_full && !tx_was_full)
+    if (tx_is_full && !udp_tx_buffer_was_full)
     {
-        tx_events++;
+        udp_tx_buffer_full_events++;
     }
 
-    rx_was_full = rx_is_full;
-    tx_was_full = tx_is_full;
+    udp_rx_buffer_was_full = rx_is_full;
+    udp_tx_buffer_was_full = tx_is_full;
 
     if (rx_full_enter_events)
     {
-        *rx_full_enter_events = rx_events;
+        *rx_full_enter_events = udp_rx_buffer_full_events;
     }
     if (tx_full_enter_events)
     {
-        *tx_full_enter_events = tx_events;
+        *tx_full_enter_events = udp_tx_buffer_full_events;
     }
+}
+
+void w5500_reset_udp_buffer_statistics(void)
+{
+    udp_rx_buffer_full_events = 0U;
+    udp_tx_buffer_full_events = 0U;
 }
 
 static void ipv4_calc_broadcast_u8(const uint8_t ip_addr[4], const uint8_t mask[4],

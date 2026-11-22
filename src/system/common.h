@@ -114,6 +114,7 @@ bool log_take_emitted_flag(void);
 void     log_core1_drain(void);
 uint32_t log_take_dropped_count(void);
 uint32_t log_get_high_water_mark(void);
+void     log_reset_statistics(void);
 
 // extern log_level_t current_log_level;
 

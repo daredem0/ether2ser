@@ -348,6 +348,16 @@ management_result_t management_execute(const management_request_t* request,
     case MANAGEMENT_RESOURCE_PIN:
         response->result = MANAGEMENT_RESULT_OK;
         break;
+    case MANAGEMENT_RESOURCE_SYSTEM_VERSION:
+        if (runtime->firmware_version == NULL)
+        {
+            response->result = MANAGEMENT_RESULT_INTERNAL_ERROR;
+            break;
+        }
+        response->value.kind      = MANAGEMENT_VALUE_TEXT;
+        response->value.data.text = runtime->firmware_version;
+        response->result          = MANAGEMENT_RESULT_OK;
+        break;
     case MANAGEMENT_RESOURCE_SYSTEM_MODE:
         response->result = execute_mode(request, runtime, response);
         break;
@@ -372,6 +382,10 @@ management_result_t management_execute(const management_request_t* request,
         break;
     case MANAGEMENT_RESOURCE_ACTION_SAVE:
         response->effect.kind = MANAGEMENT_EFFECT_SAVE;
+        response->result      = MANAGEMENT_RESULT_OK;
+        break;
+    case MANAGEMENT_RESOURCE_ACTION_RESET_STATS:
+        response->effect.kind = MANAGEMENT_EFFECT_RESET_STATS;
         response->result      = MANAGEMENT_RESULT_OK;
         break;
     case MANAGEMENT_RESOURCE_ACTION_WIPE:

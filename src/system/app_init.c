@@ -41,6 +41,7 @@ void init_app(app_ctx_t* app, const config_t* persistent_config)
     app_ctx = app;
     memset(&app->stats, 0, sizeof(app->stats));
     runtime_metrics_init(&app->runtime_metrics);
+    app->statistics_generation = 0U;
     app->need_prompt             = true;
     app->rx_frame_buffer.payload = app->rx_frame_buffer_data;
     app->rx_frame_buffer.length  = 0;

@@ -183,7 +183,7 @@ static bool uri_to_route(const char* uri, char* route, size_t route_capacity)
         }
         else if (((character >= 'a') && (character <= 'z')) ||
                  ((character >= '0') && (character <= '9')) ||
-                 (character == '_'))
+                 (character == '_') || (character == '-'))
         {
             route[i] = character;
         }
@@ -364,6 +364,14 @@ static management_http_parse_result_t parse_route_request(
                 return MANAGEMENT_HTTP_PARSE_BAD_REQUEST;
             }
             written = snprintf(command, sizeof(command), "save");
+        }
+        else if (strcmp(route, "actions.reset-stats") == 0)
+        {
+            if (body_length != 0U)
+            {
+                return MANAGEMENT_HTTP_PARSE_BAD_REQUEST;
+            }
+            written = snprintf(command, sizeof(command), "reset stats");
         }
         else if (strcmp(route, "actions.reboot") == 0)
         {

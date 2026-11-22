@@ -111,6 +111,14 @@ size_t tx_queue_get_count(const TX_QUEUE_T* queue)
     return queue->queue_buffer.count;
 }
 
+void tx_queue_reset_statistics(TX_QUEUE_T* queue)
+{
+    if (queue != NULL)
+    {
+        queue->tx_wire_bytes = 0U;
+    }
+}
+
 bool tx_queue_is_empty(TX_QUEUE_T* queue)
 {
     return queue->queue_buffer.count == 0U && queue->current_entry.frame.length == 0U;

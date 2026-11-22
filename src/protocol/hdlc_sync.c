@@ -524,6 +524,20 @@ void hdlc_sync_acc_init(HDLC_SYNC_ACCUMULATOR_T* accumulator, uint8_t sync_byte)
     accumulator->hardcap_drop_bytes     = 0;
 }
 
+void hdlc_sync_acc_reset_statistics(HDLC_SYNC_ACCUMULATOR_T* accumulator)
+{
+    if (accumulator == NULL)
+    {
+        return;
+    }
+    accumulator->lookahead_wait_syncing = 0U;
+    accumulator->lookahead_wait_synced  = 0U;
+    accumulator->frame_ready_count      = 0U;
+    accumulator->consume_count          = 0U;
+    accumulator->hardcap_drop_events    = 0U;
+    accumulator->hardcap_drop_bytes     = 0U;
+}
+
 bool hdlc_sync_acc_process_byte(HDLC_SYNC_ACCUMULATOR_T* accumulator, uint8_t byte)
 {
     if (!accumulator)

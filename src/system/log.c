@@ -141,6 +141,12 @@ uint32_t log_get_high_water_mark(void)
     return global_logstate.high_water_mark;
 }
 
+void log_reset_statistics(void)
+{
+    global_logstate.dropped         = 0U;
+    global_logstate.high_water_mark = 0U;
+}
+
 bool log_take_emitted_flag(void)
 {
     bool flag                   = global_logstate.log_emitted;

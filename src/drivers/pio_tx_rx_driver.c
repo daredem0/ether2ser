@@ -63,6 +63,7 @@ typedef struct
     PIO               rx_pio;
     uint              rx_sm;
     volatile uint32_t cts_toggle_seq;
+    uint32_t          cts_statistics_baseline;
     volatile uint32_t rx_frame_start_seq;
     uint32_t          rx_frame_start_seen;
     uint32_t          tx_fifo_underrun_count;
@@ -550,8 +551,17 @@ void v24_tx_status_snapshot(v24_tx_status_t* status)
     status->tx_fifo_underruns   = v24_runtime.tx_fifo_underrun_count;
     status->tx_cts_restarts     = v24_runtime.tx_cts_restart_count;
     status->cts_level           = v24_tx_get_cts_level();
-    status->cts_edge_count      = v24_runtime.cts_toggle_seq;
+    status->cts_edge_count      =
+        v24_runtime.cts_toggle_seq - v24_runtime.cts_statistics_baseline;
     status->cts_restart_enabled = v24_tx_state.cts_restart_enabled;
+}
+
+void v24_reset_statistics(void)
+{
+    v24_runtime.tx_fifo_underrun_count  = 0U;
+    v24_runtime.tx_cts_restart_count    = 0U;
+    v24_runtime.rx_dma_overflow_words   = 0U;
+    v24_runtime.cts_statistics_baseline = v24_runtime.cts_toggle_seq;
 }
 
 void tx_clock_update_settings(V24_CONFIG_T* config)

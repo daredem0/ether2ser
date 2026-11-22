@@ -66,6 +66,19 @@ static const char* sync_state_name(int state)
     }
 }
 
+#define INVERTED_SIGNALS_TEXT_SIZE 32U
+
+static void emit_inverted_signals(const char* label, uint32_t mask)
+{
+    char signals[INVERTED_SIGNALS_TEXT_SIZE];
+    if (!management_cli_format_inverted_signals(mask, signals, sizeof(signals)))
+    {
+        LOG_PLAIN("%sunknown\r\n", label);
+        return;
+    }
+    LOG_PLAIN("%s%s\r\n", label, signals);
+}
+
 static void emit_scalar(const char* path, const management_value_t* value)
 {
     switch (value->kind)
@@ -91,8 +104,7 @@ static void emit_scalar(const char* path, const management_value_t* value)
         LOG_PLAIN("%s: %" PRIu32 "\r\n", path, value->data.u32);
         break;
     case MANAGEMENT_VALUE_SIGNAL_MASK:
-        LOG_PLAIN("V.24 inverted signals mask: 0x%02" PRIX32 "\r\n",
-                  value->data.u32);
+        emit_inverted_signals("V.24 inverted signals: ", value->data.u32);
         break;
     case MANAGEMENT_VALUE_IPV4:
         LOG_PLAIN("%s: %u.%u.%u.%u\r\n", path, value->data.ipv4[0],
@@ -120,8 +132,20 @@ static void emit_scalar(const char* path, const management_value_t* value)
         }
         break;
     }
-    case MANAGEMENT_VALUE_NONE:
     case MANAGEMENT_VALUE_TEXT:
+        if (value->data.text != NULL)
+        {
+            if (strcmp(path, "system.version") == 0)
+            {
+                LOG_PLAIN("Firmware version: %s\r\n", value->data.text);
+            }
+            else
+            {
+                LOG_PLAIN("%s: %s\r\n", path, value->data.text);
+            }
+        }
+        break;
+    case MANAGEMENT_VALUE_NONE:
     default:
         break;
     }
@@ -209,8 +233,7 @@ static void emit_config(const management_runtime_view_t* view)
     LOG_PLAIN("  Baudrate      : %" PRIu32 "\r\n", view->v24_baudrate);
     LOG_PLAIN("  TX clock      : %s\r\n",
               view->v24_external_clock ? "external" : "internal");
-    LOG_PLAIN("  Inverted mask : 0x%02" PRIX32 "\r\n",
-              view->v24_invert_mask);
+    emit_inverted_signals("  Inverted signals: ", view->v24_invert_mask);
     LOG_PLAIN("  CTS restart   : %s\r\n",
               view->v24_cts_restart ? "on" : "off");
 }
@@ -447,8 +470,8 @@ static void emit_payload(const management_request_t* request,
         LOG_PLAIN("  TX clock    : %s\r\n",
                   response->snapshot.v24_external_clock
                       ? "external" : "internal");
-        LOG_PLAIN("  Inverted mask: 0x%02" PRIX32 "\r\n",
-                  response->snapshot.v24_invert_mask);
+        emit_inverted_signals("  Inverted signals: ",
+                              response->snapshot.v24_invert_mask);
         LOG_PLAIN("  CTS restart : %s\r\n",
                   response->snapshot.v24_cts_restart ? "on" : "off");
         break;
@@ -459,6 +482,9 @@ static void emit_payload(const management_request_t* request,
     case MANAGEMENT_RESOURCE_SYSTEM_LOGLEVEL:
         LOG_PLAIN("Log level: %s\r\n",
                   loglevel_name(response->value.data.u32));
+        break;
+    case MANAGEMENT_RESOURCE_ACTION_RESET_STATS:
+        LOG_PLAIN("Statistics reset.\r\n");
         break;
     default:
         emit_scalar(canonical_path, &response->value);

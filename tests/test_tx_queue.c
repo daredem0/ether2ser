@@ -189,3 +189,20 @@ void test_tx_queue_waits_for_rts_release_between_queued_frames(void)
     TEST_ASSERT_EQUAL(E2S_OK, tx_queue_drain(&queue, SIZE_MAX, &bytes_drained));
     TEST_ASSERT_GREATER_THAN(0U, bytes_drained);
 }
+
+void test_tx_queue_statistics_reset_preserves_queued_frames(void)
+{
+    TX_QUEUE_T queue = {0};
+    uint8_t buffer[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)];
+    uint8_t payload[] = {0x01U};
+    UDP_FRAME_T frame = {.payload = payload, .length = sizeof(payload)};
+
+    init_queue(&queue, buffer);
+    TEST_ASSERT_EQUAL(E2S_OK, tx_queue_enqueue_udp_frame(&queue, &frame));
+    queue.tx_wire_bytes = 1234U;
+
+    tx_queue_reset_statistics(&queue);
+
+    TEST_ASSERT_EQUAL_UINT64(0U, queue.tx_wire_bytes);
+    TEST_ASSERT_EQUAL_UINT32(1U, tx_queue_get_count(&queue));
+}

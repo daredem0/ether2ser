@@ -101,6 +101,12 @@ uint32_t event_queue_get_push_drop_count(void)
     return event_queue_push_drops;
 }
 
+void event_queue_reset_statistics(void)
+{
+    event_queue_high_water_mark = event_queue_count_internal();
+    event_queue_push_drops      = 0U;
+}
+
 bool event_get_payload_ptr(const event_t* event, size_t required_size, const void** out)
 {
     if (!event || !out || required_size == 0)

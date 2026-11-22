@@ -107,6 +107,11 @@ size_t event_queue_get_high_water_mark(void);
 uint32_t event_queue_get_push_drop_count(void);
 
 /**
+ * @brief Reset queue high-water and drop statistics without removing events.
+ */
+void event_queue_reset_statistics(void);
+
+/**
  * @brief Resolve payload pointer and validate minimum payload size.
  * @param event Event to inspect.
  * @param required_size Minimum bytes required by caller.

@@ -8,8 +8,11 @@
 #include "drivers/pio_tx_rx_driver.h"
 #include "drivers/tx_queue.h"
 #include "drivers/w5500_driver.h"
+#include "protocol/hdlc_decoder.h"
+#include "protocol/hdlc_sync.h"
 #include "system/common.h"
 #include "system/event_queue.h"
+#include "version.h"
 
 static uint8_t mask_prefix_length(const uint8_t mask[4])
 {
@@ -89,6 +92,7 @@ static V24_POLARITIES_T mask_to_polarities(uint32_t mask)
 void management_app_capture(app_ctx_t* app, management_runtime_view_t* runtime)
 {
     memset(runtime, 0, sizeof(*runtime));
+    runtime->firmware_version = VERSION_STRING;
     runtime->operating_mode = app->operating_mode;
     runtime->frame_active   = tx_queue_has_active_frame(&app->tx_queue);
     runtime->queue_empty    = tx_queue_is_empty(&app->tx_queue);
@@ -252,6 +256,21 @@ static bool apply_set_effect(app_ctx_t* app, const management_effect_t* effect)
     return true;
 }
 
+static void reset_statistics(app_ctx_t* app)
+{
+    memset(&app->stats, 0, sizeof(app->stats));
+    runtime_metrics_init(&app->runtime_metrics);
+    tx_queue_reset_statistics(&app->tx_queue);
+    hdlc_sync_acc_reset_statistics(&app->accumulator);
+    hdlc_decode_stats_reset();
+    hdlc_decode_failure_reset();
+    event_queue_reset_statistics();
+    log_reset_statistics();
+    w5500_reset_udp_buffer_statistics();
+    v24_reset_statistics();
+    app->statistics_generation++;
+}
+
 bool management_app_apply_effect(app_ctx_t* app, const management_effect_t* effect)
 {
     if (app == NULL || effect == NULL)
@@ -269,6 +288,9 @@ bool management_app_apply_effect(app_ctx_t* app, const management_effect_t* effe
         break;
     case MANAGEMENT_EFFECT_SAVE:
         return push_simple_event(EV_SAVE_CONFIG);
+    case MANAGEMENT_EFFECT_RESET_STATS:
+        reset_statistics(app);
+        return true;
     case MANAGEMENT_EFFECT_WIPE:
         return push_simple_event(EV_WIPE_CONFIG);
     case MANAGEMENT_EFFECT_REBOOT:

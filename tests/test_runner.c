@@ -80,6 +80,7 @@ extern void test_operating_mode_restores_gpio_from_storage(void);
 extern void test_operating_mode_change_requires_idle_pipeline(void);
 extern void test_bridge_mode_rejects_every_manual_gpio_write(void);
 extern void test_gpio_mode_allows_only_nonreserved_outputs(void);
+extern void test_management_get_version_returns_runtime_version(void);
 extern void test_gpio_catalog_includes_external_clock_and_reserved_reset(void);
 
 // Transport-neutral management tests
@@ -92,6 +93,7 @@ extern void test_management_set_mode_is_idempotent(void);
 extern void test_management_gpio_write_uses_common_mode_policy(void);
 extern void test_management_gpio_write_rejects_input_and_reserved_signals(void);
 extern void test_management_local_ip_is_accepted_without_forcing_reboot(void);
+extern void test_management_reset_stats_prepares_runtime_effect(void);
 
 // Query-independent runtime metrics tests
 extern void test_runtime_metrics_first_sample_establishes_baseline(void);
@@ -105,16 +107,21 @@ extern void test_management_cli_parses_semantic_mode_and_clock_values(void);
 extern void test_management_cli_parses_gpio_path_and_level(void);
 extern void test_management_cli_parses_actions_and_wipe_confirmation(void);
 extern void test_management_cli_rejects_unknown_trailing_and_oversized_lines(void);
+extern void test_management_cli_parses_reset_stats_action(void);
 extern void test_management_cli_formats_framed_success_and_error(void);
+extern void test_management_cli_formats_inverted_signals_for_humans(void);
+extern void test_management_cli_exposes_firmware_version(void);
 extern void test_management_cli_human_commands_keep_original_shortcuts(void);
 extern void test_management_cli_human_commands_accept_original_category_syntax(void);
 extern void test_management_cli_help_is_human_readable(void);
 extern void test_management_cli_help_provides_targeted_usage(void);
+extern void test_management_http_exposes_firmware_version(void);
 
 // HTTP REST management tests
 extern void test_management_http_maps_get_and_nested_paths(void);
 extern void test_management_http_maps_put_values_through_common_request_semantics(void);
 extern void test_management_http_maps_actions_and_enforces_wipe_confirmation(void);
+extern void test_management_http_maps_reset_stats_action(void);
 extern void test_management_http_rejects_incomplete_oversized_and_unsupported_requests(void);
 extern void test_management_http_formats_bounded_json_success_and_error(void);
 extern void test_management_http_server_opens_socket_two_nonblocking_on_port_80(void);
@@ -124,6 +131,7 @@ extern void test_management_http_server_sends_incrementally_then_applies_effect(
 extern void test_management_http_formats_shared_status_and_config_snapshots(void);
 
 // Event Queue declarations
+extern void test_event_queue_statistics_reset_preserves_pending_events(void);
 extern void test_event_queue_empty_after_init(void);
 extern void test_event_queue_push_pop_single(void);
 extern void test_event_queue_full_when_capacity_reached(void);
@@ -143,6 +151,7 @@ extern void test_hdlc_sync_incomplete_frame_not_ready(void);
 extern void test_hdlc_sync_noise_then_frame(void);
 extern void test_hdlc_sync_accumulator_overflow_rejected(void);
 extern void test_hdlc_sync_poll_invalid_args_returns_ok(void);
+extern void test_hdlc_sync_statistics_reset_preserves_accumulator_state(void);
 extern void test_hdlc_sync_poll_syncing_waits_for_lookahead(void);
 extern void test_hdlc_sync_poll_synced_waits_for_lookahead(void);
 extern void test_hdlc_sync_poll_overflow_resets_state(void);
@@ -175,6 +184,7 @@ extern void test_tx_queue_oversized_payload_rejected(void);
 extern void test_tx_queue_restarts_midframe_after_cts_edge(void);
 extern void test_tx_queue_protects_queued_tail_until_pio_completion(void);
 extern void test_tx_queue_waits_for_rts_release_between_queued_frames(void);
+extern void test_tx_queue_statistics_reset_preserves_queued_frames(void);
 
 // Event scheduler tests
 extern void test_event_scheduler_blocks_control_during_active_frame(void);
@@ -304,12 +314,14 @@ int main(void) {
     RUN_TEST(test_management_catalog_paths_are_unique);
     RUN_TEST(test_management_catalog_exposes_common_mode_and_status_resources);
     RUN_TEST(test_management_get_mode_returns_runtime_mode);
+    RUN_TEST(test_management_get_version_returns_runtime_version);
     RUN_TEST(test_management_set_mode_prepares_persisted_reboot_effect);
     RUN_TEST(test_management_set_mode_rejects_busy_pipeline);
     RUN_TEST(test_management_set_mode_is_idempotent);
     RUN_TEST(test_management_gpio_write_uses_common_mode_policy);
     RUN_TEST(test_management_gpio_write_rejects_input_and_reserved_signals);
     RUN_TEST(test_management_local_ip_is_accepted_without_forcing_reboot);
+    RUN_TEST(test_management_reset_stats_prepares_runtime_effect);
 
     // Query-independent runtime metrics tests
     RUN_TEST(test_runtime_metrics_first_sample_establishes_baseline);
@@ -323,17 +335,22 @@ int main(void) {
     RUN_TEST(test_management_cli_parses_gpio_path_and_level);
     RUN_TEST(test_management_cli_parses_actions_and_wipe_confirmation);
     RUN_TEST(test_management_cli_rejects_unknown_trailing_and_oversized_lines);
+    RUN_TEST(test_management_cli_parses_reset_stats_action);
     RUN_TEST(test_management_cli_formats_framed_success_and_error);
+    RUN_TEST(test_management_cli_formats_inverted_signals_for_humans);
     RUN_TEST(test_management_cli_human_commands_keep_original_shortcuts);
+    RUN_TEST(test_management_cli_exposes_firmware_version);
     RUN_TEST(test_management_cli_human_commands_accept_original_category_syntax);
     RUN_TEST(test_management_cli_help_is_human_readable);
     RUN_TEST(test_management_cli_help_provides_targeted_usage);
 
     // HTTP REST management tests
     RUN_TEST(test_management_http_maps_get_and_nested_paths);
+    RUN_TEST(test_management_http_exposes_firmware_version);
     RUN_TEST(test_management_http_maps_put_values_through_common_request_semantics);
     RUN_TEST(test_management_http_maps_actions_and_enforces_wipe_confirmation);
     RUN_TEST(test_management_http_rejects_incomplete_oversized_and_unsupported_requests);
+    RUN_TEST(test_management_http_maps_reset_stats_action);
     RUN_TEST(test_management_http_formats_bounded_json_success_and_error);
     RUN_TEST(test_management_http_server_opens_socket_two_nonblocking_on_port_80);
     RUN_TEST(test_management_http_server_listens_without_blocking);
@@ -346,6 +363,7 @@ int main(void) {
     RUN_TEST(test_event_queue_push_pop_single);
     RUN_TEST(test_event_queue_full_when_capacity_reached);
     RUN_TEST(test_event_queue_pop_empty_fails);
+    RUN_TEST(test_event_queue_statistics_reset_preserves_pending_events);
     RUN_TEST(test_event_queue_wraparound_preserves_order);
     RUN_TEST(test_event_get_payload_ptr_inline_ok);
     RUN_TEST(test_event_get_payload_ptr_inline_too_small_fails);
@@ -363,6 +381,7 @@ int main(void) {
     RUN_TEST(test_hdlc_sync_poll_invalid_args_returns_ok);
     RUN_TEST(test_hdlc_sync_poll_syncing_waits_for_lookahead);
     RUN_TEST(test_hdlc_sync_poll_synced_waits_for_lookahead);
+    RUN_TEST(test_hdlc_sync_statistics_reset_preserves_accumulator_state);
     RUN_TEST(test_hdlc_sync_poll_overflow_resets_state);
     RUN_TEST(test_hdlc_sync_consume_candidate_drops_prefix_and_resets);
     RUN_TEST(test_hdlc_sync_consume_candidate_applies_hardcap);
@@ -393,6 +412,7 @@ int main(void) {
     RUN_TEST(test_tx_queue_restarts_midframe_after_cts_edge);
     RUN_TEST(test_tx_queue_protects_queued_tail_until_pio_completion);
     RUN_TEST(test_tx_queue_waits_for_rts_release_between_queued_frames);
+    RUN_TEST(test_tx_queue_statistics_reset_preserves_queued_frames);
 
     // Event scheduler tests
     RUN_TEST(test_event_scheduler_blocks_control_during_active_frame);

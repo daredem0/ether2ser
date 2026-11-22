@@ -48,6 +48,29 @@ void test_event_queue_full_when_capacity_reached(void)
     TEST_ASSERT_FALSE(event_queue_push(&extra));
 }
 
+void test_event_queue_statistics_reset_preserves_pending_events(void)
+{
+    event_queue_init();
+    event_t event = make_event(EV_CLI_LINE, 0U, 1U);
+    for (size_t index = 0U; index < EVENT_QUEUE_CAPACITY - 1U; index++)
+    {
+        TEST_ASSERT_TRUE(event_queue_push(&event));
+    }
+    TEST_ASSERT_FALSE(event_queue_push(&event));
+
+    event_t output = {0};
+    while (event_queue_get_count() > 1U)
+    {
+        TEST_ASSERT_TRUE(event_queue_pop(&output));
+    }
+
+    event_queue_reset_statistics();
+
+    TEST_ASSERT_EQUAL_UINT32(1U, event_queue_get_count());
+    TEST_ASSERT_EQUAL_UINT32(1U, event_queue_get_high_water_mark());
+    TEST_ASSERT_EQUAL_UINT32(0U, event_queue_get_push_drop_count());
+}
+
 void test_event_queue_pop_empty_fails(void)
 {
     event_queue_init();

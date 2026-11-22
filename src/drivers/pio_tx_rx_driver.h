@@ -78,6 +78,9 @@ bool v24_tx_get_cts_restart_enabled(void);
 /** @brief Copy TX diagnostics without exposing PIO internals. */
 void v24_tx_status_snapshot(v24_tx_status_t* status);
 
+/** @brief Reset cumulative V.24 TX/RX diagnostics without changing link state. */
+void v24_reset_statistics(void);
+
 /**
  * @brief Initialize RX clock/data PIO state machine.
  * @param pio PIO instance.

@@ -17,6 +17,8 @@ management_result_t management_cli_parse_human(const char* line,
 bool management_cli_format_response(uint32_t sequence, const char* canonical_path,
                                     const management_response_t* response,
                                     char* output, size_t output_capacity);
+bool management_cli_format_inverted_signals(uint32_t mask, char* output,
+                                            size_t output_capacity);
 const char* management_cli_help_overview(void);
 const char* management_cli_help_usage(management_resource_t resource);
 

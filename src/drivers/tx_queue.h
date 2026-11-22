@@ -123,5 +123,10 @@ e2s_error_t tx_queue_init(TX_QUEUE_T* queue, uint8_t* buffer_data);
  */
 size_t tx_queue_get_count(const TX_QUEUE_T* queue);
 
+/**
+ * @brief Reset cumulative TX byte statistics without changing queued frames.
+ */
+void tx_queue_reset_statistics(TX_QUEUE_T* queue);
+
 
 #endif /* TX_QUEUE_H */

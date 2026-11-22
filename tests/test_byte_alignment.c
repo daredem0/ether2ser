@@ -262,6 +262,33 @@ void test_hdlc_sync_poll_invalid_args_returns_ok(void)
     TEST_ASSERT_EQUAL(E2S_OK, hdlc_sync_acc_poll(&accumulator, &frame));
 }
 
+void test_hdlc_sync_statistics_reset_preserves_accumulator_state(void)
+{
+    HDLC_SYNC_ACCUMULATOR_T accumulator;
+    hdlc_sync_acc_init(&accumulator, HDLC_FLAG_BYTE);
+    accumulator.state                  = HDLC_SYNC_STATE_SYNCED;
+    accumulator.position               = 7U;
+    accumulator.processed              = 3U;
+    accumulator.lookahead_wait_syncing = 1U;
+    accumulator.lookahead_wait_synced  = 2U;
+    accumulator.frame_ready_count      = 3U;
+    accumulator.consume_count          = 4U;
+    accumulator.hardcap_drop_events    = 5U;
+    accumulator.hardcap_drop_bytes     = 6U;
+
+    hdlc_sync_acc_reset_statistics(&accumulator);
+
+    TEST_ASSERT_EQUAL_INT(HDLC_SYNC_STATE_SYNCED, accumulator.state);
+    TEST_ASSERT_EQUAL_UINT32(7U, accumulator.position);
+    TEST_ASSERT_EQUAL_UINT32(3U, accumulator.processed);
+    TEST_ASSERT_EQUAL_UINT32(0U, accumulator.lookahead_wait_syncing);
+    TEST_ASSERT_EQUAL_UINT32(0U, accumulator.lookahead_wait_synced);
+    TEST_ASSERT_EQUAL_UINT32(0U, accumulator.frame_ready_count);
+    TEST_ASSERT_EQUAL_UINT32(0U, accumulator.consume_count);
+    TEST_ASSERT_EQUAL_UINT32(0U, accumulator.hardcap_drop_events);
+    TEST_ASSERT_EQUAL_UINT32(0U, accumulator.hardcap_drop_bytes);
+}
+
 void test_hdlc_sync_poll_syncing_waits_for_lookahead(void)
 {
     HDLC_SYNC_ACCUMULATOR_T accumulator;
