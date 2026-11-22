@@ -268,6 +268,8 @@ Compatibility path:
 TX path:
 - Two TX programs:
   - internal clock mode: `tck_txd.pio` (drives `V24_TXC_DTE`)
+    - eight PIO cycles per bit with four high and four low; TXD changes on the
+      rising edge and the peer samples on the falling edge
   - external clock mode: `xck_txd.pio` (samples `V24_TXC_DCE`)
 - `v24_tx_state.*` owns the allocation-free physical phases: idle, RTS settle, sending, PIO draining, RTS hold and inter-frame hold.
 - `pio_tx_rx_driver.c` is the sole adapter from state actions to GPIO/PIO. `v24_tx_try_write` checks FIFO capacity before an `ALLOW_WRITE` transition, so an allowed byte is always written. On the first byte after RTS settle, it clears the sticky TX-stall flag after filling the FIFO; clearing before the write can immediately re-latch the startup `pull` stall as a false underrun.
