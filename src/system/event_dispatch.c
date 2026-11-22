@@ -418,6 +418,63 @@ static void ev_status(app_ctx_t* app, ev_status_stats_t* status_stats)
     app->stats.last_report_ms = report_now_ms;
 }
 
+static const char* hdlc_decode_failure_reason_name(hdlc_decode_failure_reason_t reason)
+{
+    switch (reason)
+    {
+    case HDLC_DECODE_FAILURE_INVALID_FRAME:
+        return "invalid";
+    case HDLC_DECODE_FAILURE_TOO_SHORT:
+        return "short";
+    case HDLC_DECODE_FAILURE_PAYLOAD_TOO_LONG:
+        return "long";
+    case HDLC_DECODE_FAILURE_UNSTUFF_ERROR:
+        return "unstuff";
+    case HDLC_DECODE_FAILURE_CRC_MISMATCH:
+        return "crc";
+    case HDLC_DECODE_FAILURE_NONE:
+    default:
+        return "none";
+    }
+}
+
+static void print_first_decode_failure(void)
+{
+    hdlc_decode_failure_diagnostic_t diagnostic;
+    hdlc_decode_failure_snapshot(&diagnostic);
+    if (!diagnostic.valid)
+    {
+        LOG_PLAIN("    FirstFail : none\r\n");
+        return;
+    }
+
+    char prefix_hex[(HDLC_DECODE_FAILURE_PREFIX_SIZE * 2U) + 1U] = {0};
+    for (size_t i = 0; i < diagnostic.prefix_length; i++)
+    {
+        (void)snprintf(&prefix_hex[i * 2U], 3U, "%02X", diagnostic.prefix[i]);
+    }
+
+    LOG_PLAIN("    FirstFail : reason=%s  encoded=%zu  decoded=%zu  raw_seen=%zu\r\n",
+              hdlc_decode_failure_reason_name(diagnostic.reason), diagnostic.encoded_length,
+              diagnostic.decoded_length, diagnostic.raw_bit_index);
+    LOG_PLAIN("                off=%u  align=%s  rx_crc=%04" PRIX16 "  calc_crc=%04" PRIX16
+              "\r\n",
+              diagnostic.sync_bit_offset, diagnostic.align_shift_right ? "right" : "left",
+              diagnostic.received_crc, diagnostic.calculated_crc);
+    if (diagnostic.prefix_length >= 4U)
+    {
+        uint32_t sequence = ((uint32_t)diagnostic.prefix[0] << 24U) |
+                            ((uint32_t)diagnostic.prefix[1] << 16U) |
+                            ((uint32_t)diagnostic.prefix[2] << 8U) |
+                            (uint32_t)diagnostic.prefix[3];
+        LOG_PLAIN("                prefix=%s  seq_be=%" PRIu32 "\r\n", prefix_hex, sequence);
+    }
+    else
+    {
+        LOG_PLAIN("                prefix=%s\r\n", prefix_hex);
+    }
+}
+
 static void print_status_event(app_ctx_t* app, ev_status_stats_t* status_stats)
 {
 
@@ -455,6 +512,7 @@ static void print_status_event(app_ctx_t* app, ev_status_stats_t* status_stats)
               app->stats.decode_fail_invalid_frame, app->stats.decode_fail_too_short,
               app->stats.decode_fail_payload_too_long, app->stats.decode_fail_unstuff_error,
               app->stats.decode_fail_crc_mismatch);
+    print_first_decode_failure();
     LOG_PLAIN("    SyncState : %s\r\n", hdlc_sync_state_name(app->accumulator.state));
     LOG_PLAIN("    SyncWait  : syncing=%" PRIu64 "  synced=%" PRIu64 "\r\n",
               app->stats.sync_lookahead_wait_syncing, app->stats.sync_lookahead_wait_synced);
@@ -495,7 +553,10 @@ static void print_status_event(app_ctx_t* app, ev_status_stats_t* status_stats)
 
     v24_tx_status_t v24_tx_status;
     v24_tx_status_snapshot(&v24_tx_status);
-    LOG_PLAIN("    PIO TX    : stalled=%u\r\n", v24_tx_status.pio_stalled ? 1U : 0U);
+    LOG_PLAIN("    PIO TX    : stalled=%u  underruns=%" PRIu32 "  cts_restarts=%" PRIu32
+              "\r\n",
+              v24_tx_status.pio_stalled ? 1U : 0U, v24_tx_status.tx_fifo_underruns,
+              v24_tx_status.tx_cts_restarts);
     LOG_PLAIN("    CTS       : level=%u  edges=%" PRIu32 "  restart=%u\r\n",
               v24_tx_status.cts_level ? 1U : 0U, v24_tx_status.cts_edge_count,
               v24_tx_status.cts_restart_enabled ? 1U : 0U);

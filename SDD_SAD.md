@@ -69,26 +69,24 @@ Startup sequence:
 
 ### 4.2 Main Loop (`src/system/event_loop.c`)
 Each iteration:
-1. Feed watchdog.
-2. Early RX drain from PIO FIFO into HDLC sync accumulator.
-3. Sample W5500 UDP socket pressure counters (`w5500_poll_udp_buffer_full_events`).
-4. Poll TX queue stats and drain up to `TX_QUEUE_DRAIN_CHUNK_SIZE` bytes to PIO TX.
-5. Update UDP RX throttle state from TX queue occupancy (`TX_QUEUE_HIGH_WM` / `TX_QUEUE_LOW_WM`).
-6. Poll UDP RX (`w5500_poll_rx`) and enqueue encoded frames into TX queue only when not throttled.
-7. Second RX drain pass.
-8. Apply HDLC idle-timeout resync policy.
-9. Poll HDLC sync for ready frames; decode and forward UDP immediately.
-10. Apply HDLC no-progress resync policy.
-11. Update runtime stats snapshots (decode stats, queue HWM/drops, log drops/HWM).
-12. Poll RX FIFO stall flags.
-13. Derive a bounded control budget from the physical TX state: zero while a frame is active, two events at a frame boundary with queued backlog, or twenty events when fully idle.
-14. At a nonzero control budget, poll CLI input, dispatch at most the budgeted events, consume the log-output flag, and redraw the prompt.
+1. Feed watchdog and poll the physical RX frame-start boundary.
+2. Poll TX queue stats, then refill the PIO TX FIFO.
+3. Drain at most `ACTIVE_FRAME_RX_DRAIN_CHUNK_SIZE` RX bytes while a physical TX frame is active; otherwise drain RX completely.
+4. Refill the PIO TX FIFO a second time.
+5. While a physical frame remains active, poll RX stall state and immediately restart the loop. W5500 access, HDLC decode, statistics, logging, and USB control work are deferred.
+6. At a physical frame boundary, sample W5500 UDP socket pressure counters.
+7. Update UDP RX throttle state from TX queue occupancy (`TX_QUEUE_HIGH_WM` / `TX_QUEUE_LOW_WM`).
+8. Poll UDP RX (`w5500_poll_rx`) and enqueue one encoded frame when not throttled.
+9. Finish draining RX, apply HDLC idle/no-progress resync policies, decode complete frames, and forward decoded payloads to UDP.
+10. Update runtime stats and poll RX FIFO stall flags.
+11. Poll CLI input and dispatch a bounded control budget: two events with queued backlog or twenty events when fully idle.
 
-Queued traffic cannot starve the control plane: `tx_queue_drain()` exposes an iteration with no active physical frame before selecting the next queued entry. CLI polling at that boundary remains nonblocking and bounded.
+Queued traffic cannot starve the control plane: `tx_queue_drain()` exposes an iteration with no active physical frame before selecting the next queued entry. CLI polling at that boundary remains nonblocking and bounded. Conversely, potentially blocking background I/O cannot starve an active external-clock transmission: active-frame iterations perform only watchdog, TX refill, bounded RX drain, and RX stall monitoring.
 
 Implementation notes:
-- TX work bookkeeping now uses actual drain progress (`bytes_drained > 0`) instead of only error code.
+- TX work bookkeeping uses actual drain progress (`bytes_drained > 0`) instead of only error code.
 - UDP RX throttling is hysteretic and increments dedicated stats (`udp_rx_throttle_enter`, `udp_rx_throttle_skips`).
+- The active-frame RX drain is bounded so continuous receive traffic cannot delay the second TX refill.
 
 ### 4.3 Runtime Concurrency Diagram
 ```mermaid
@@ -114,8 +112,10 @@ HDLC resync/recovery policies in loop:
 - Decode fail streak hard resync (`HDLC_DECODE_FAIL_STREAK_LIMIT`)
 - No-progress byte-window resync with different thresholds for internal/external clock
   (`2048` internal, `12288` external), active only after first successful decode lock
-- External-clock hunting idle-byte suppression for long runs of `0x00/0xFF`
-  (first two bytes kept, subsequent run bytes dropped while in `HUNTING`)
+- External-clock hunting idle-byte suppression retains one `0x00`/`0xFF` overlap byte and drops
+  only an identical idle byte while that overlap is the accumulator's entire contents. Once any
+  possible frame-start byte is buffered, the complete burst is preserved until synchronization;
+  payload runs of `0x00`/`0xFF` are never classified as idle.
 
 ## 5. Module Decomposition
 ### 5.1 Application Context (`src/system/app_context.h`)
@@ -270,11 +270,12 @@ TX path:
   - internal clock mode: `tck_txd.pio` (drives `V24_TXC_DTE`)
   - external clock mode: `xck_txd.pio` (samples `V24_TXC_DCE`)
 - `v24_tx_state.*` owns the allocation-free physical phases: idle, RTS settle, sending, PIO draining, RTS hold and inter-frame hold.
-- `pio_tx_rx_driver.c` is the sole adapter from state actions to GPIO/PIO. `v24_tx_try_write` checks FIFO capacity before an `ALLOW_WRITE` transition, so an allowed byte is always written.
+- `pio_tx_rx_driver.c` is the sole adapter from state actions to GPIO/PIO. `v24_tx_try_write` checks FIFO capacity before an `ALLOW_WRITE` transition, so an allowed byte is always written. On the first byte after RTS settle, it clears the sticky TX-stall flag after filling the FIFO; clearing before the write can immediately re-latch the startup `pull` stall as a false underrun.
+- A sticky PIO TX stall during `SENDING` is an underrun. The state machine resets the PIO, reapplies the RTS settle hold, and asks `tx_queue` to restart the active frame from byte zero. A stall during `DRAINING` remains the expected physical completion signal.
 - The final byte is marked with `v24_tx_mark_frame_queued`; `v24_tx_poll` reports restart or physical frame completion only after PIO completion, the 41-bit-time RTS hold, RTS deassertion and the inter-frame hold.
 - The RTS holdoff has a 200 us floor. Both TX PIO programs use the joined eight-word FIFO.
 - CTS edges are counted by the GPIO IRQ. Edges before the first accepted byte are ignored; edges during sending or draining restart the PIO and frame only when runtime CTS restart is enabled.
-- `v24_tx_status_snapshot` exposes PIO stall, logical CTS level, edge count and restart policy without exposing PIO pointers.
+- `v24_tx_status_snapshot` exposes PIO stall state, underrun and CTS-restart counts, logical CTS level, edge count, and restart policy without exposing PIO pointers.
 
 RX path:
 - `rck_rxd.pio` samples RXD using RXC timing

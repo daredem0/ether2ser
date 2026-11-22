@@ -70,6 +70,8 @@ extern void test_bitstuff_decode_exact_capacity_succeeds(void);
 extern void test_bitstuff_decode_abort_crc_mismatch(void);
 extern void test_bitstuff_decode_abort_unstuff_violation(void);
 extern void test_bitstuff_decode_abort_bit_order_mismatch(void);
+extern void test_bitstuff_decode_captures_first_crc_failure(void);
+extern void test_bitstuff_decode_failure_reset_clears_capture(void);
 
 // CLI Parser declarations
 extern void test_cli_parse_command_only(void);
@@ -164,6 +166,13 @@ extern void test_tx_queue_waits_for_rts_release_between_queued_frames(void);
 extern void test_event_scheduler_blocks_control_during_active_frame(void);
 extern void test_event_scheduler_services_boundary_with_backlog(void);
 extern void test_event_scheduler_services_full_idle_budget(void);
+extern void test_event_scheduler_blocks_background_io_during_active_frame(void);
+extern void test_event_scheduler_allows_background_io_at_frame_boundary(void);
+
+// RX hunting idle filter tests
+extern void test_rx_hunt_filter_drops_only_redundant_preframe_idle(void);
+extern void test_rx_hunt_filter_preserves_repeated_zeroes_after_opening_flag(void);
+extern void test_rx_hunt_filter_inactive_states_never_drop(void);
 extern void test_tx_queue_active_frame_covers_physical_completion(void);
 extern void test_tx_queue_active_frame_clears_before_next_queued_entry(void);
 
@@ -173,6 +182,8 @@ extern void test_v24_tx_state_ignores_cts_edges_before_first_byte(void);
 extern void test_v24_tx_state_restarts_on_cts_edge_while_sending(void);
 extern void test_v24_tx_state_restarts_on_cts_edge_while_draining(void);
 extern void test_v24_tx_state_ignores_cts_restart_when_disabled(void);
+extern void test_v24_tx_state_restarts_on_fifo_underrun_during_poll(void);
+extern void test_v24_tx_state_restarts_on_fifo_underrun_before_write(void);
 extern void test_v24_tx_state_completes_after_rts_and_interframe_holds(void);
 extern void test_v24_tx_state_reconfigure_resets_lifecycle_and_preserves_restart(void);
 
@@ -263,6 +274,8 @@ int main(void) {
     RUN_TEST(test_bitstuff_decode_abort_crc_mismatch);
     RUN_TEST(test_bitstuff_decode_abort_unstuff_violation);
     RUN_TEST(test_bitstuff_decode_abort_bit_order_mismatch);
+    RUN_TEST(test_bitstuff_decode_captures_first_crc_failure);
+    RUN_TEST(test_bitstuff_decode_failure_reset_clears_capture);
 
     // CLI Parser Tests
     RUN_TEST(test_cli_parse_command_only);
@@ -357,6 +370,11 @@ int main(void) {
     RUN_TEST(test_event_scheduler_blocks_control_during_active_frame);
     RUN_TEST(test_event_scheduler_services_boundary_with_backlog);
     RUN_TEST(test_event_scheduler_services_full_idle_budget);
+    RUN_TEST(test_event_scheduler_blocks_background_io_during_active_frame);
+    RUN_TEST(test_event_scheduler_allows_background_io_at_frame_boundary);
+    RUN_TEST(test_rx_hunt_filter_drops_only_redundant_preframe_idle);
+    RUN_TEST(test_rx_hunt_filter_preserves_repeated_zeroes_after_opening_flag);
+    RUN_TEST(test_rx_hunt_filter_inactive_states_never_drop);
     RUN_TEST(test_tx_queue_active_frame_covers_physical_completion);
     RUN_TEST(test_tx_queue_active_frame_clears_before_next_queued_entry);
 
@@ -366,6 +384,8 @@ int main(void) {
     RUN_TEST(test_v24_tx_state_restarts_on_cts_edge_while_sending);
     RUN_TEST(test_v24_tx_state_restarts_on_cts_edge_while_draining);
     RUN_TEST(test_v24_tx_state_ignores_cts_restart_when_disabled);
+    RUN_TEST(test_v24_tx_state_restarts_on_fifo_underrun_during_poll);
+    RUN_TEST(test_v24_tx_state_restarts_on_fifo_underrun_before_write);
     RUN_TEST(test_v24_tx_state_completes_after_rts_and_interframe_holds);
     RUN_TEST(test_v24_tx_state_reconfigure_resets_lifecycle_and_preserves_restart);
 

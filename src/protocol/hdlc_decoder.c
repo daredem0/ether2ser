@@ -17,6 +17,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 // Project Headers
 #include "hdlc_common.h"
@@ -41,6 +42,40 @@ typedef enum
 } hdlc_decoder_bit_type_t;
 
 static hdlc_decode_stats_t hdlc_decode_stats = {0};
+static hdlc_decode_failure_diagnostic_t hdlc_decode_failure = {0};
+
+static void hdlc_capture_decode_failure(hdlc_decode_failure_reason_t reason,
+                                        const HDLC_FRAME_T* frame, const uint8_t* payload,
+                                        size_t decoded_length, size_t raw_bit_index,
+                                        uint16_t received_crc, uint16_t calculated_crc,
+                                        uint8_t sync_bit_offset, bool align_shift_right)
+{
+    if (hdlc_decode_failure.valid)
+    {
+        return;
+    }
+
+    hdlc_decode_failure.valid             = true;
+    hdlc_decode_failure.reason            = reason;
+    hdlc_decode_failure.encoded_length    = frame != NULL ? frame->length : 0U;
+    hdlc_decode_failure.raw_bit_index     = raw_bit_index;
+    hdlc_decode_failure.decoded_length    = decoded_length;
+    hdlc_decode_failure.received_crc      = received_crc;
+    hdlc_decode_failure.calculated_crc    = calculated_crc;
+    hdlc_decode_failure.sync_bit_offset   = sync_bit_offset;
+    hdlc_decode_failure.align_shift_right = align_shift_right;
+
+    size_t prefix_length = decoded_length;
+    if (prefix_length > HDLC_DECODE_FAILURE_PREFIX_SIZE)
+    {
+        prefix_length = HDLC_DECODE_FAILURE_PREFIX_SIZE;
+    }
+    if (payload != NULL && prefix_length > 0U)
+    {
+        memcpy(hdlc_decode_failure.prefix, payload, prefix_length);
+        hdlc_decode_failure.prefix_length = (uint8_t)prefix_length;
+    }
+}
 
 bool hdlc_decode_byte(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_capacity,
                       size_t* payload_length)
@@ -169,13 +204,16 @@ static hdlc_decoder_bit_type_t hdlc_get_byte(hdlc_decoder_t* decoder, const HDLC
 }
 
 bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_capacity,
-                 size_t* payload_length, bool lsb_first)
+                 size_t* payload_length, bool lsb_first, uint8_t sync_bit_offset,
+                 bool align_shift_right)
 {
     if (frame == NULL || payload == NULL || payload_length == NULL || out_capacity == 0 ||
         frame->length < 2 || frame->payload[0] != HDLC_FLAG_BYTE ||
         frame->payload[frame->length - 1] != HDLC_FLAG_BYTE)
     {
         hdlc_decode_stats.invalid_frame++;
+        hdlc_capture_decode_failure(HDLC_DECODE_FAILURE_INVALID_FRAME, frame, NULL, 0U, 0U, 0U,
+                                    0U, sync_bit_offset, align_shift_right);
         LOG_DEBUG("Invalid frame\r\n");
         goto abort;
     }
@@ -194,12 +232,18 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
         if (bit_result == HDLC_BIT_ERR)
         {
             hdlc_decode_stats.unstuff_error++;
+            hdlc_capture_decode_failure(HDLC_DECODE_FAILURE_UNSTUFF_ERROR, frame, payload,
+                                        outbyte_ctr, decoder.raw_bit_index, 0U, 0U,
+                                        sync_bit_offset, align_shift_right);
             LOG_DEBUG("Invalid frame\r\n");
             goto abort;
         }
         if (outbyte_ctr >= out_capacity)
         {
             hdlc_decode_stats.payload_too_long++;
+            hdlc_capture_decode_failure(HDLC_DECODE_FAILURE_PAYLOAD_TOO_LONG, frame, payload,
+                                        outbyte_ctr, decoder.raw_bit_index, 0U, 0U,
+                                        sync_bit_offset, align_shift_right);
             LOG_DEBUG("Payload too long\r\n");
             goto abort;
         }
@@ -209,6 +253,9 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
     if (outbyte_ctr < 2)
     {
         hdlc_decode_stats.too_short++;
+        hdlc_capture_decode_failure(HDLC_DECODE_FAILURE_TOO_SHORT, frame, payload, outbyte_ctr,
+                                    decoder.raw_bit_index, 0U, 0U, sync_bit_offset,
+                                    align_shift_right);
         goto abort;
     }
 
@@ -220,6 +267,9 @@ bool hdlc_decode(const HDLC_FRAME_T* frame, uint8_t* payload, const size_t out_c
     if (crc16 != recovered_crc)
     {
         hdlc_decode_stats.crc_mismatch++;
+        hdlc_capture_decode_failure(HDLC_DECODE_FAILURE_CRC_MISMATCH, frame, payload,
+                                    *payload_length, decoder.raw_bit_index, crc16, recovered_crc,
+                                    sync_bit_offset, align_shift_right);
         LOG_DEBUG("CRC mismatch\r\n");
         goto abort;
     }
@@ -246,4 +296,18 @@ void hdlc_decode_stats_snapshot(hdlc_decode_stats_t* out_stats)
 void hdlc_decode_stats_reset(void)
 {
     hdlc_decode_stats = (hdlc_decode_stats_t){0};
+}
+
+void hdlc_decode_failure_snapshot(hdlc_decode_failure_diagnostic_t* out_diagnostic)
+{
+    if (out_diagnostic == NULL)
+    {
+        return;
+    }
+    *out_diagnostic = hdlc_decode_failure;
+}
+
+void hdlc_decode_failure_reset(void)
+{
+    hdlc_decode_failure = (hdlc_decode_failure_diagnostic_t){0};
 }

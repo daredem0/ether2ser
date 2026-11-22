@@ -12,3 +12,8 @@ uint8_t event_scheduler_control_budget(bool frame_active, bool queue_empty)
 
     return queue_empty ? EVENT_SCHEDULER_IDLE_BUDGET : EVENT_SCHEDULER_BOUNDARY_BUDGET;
 }
+
+bool event_scheduler_background_io_allowed(bool frame_active)
+{
+    return !frame_active;
+}

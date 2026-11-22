@@ -11,6 +11,7 @@ set(SOURCES
     src/system/event_dispatch.c
     src/system/event_queue.c
     src/system/event_scheduler.c
+    src/system/rx_hunt_filter.c
     src/system/error.c
     src/system/cli_usb_cdc.c
     src/system/cli_commands.c
@@ -304,6 +305,7 @@ else()
         tests/test_mac_address.c
         tests/test_tx_queue.c
         tests/test_event_scheduler.c
+        tests/test_rx_hunt_filter.c
         tests/test_v24_tx_state.c
         tests/test_w5500_socket_io.c
         tests/mock_w5500_socket.c
@@ -311,6 +313,7 @@ else()
         tests/mock_tx_queue_platform.c
         src/drivers/tx_queue.c
         src/system/event_scheduler.c
+        src/system/rx_hunt_filter.c
         src/drivers/v24_tx_state.c
         src/drivers/mac_address.c
         src/protocol/hdlc_common.c

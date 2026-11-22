@@ -14,6 +14,13 @@ typedef enum
     V24_TX_PHASE_INTERFRAME_HOLD,
 } v24_tx_phase_t;
 
+typedef enum
+{
+    V24_TX_RESTART_NONE = 0,
+    V24_TX_RESTART_CTS,
+    V24_TX_RESTART_UNDERRUN,
+} v24_tx_restart_reason_t;
+
 typedef uint32_t v24_tx_action_t;
 enum
 {
@@ -29,22 +36,23 @@ enum
 
 typedef struct
 {
-    v24_tx_phase_t phase;
-    uint32_t       holdoff_us;
-    uint64_t       deadline_us;
-    uint32_t       frame_cts_baseline;
-    bool           frame_cts_baseline_valid;
-    bool           cts_restart_enabled;
+    v24_tx_phase_t          phase;
+    v24_tx_restart_reason_t restart_reason;
+    uint32_t                holdoff_us;
+    uint64_t                deadline_us;
+    uint32_t                frame_cts_baseline;
+    bool                    frame_cts_baseline_valid;
+    bool                    cts_restart_enabled;
 } v24_tx_state_t;
 
 void v24_tx_state_init(v24_tx_state_t* state, uint32_t holdoff_us,
                        bool cts_restart_enabled);
 void v24_tx_state_reconfigure(v24_tx_state_t* state, uint32_t holdoff_us);
 v24_tx_action_t v24_tx_state_request_write(v24_tx_state_t* state, uint64_t now_us,
-                                            uint32_t cts_seq);
+                                            uint32_t cts_seq, bool pio_stalled);
 v24_tx_action_t v24_tx_state_frame_queued(v24_tx_state_t* state);
 v24_tx_action_t v24_tx_state_poll(v24_tx_state_t* state, uint64_t now_us, uint32_t cts_seq,
-                                  bool pio_frame_complete);
+                                  bool pio_stalled);
 void v24_tx_state_set_cts_restart(v24_tx_state_t* state, bool enabled);
 
 #endif /* V24_TX_STATE_H */

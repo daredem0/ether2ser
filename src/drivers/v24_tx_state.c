@@ -3,6 +3,17 @@
 #include <stddef.h>
 #include <string.h>
 
+static v24_tx_action_t v24_tx_state_restart(v24_tx_state_t* state, uint64_t now_us,
+                                             v24_tx_restart_reason_t reason)
+{
+    state->phase                    = V24_TX_PHASE_RTS_SETTLE;
+    state->deadline_us              = now_us + state->holdoff_us;
+    state->frame_cts_baseline_valid = false;
+    state->restart_reason           = reason;
+    return V24_TX_ACTION_RESET_PIO | V24_TX_ACTION_CLEAR_STALL |
+           V24_TX_ACTION_RESTART_FRAME;
+}
+
 static v24_tx_action_t v24_tx_state_check_cts(v24_tx_state_t* state, uint64_t now_us,
                                                uint32_t cts_seq)
 {
@@ -29,11 +40,7 @@ static v24_tx_action_t v24_tx_state_check_cts(v24_tx_state_t* state, uint64_t no
         return V24_TX_ACTION_NONE;
     }
 
-    state->phase                    = V24_TX_PHASE_RTS_SETTLE;
-    state->deadline_us              = now_us + state->holdoff_us;
-    state->frame_cts_baseline_valid = false;
-    return V24_TX_ACTION_RESET_PIO | V24_TX_ACTION_CLEAR_STALL |
-           V24_TX_ACTION_RESTART_FRAME;
+    return v24_tx_state_restart(state, now_us, V24_TX_RESTART_CTS);
 }
 
 void v24_tx_state_init(v24_tx_state_t* state, uint32_t holdoff_us,
@@ -62,7 +69,7 @@ void v24_tx_state_reconfigure(v24_tx_state_t* state, uint32_t holdoff_us)
 }
 
 v24_tx_action_t v24_tx_state_request_write(v24_tx_state_t* state, uint64_t now_us,
-                                            uint32_t cts_seq)
+                                            uint32_t cts_seq, bool pio_stalled)
 {
     if (state == NULL)
     {
@@ -86,13 +93,19 @@ v24_tx_action_t v24_tx_state_request_write(v24_tx_state_t* state, uint64_t now_u
         state->phase                    = V24_TX_PHASE_SENDING;
         state->frame_cts_baseline       = cts_seq;
         state->frame_cts_baseline_valid = true;
-        return V24_TX_ACTION_ALLOW_WRITE;
+        return V24_TX_ACTION_CLEAR_STALL | V24_TX_ACTION_ALLOW_WRITE;
     }
 
     if (state->phase == V24_TX_PHASE_SENDING)
     {
         v24_tx_action_t action = v24_tx_state_check_cts(state, now_us, cts_seq);
-        return action == V24_TX_ACTION_NONE ? V24_TX_ACTION_ALLOW_WRITE : action;
+        if (action != V24_TX_ACTION_NONE)
+        {
+            return action;
+        }
+        return pio_stalled
+                   ? v24_tx_state_restart(state, now_us, V24_TX_RESTART_UNDERRUN)
+                   : V24_TX_ACTION_ALLOW_WRITE;
     }
 
     return V24_TX_ACTION_NONE;
@@ -110,7 +123,7 @@ v24_tx_action_t v24_tx_state_frame_queued(v24_tx_state_t* state)
 }
 
 v24_tx_action_t v24_tx_state_poll(v24_tx_state_t* state, uint64_t now_us, uint32_t cts_seq,
-                                  bool pio_frame_complete)
+                                  bool pio_stalled)
 {
     if (state == NULL)
     {
@@ -123,7 +136,12 @@ v24_tx_action_t v24_tx_state_poll(v24_tx_state_t* state, uint64_t now_us, uint32
         return cts_action;
     }
 
-    if (state->phase == V24_TX_PHASE_DRAINING && pio_frame_complete)
+    if (state->phase == V24_TX_PHASE_SENDING && pio_stalled)
+    {
+        return v24_tx_state_restart(state, now_us, V24_TX_RESTART_UNDERRUN);
+    }
+
+    if (state->phase == V24_TX_PHASE_DRAINING && pio_stalled)
     {
         state->phase       = V24_TX_PHASE_RTS_HOLD;
         state->deadline_us = now_us + state->holdoff_us;

@@ -38,12 +38,14 @@
 #include "system/event_dispatch.h"
 #include "system/event_queue.h"
 #include "system/event_scheduler.h"
+#include "system/rx_hunt_filter.h"
 // Generated headers
 
 #define MAIN_LOOP_SLEEP_MS 1
 #define MAIN_LOOP_SLEEP_US 50
 
 #define TX_QUEUE_DRAIN_CHUNK_SIZE 32U
+#define ACTIVE_FRAME_RX_DRAIN_CHUNK_SIZE 32U
 #define TX_QUEUE_HIGH_WM 48U
 #define TX_QUEUE_LOW_WM 12U
 
@@ -62,35 +64,6 @@ static void print_prompt(app_ctx_t* app)
     }
 }
 
-static bool event_loop_should_drop_hunt_idle_byte(app_ctx_t* app, uint8_t rx_byte,
-                                                  uint32_t* idle_run_length)
-{
-    if (!app || !idle_run_length)
-    {
-        return false;
-    }
-
-    bool in_external_hunting =
-        app->v24_config.external_clock && (app->accumulator.state == HDLC_SYNC_STATE_HUNTING);
-    if (!in_external_hunting)
-    {
-        *idle_run_length = 0U;
-        return false;
-    }
-
-    if (rx_byte == 0x00U || rx_byte == 0xFFU)
-    {
-        if (*idle_run_length >= 2U)
-        {
-            return true;
-        }
-        (*idle_run_length)++;
-        return false;
-    }
-
-    *idle_run_length = 0U;
-    return false;
-}
 
 typedef struct
 {
@@ -98,17 +71,21 @@ typedef struct
     uint8_t  hdlc_decode_fail_streak;
     uint64_t last_rx_byte_us;
     uint64_t last_frame_ready_bytes;
-    uint32_t hunt_idle_run_length;
     bool     udp_rx_throttled;
 } event_loop_runtime_t;
 
-static void drain_rx_until_empty(app_ctx_t* app, event_loop_runtime_t* runtime, size_t* rx_drained)
+static void drain_rx(app_ctx_t* app, event_loop_runtime_t* runtime, size_t budget,
+                     size_t* rx_drained)
 {
-    while (rx_get(&runtime->rx_byte))
+    while (*rx_drained < budget && rx_get(&runtime->rx_byte))
     {
         (*rx_drained)++;
-        if (event_loop_should_drop_hunt_idle_byte(app, runtime->rx_byte,
-                                                  &runtime->hunt_idle_run_length))
+        uint8_t buffered_tail = app->accumulator.position > 0U
+                                    ? app->accumulator.buffer[app->accumulator.position - 1U]
+                                    : 0U;
+        if (rx_hunt_filter_should_drop(app->v24_config.external_clock,
+                                       app->accumulator.state, app->accumulator.position,
+                                       buffered_tail, runtime->rx_byte))
         {
             app->stats.hunt_idle_drop_bytes++;
             continue;
@@ -162,14 +139,9 @@ static void poll_and_enqueue_udp_rx(app_ctx_t* app)
 
 static size_t poll_tx_pipeline(app_ctx_t* app)
 {
-
     size_t bytes_drained = 0;
-    if (poll_queue_stats(&app->tx_queue) != E2S_OK)
-    {
-        LOG_ERROR("Poll Queue Stats failed.\r\n");
-    }
 
-    // Poll the tx queue. This writes out bytes on the serial line
+    // Poll the tx queue. This writes out bytes on the serial line.
     if (tx_queue_drain(&app->tx_queue, TX_QUEUE_DRAIN_CHUNK_SIZE, &bytes_drained) != E2S_OK)
     {
         LOG_ERROR("Poll Queue Drain failed.\r\n");
@@ -203,7 +175,8 @@ static void decode_hdlc_to_udp_tx(app_ctx_t* app, event_loop_runtime_t* event_lo
     event_loop_runtime->last_frame_ready_bytes = app->stats.serial_rx_bytes;
     app->tx_frame_buffer.length                = 0;
     if (hdlc_decode(&app->reconstructed_frame, app->tx_frame_buffer.payload, TX_BUF_SIZE,
-                    &app->tx_frame_buffer.length, true))
+                    &app->tx_frame_buffer.length, true, app->accumulator.bit_offset,
+                    app->accumulator.align_shift_right))
     {
         app->stats.hdlc_decode_ok++;
         event_loop_runtime->hdlc_decode_fail_streak = 0;
@@ -263,7 +236,7 @@ static void drain_hdlc_frames_to_udp(app_ctx_t* app, event_loop_runtime_t* event
 
             // Re-prioritize RX draining between decode/send operations to reduce RX FIFO stalls.
             size_t rx_drained = 0U;
-            drain_rx_until_empty(app, event_loop_runtime, &rx_drained);
+            drain_rx(app, event_loop_runtime, SIZE_MAX, &rx_drained);
             if (rx_drained > 0U)
             {
                 update_rx_drain_stats(app, event_loop_runtime, rx_drained,
@@ -389,7 +362,6 @@ void event_loop(app_ctx_t* app)
                                                       .hdlc_decode_fail_streak = 0U,
                                                       .last_rx_byte_us         = 0U,
                                                       .last_frame_ready_bytes  = 0U,
-                                                      .hunt_idle_run_length    = 0U,
                                                       .udp_rx_throttled        = false};
 
     // Core 0 intentionally busy-polls; sleeping consumes bounded RX DMA ring headroom.
@@ -403,16 +375,44 @@ void event_loop(app_ctx_t* app)
          * transitions cannot splice stale bits into the first received byte.
          */
         (void)rx_clock_poll_frame_start();
-        // Drain RX early in the loop to reduce risk of RX FIFO stalling under continuous clock.
+
+        if (poll_queue_stats(&app->tx_queue) != E2S_OK)
+        {
+            LOG_ERROR("Poll Queue Stats failed.\r\n");
+        }
+
+        /*
+         * Refill TX before and after a bounded RX drain. While a physical
+         * frame is active, skip W5500, decode, statistics, and USB work so the
+         * external clock cannot drain the eight-word PIO TX FIFO unnoticed.
+         */
+        (void)poll_tx_pipeline(app);
+        bool frame_active = tx_queue_has_active_frame(&app->tx_queue);
+
         size_t rx_drained_early = 0;
-        drain_rx_until_empty(app, &event_loop_runtime, &rx_drained_early);
+        drain_rx(app, &event_loop_runtime,
+                 frame_active ? ACTIVE_FRAME_RX_DRAIN_CHUNK_SIZE : SIZE_MAX,
+                 &rx_drained_early);
         update_rx_drain_stats(app, &event_loop_runtime, rx_drained_early,
                               to_us_since_boot(get_absolute_time()));
+
+        if (frame_active)
+        {
+            (void)poll_tx_pipeline(app);
+            frame_active = tx_queue_has_active_frame(&app->tx_queue);
+        }
+        if (!event_scheduler_background_io_allowed(frame_active))
+        {
+            if (rx_clock_poll_stall())
+            {
+                (app->stats.rx_fifo_stall_events)++;
+            }
+            continue;
+        }
 
         w5500_poll_udp_buffer_full_events(&app->stats.udp_rx_buffer_full_counts,
                                           &app->stats.udp_tx_buffer_full_counts);
 
-        (void)poll_tx_pipeline(app);
         update_udp_rx_throttle_state(app, &event_loop_runtime);
         if (!event_loop_runtime.udp_rx_throttled)
         {
@@ -423,9 +423,9 @@ void event_loop(app_ctx_t* app)
             app->stats.udp_rx_throttle_skips++;
         }
 
-        // Drain RX FIFO into the accumulator buffer
+        // Finish draining RX at the frame boundary before decoding.
         size_t rx_drained = 0;
-        drain_rx_until_empty(app, &event_loop_runtime, &rx_drained);
+        drain_rx(app, &event_loop_runtime, SIZE_MAX, &rx_drained);
         uint64_t now_us = to_us_since_boot(get_absolute_time());
         update_rx_drain_stats(app, &event_loop_runtime, rx_drained, now_us);
 
@@ -466,6 +466,5 @@ void event_loop(app_ctx_t* app)
             }
             print_prompt(app);
         }
-
     }
 }

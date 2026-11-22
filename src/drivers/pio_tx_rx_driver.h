@@ -38,6 +38,8 @@ typedef enum
 typedef struct
 {
     bool     pio_stalled;
+    uint32_t tx_fifo_underruns;
+    uint32_t tx_cts_restarts;
     bool     cts_level;
     uint32_t cts_edge_count;
     bool     cts_restart_enabled;

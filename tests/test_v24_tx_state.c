@@ -9,9 +9,9 @@
 static void begin_sending(v24_tx_state_t* state, uint32_t cts_seq)
 {
     TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_ASSERT_RTS,
-                             v24_tx_state_request_write(state, 1000U, cts_seq));
-    TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_ALLOW_WRITE,
-                             v24_tx_state_request_write(state, 1200U, cts_seq));
+                             v24_tx_state_request_write(state, 1000U, cts_seq, false));
+    TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_CLEAR_STALL | V24_TX_ACTION_ALLOW_WRITE,
+                             v24_tx_state_request_write(state, 1200U, cts_seq, true));
 }
 
 void test_v24_tx_state_asserts_rts_and_waits_for_settle(void)
@@ -20,13 +20,13 @@ void test_v24_tx_state_asserts_rts_and_waits_for_settle(void)
     v24_tx_state_init(&state, TEST_HOLDOFF_US, true);
 
     TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_ASSERT_RTS,
-                             v24_tx_state_request_write(&state, 1000U, 7U));
+                             v24_tx_state_request_write(&state, 1000U, 7U, true));
     TEST_ASSERT_EQUAL(V24_TX_PHASE_RTS_SETTLE, state.phase);
     TEST_ASSERT_EQUAL_UINT64(1200U, state.deadline_us);
     TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_NONE,
-                             v24_tx_state_request_write(&state, 1199U, 8U));
-    TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_ALLOW_WRITE,
-                             v24_tx_state_request_write(&state, 1200U, 8U));
+                             v24_tx_state_request_write(&state, 1199U, 8U, true));
+    TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_CLEAR_STALL | V24_TX_ACTION_ALLOW_WRITE,
+                             v24_tx_state_request_write(&state, 1200U, 8U, true));
     TEST_ASSERT_EQUAL(V24_TX_PHASE_SENDING, state.phase);
     TEST_ASSERT_EQUAL_UINT32(8U, state.frame_cts_baseline);
     TEST_ASSERT_TRUE(state.frame_cts_baseline_valid);
@@ -37,11 +37,11 @@ void test_v24_tx_state_ignores_cts_edges_before_first_byte(void)
     v24_tx_state_t state;
     v24_tx_state_init(&state, TEST_HOLDOFF_US, true);
 
-    (void)v24_tx_state_request_write(&state, 1000U, 3U);
+    (void)v24_tx_state_request_write(&state, 1000U, 3U, false);
     TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_NONE,
-                             v24_tx_state_poll(&state, 1100U, 9U, false));
-    TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_ALLOW_WRITE,
-                             v24_tx_state_request_write(&state, 1200U, 9U));
+                             v24_tx_state_poll(&state, 1100U, 9U, true));
+    TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_CLEAR_STALL | V24_TX_ACTION_ALLOW_WRITE,
+                             v24_tx_state_request_write(&state, 1200U, 9U, true));
     TEST_ASSERT_EQUAL_UINT32(9U, state.frame_cts_baseline);
 }
 
@@ -57,6 +57,7 @@ void test_v24_tx_state_restarts_on_cts_edge_while_sending(void)
     TEST_ASSERT_EQUAL(V24_TX_PHASE_RTS_SETTLE, state.phase);
     TEST_ASSERT_EQUAL_UINT64(1450U, state.deadline_us);
     TEST_ASSERT_FALSE(state.frame_cts_baseline_valid);
+    TEST_ASSERT_EQUAL(V24_TX_RESTART_CTS, state.restart_reason);
 }
 
 void test_v24_tx_state_restarts_on_cts_edge_while_draining(void)
@@ -71,6 +72,33 @@ void test_v24_tx_state_restarts_on_cts_edge_while_draining(void)
     TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_RESET_PIO | V24_TX_ACTION_CLEAR_STALL |
                                  V24_TX_ACTION_RESTART_FRAME,
                              v24_tx_state_poll(&state, 1300U, 6U, false));
+    TEST_ASSERT_EQUAL(V24_TX_RESTART_CTS, state.restart_reason);
+}
+
+void test_v24_tx_state_restarts_on_fifo_underrun_during_poll(void)
+{
+    v24_tx_state_t state;
+    v24_tx_state_init(&state, TEST_HOLDOFF_US, true);
+    begin_sending(&state, 4U);
+
+    TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_RESET_PIO | V24_TX_ACTION_CLEAR_STALL |
+                                 V24_TX_ACTION_RESTART_FRAME,
+                             v24_tx_state_poll(&state, 1250U, 4U, true));
+    TEST_ASSERT_EQUAL(V24_TX_PHASE_RTS_SETTLE, state.phase);
+    TEST_ASSERT_EQUAL_UINT64(1450U, state.deadline_us);
+    TEST_ASSERT_EQUAL(V24_TX_RESTART_UNDERRUN, state.restart_reason);
+}
+
+void test_v24_tx_state_restarts_on_fifo_underrun_before_write(void)
+{
+    v24_tx_state_t state;
+    v24_tx_state_init(&state, TEST_HOLDOFF_US, true);
+    begin_sending(&state, 4U);
+
+    TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_RESET_PIO | V24_TX_ACTION_CLEAR_STALL |
+                                 V24_TX_ACTION_RESTART_FRAME,
+                             v24_tx_state_request_write(&state, 1250U, 4U, true));
+    TEST_ASSERT_EQUAL(V24_TX_RESTART_UNDERRUN, state.restart_reason);
 }
 
 void test_v24_tx_state_ignores_cts_restart_when_disabled(void)
@@ -106,6 +134,7 @@ void test_v24_tx_state_completes_after_rts_and_interframe_holds(void)
     TEST_ASSERT_EQUAL_UINT32(V24_TX_ACTION_FRAME_COMPLETE,
                              v24_tx_state_poll(&state, 1700U, 4U, true));
     TEST_ASSERT_EQUAL(V24_TX_PHASE_IDLE, state.phase);
+    TEST_ASSERT_EQUAL(V24_TX_RESTART_NONE, state.restart_reason);
 }
 
 void test_v24_tx_state_reconfigure_resets_lifecycle_and_preserves_restart(void)

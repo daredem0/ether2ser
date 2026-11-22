@@ -65,6 +65,8 @@ typedef struct
     volatile uint32_t cts_toggle_seq;
     volatile uint32_t rx_frame_start_seq;
     uint32_t          rx_frame_start_seen;
+    uint32_t          tx_fifo_underrun_count;
+    uint32_t          tx_cts_restart_count;
     int               rx_dma_chan;
     bool              rx_dma_enabled;
     uint32_t          rx_dma_words_consumed;
@@ -406,7 +408,7 @@ static uint32_t v24_tx_stall_mask(void)
     return 1U << (PIO_FDEBUG_TXSTALL_LSB + v24_runtime.tx_sm);
 }
 
-static bool v24_tx_pio_frame_complete(void)
+static bool v24_tx_pio_stalled(void)
 {
     return v24_runtime.tx_pio != NULL &&
            (v24_runtime.tx_pio->fdebug & v24_tx_stall_mask()) != 0U;
@@ -428,11 +430,24 @@ static void v24_tx_reset_pio(void)
 
 static void v24_tx_apply_actions(v24_tx_action_t actions)
 {
+    if ((actions & V24_TX_ACTION_RESTART_FRAME) != 0U)
+    {
+        if (v24_tx_state.restart_reason == V24_TX_RESTART_UNDERRUN)
+        {
+            v24_runtime.tx_fifo_underrun_count++;
+        }
+        else if (v24_tx_state.restart_reason == V24_TX_RESTART_CTS)
+        {
+            v24_runtime.tx_cts_restart_count++;
+        }
+    }
+
     if ((actions & V24_TX_ACTION_RESET_PIO) != 0U)
     {
         v24_tx_reset_pio();
     }
-    if ((actions & V24_TX_ACTION_CLEAR_STALL) != 0U && v24_runtime.tx_pio != NULL)
+    if ((actions & V24_TX_ACTION_CLEAR_STALL) != 0U &&
+        (actions & V24_TX_ACTION_ALLOW_WRITE) == 0U && v24_runtime.tx_pio != NULL)
     {
         v24_runtime.tx_pio->fdebug = v24_tx_stall_mask();
     }
@@ -470,8 +485,8 @@ bool v24_tx_try_write(uint8_t data)
     }
 
     uint64_t now_us = to_us_since_boot(get_absolute_time());
-    v24_tx_action_t actions =
-        v24_tx_state_request_write(&v24_tx_state, now_us, v24_runtime.cts_toggle_seq);
+    v24_tx_action_t actions = v24_tx_state_request_write(
+        &v24_tx_state, now_us, v24_runtime.cts_toggle_seq, v24_tx_pio_stalled());
     v24_tx_apply_actions(actions);
     v24_tx_pending_event = v24_tx_event_from_actions(actions);
     if ((actions & V24_TX_ACTION_ALLOW_WRITE) == 0U)
@@ -480,6 +495,15 @@ bool v24_tx_try_write(uint8_t data)
     }
 
     pio_sm_put(v24_runtime.tx_pio, v24_runtime.tx_sm, data);
+    if ((actions & V24_TX_ACTION_CLEAR_STALL) != 0U)
+    {
+        /*
+         * A state machine blocked on its initial pull can reassert TXSTALL
+         * between clearing the sticky bit and filling the FIFO. Clear after
+         * the first write so only a later empty-FIFO event is an underrun.
+         */
+        v24_runtime.tx_pio->fdebug = v24_tx_stall_mask();
+    }
     return true;
 }
 
@@ -500,7 +524,7 @@ v24_tx_event_t v24_tx_poll(void)
     uint64_t now_us = to_us_since_boot(get_absolute_time());
     v24_tx_action_t actions =
         v24_tx_state_poll(&v24_tx_state, now_us, v24_runtime.cts_toggle_seq,
-                          v24_tx_pio_frame_complete());
+                          v24_tx_pio_stalled());
     v24_tx_apply_actions(actions);
     return v24_tx_event_from_actions(actions);
 }
@@ -522,7 +546,9 @@ void v24_tx_status_snapshot(v24_tx_status_t* status)
         return;
     }
 
-    status->pio_stalled         = v24_tx_pio_frame_complete();
+    status->pio_stalled         = v24_tx_pio_stalled();
+    status->tx_fifo_underruns   = v24_runtime.tx_fifo_underrun_count;
+    status->tx_cts_restarts     = v24_runtime.tx_cts_restart_count;
     status->cts_level           = v24_tx_get_cts_level();
     status->cts_edge_count      = v24_runtime.cts_toggle_seq;
     status->cts_restart_enabled = v24_tx_state.cts_restart_enabled;

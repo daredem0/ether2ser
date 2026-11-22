@@ -12,4 +12,11 @@
  */
 uint8_t event_scheduler_control_budget(bool frame_active, bool queue_empty);
 
+/**
+ * @brief Return whether potentially blocking background I/O may run.
+ * @param frame_active True while a physical V.24 frame lifecycle is active.
+ * @return false while TX refill latency must be minimized.
+ */
+bool event_scheduler_background_io_allowed(bool frame_active);
+
 #endif /* EVENT_SCHEDULER_H */

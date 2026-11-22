@@ -410,8 +410,10 @@ void test_hdlc_sync_tck_long_trace_decodes_ten_1472b_frames_with_sequence(void)
             if (acc_result == E2S_ERR_HDLC_ACC_FRAME_READY)
             {
                 payload_length = 0U;
-                bool decode_ok = hdlc_decode(&reconstructed_frame, payload_buffer,
-                                             sizeof(payload_buffer), &payload_length, true);
+                bool decode_ok =
+                    hdlc_decode(&reconstructed_frame, payload_buffer, sizeof(payload_buffer),
+                                &payload_length, true, accumulator.bit_offset,
+                                accumulator.align_shift_right);
                 if (decode_ok)
                 {
                     decode_ok_count++;
@@ -487,8 +489,10 @@ void test_hdlc_sync_xck_long4_trace_decodes_ten_1472b_frames_with_sequence(void)
             if (acc_result == E2S_ERR_HDLC_ACC_FRAME_READY)
             {
                 payload_length = 0U;
-                bool decode_ok = hdlc_decode(&reconstructed_frame, payload_buffer,
-                                             sizeof(payload_buffer), &payload_length, true);
+                bool decode_ok =
+                    hdlc_decode(&reconstructed_frame, payload_buffer, sizeof(payload_buffer),
+                                &payload_length, true, accumulator.bit_offset,
+                                accumulator.align_shift_right);
                 if (decode_ok)
                 {
                     decode_ok_count++;

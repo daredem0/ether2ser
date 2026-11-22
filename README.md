@@ -87,18 +87,23 @@ PIPE STATS
   Decode / Sync
     Decode    : frame_ready=420  ok=420  fail=0
     FailReason: invalid=0  short=0  long=0  unstuff=0  crc=0
+    FirstFail : none
     SyncState : HUNTING
     SyncWait  : syncing=0  synced=0
     SyncMaint : consume=420  hardcap_events=0  hardcap_bytes=0
     Resync    : idle=0  hard=0  no_progress=0
     Accum     : pos=0  proc=0  state=0  off=0  cand_valid=0  cand_end=0
     RX Health : acc_pos_max=4  rx_fifo_stall=0  rx_drop_acc_full=0
+               hunt_idle_drop=0  dma_ovf_words=0
   Buffers
-    TX Queue  : used=0/32  active=0
+    TX Queue  : used=0/64  active=0
     HighWater : tx=0  event=1  log=4
+    W5500 Buf : rx_no_room_events=0  tx_full_events=0
     Drops     : tx=0  event=0  log=0
     Recons    : len=0
-    PIO TX    : stalled=1
+    Throttle  : udp_rx_enter=0  udp_rx_skips=0
+    PIO TX    : stalled=1  underruns=0  cts_restarts=0
+    CTS       : level=0  edges=0  restart=1
 ```
 - Field meanings
 
@@ -132,12 +137,13 @@ PIPE STATS
 | `ok` | Successful decode + CRC validation. | Should track UDP TX `attempts`. |
 | `fail` | Failed decode attempts. | Use `FailReason` to identify root cause. |
 | `FailReason` | Breakdown (`invalid`, `short`, `long`, `unstuff`, `crc`). | `unstuff` dominance suggests bitstream corruption/alignment; `crc` points to data corruption after framing. |
+| `FirstFail` | First failed decode retained since boot: reason, encoded/decoded length, raw bits consumed, sync alignment, received/calculated CRC, and first 12 de-stuffed bytes. A four-byte big-endian prefix is also shown as `seq_be`. | Correlate `seq_be` with the sender's missing sequence. `raw_seen` is decoder progress, not the corrupt-bit location; a CRC failure is only identified after the full candidate is consumed. |
 | `SyncState` | Current sync FSM state (`HUNTING`, `SYNCING`, `SYNCED`). | Long time in `SYNCING`/`SYNCED` with low progress can indicate stuck candidate flow. |
 | `SyncWait` | Lookahead waits for cross-byte alignment in `SYNCING`/`SYNCED`. | Fast growth indicates frequent boundary stalls. |
 | `SyncMaint` | Maintenance counters (`consume`, `hardcap_events`, `hardcap_bytes`). | `hardcap_*` should remain near zero in healthy operation. |
 | `Resync` | Recovery reason counters (`idle`, `hard`, `no_progress`). | Spikes indicate unstable decode path or over-aggressive thresholds. |
 | `Accum` | Internal accumulator live state (`pos`, `proc`, `state`, `off`, candidate fields). | Non-zero `pos`/`proc` for long periods without progress indicates parser stall. |
-| `RX Health` | RX path health (`acc_pos_max`, `rx_fifo_stall`, `rx_drop_acc_full`). | Rising `rx_fifo_stall` indicates service starvation; rising `rx_drop_acc_full` means accumulator backpressure. |
+| `RX Health` | RX path health (`acc_pos_max`, `rx_fifo_stall`, `rx_drop_acc_full`, `hunt_idle_drop`, `dma_ovf_words`). | Rising stall/overflow/drop counters indicate receive-capacity loss. `hunt_idle_drop` counts only redundant external-clock idle bytes discarded while the accumulator retains its single-byte overlap; it must not include bytes after a possible frame start. |
 
 `Buffers`
 
@@ -149,7 +155,7 @@ PIPE STATS
 | `HighWater` | Peak occupancy since boot (`tx`, `event`, `log`). | Useful to size buffers and detect near-overflow phases. |
 | `Drops` | Cumulative dropped items (`tx`, `event`, `log`). | Any non-zero drop counter indicates data/control loss. |
 | `Recons` | Current reconstructed frame length pending decode. | Large lingering values can indicate stuck/incomplete candidate handling. |
-| `PIO TX` | TX PIO stall flag state. | Sticky hardware indicator; useful to correlate with underfeeding/transmit pacing. |
+| `PIO TX` | TX PIO stall state and cumulative recovery counts (`underruns`, `cts_restarts`). | `stalled=1` is normal after a completed frame; rising `underruns` means the active frame exhausted the FIFO and was restarted from byte zero. Rising `cts_restarts` means a CTS edge interrupted an active frame. |
 
 **UDP Test Scripts**
 - `tests/udp_cli_sender.sh`

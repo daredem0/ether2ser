@@ -23,7 +23,8 @@ static void decode_expect_ok(const HDLC_FRAME_T* frame, bool lsb_first, const ui
     uint8_t out[512];
     size_t  out_len = 0;
 
-    TEST_ASSERT_TRUE(hdlc_decode(frame, out, expected_len + 2, &out_len, lsb_first));
+    TEST_ASSERT_TRUE(
+        hdlc_decode(frame, out, expected_len + 2, &out_len, lsb_first, 0U, false));
     TEST_ASSERT_EQUAL(expected_len, out_len);
     if (expected_len > 0)
     {
@@ -83,7 +84,7 @@ void test_bitstuff_decode_abort_null_frame(void)
 {
     uint8_t out[16];
     size_t  out_len = 123;
-    TEST_ASSERT_FALSE(hdlc_decode(NULL, out, sizeof(out), &out_len, true));
+    TEST_ASSERT_FALSE(hdlc_decode(NULL, out, sizeof(out), &out_len, true, 0U, false));
     TEST_ASSERT_EQUAL(0, out_len);
 }
 
@@ -93,7 +94,7 @@ void test_bitstuff_decode_abort_null_payload(void)
     HDLC_FRAME_T frame          = {
                  .payload = frame_buffer, .length = sizeof(frame_buffer), .capacity = sizeof(frame_buffer)};
     size_t out_len = 123;
-    TEST_ASSERT_FALSE(hdlc_decode(&frame, NULL, 8, &out_len, true));
+    TEST_ASSERT_FALSE(hdlc_decode(&frame, NULL, 8, &out_len, true, 0U, false));
     TEST_ASSERT_EQUAL(0, out_len);
 }
 
@@ -103,7 +104,7 @@ void test_bitstuff_decode_abort_null_payload_length(void)
     HDLC_FRAME_T frame          = {
                  .payload = frame_buffer, .length = sizeof(frame_buffer), .capacity = sizeof(frame_buffer)};
     uint8_t out[16];
-    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, sizeof(out), NULL, true));
+    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, sizeof(out), NULL, true, 0U, false));
 }
 
 void test_bitstuff_decode_abort_zero_out_capacity(void)
@@ -113,7 +114,7 @@ void test_bitstuff_decode_abort_zero_out_capacity(void)
                  .payload = frame_buffer, .length = sizeof(frame_buffer), .capacity = sizeof(frame_buffer)};
     uint8_t out[1];
     size_t  out_len = 123;
-    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, 0, &out_len, true));
+    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, 0, &out_len, true, 0U, false));
     TEST_ASSERT_EQUAL(0, out_len);
 }
 
@@ -124,7 +125,8 @@ void test_bitstuff_decode_abort_missing_start_flag(void)
                  .payload = frame_buffer, .length = sizeof(frame_buffer), .capacity = sizeof(frame_buffer)};
     uint8_t out[32];
     size_t  out_len = 123;
-    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, sizeof(out), &out_len, true));
+    TEST_ASSERT_FALSE(
+        hdlc_decode(&frame, out, sizeof(out), &out_len, true, 0U, false));
     TEST_ASSERT_EQUAL(0, out_len);
 }
 
@@ -135,7 +137,8 @@ void test_bitstuff_decode_abort_missing_end_flag(void)
                  .payload = frame_buffer, .length = sizeof(frame_buffer), .capacity = sizeof(frame_buffer)};
     uint8_t out[32];
     size_t  out_len = 123;
-    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, sizeof(out), &out_len, true));
+    TEST_ASSERT_FALSE(
+        hdlc_decode(&frame, out, sizeof(out), &out_len, true, 0U, false));
     TEST_ASSERT_EQUAL(0, out_len);
 }
 
@@ -148,7 +151,8 @@ void test_bitstuff_decode_abort_payload_too_long(void)
     size_t       out_len = 0;
 
     encode_frame_or_fail(payload, sizeof(payload), true, frame_buffer, sizeof(frame_buffer), &frame);
-    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, sizeof(payload) + 1, &out_len, true));
+    TEST_ASSERT_FALSE(
+        hdlc_decode(&frame, out, sizeof(payload) + 1, &out_len, true, 0U, false));
     TEST_ASSERT_EQUAL(0, out_len);
 }
 
@@ -161,7 +165,8 @@ void test_bitstuff_decode_exact_capacity_succeeds(void)
     size_t       out_len = 0;
 
     encode_frame_or_fail(payload, sizeof(payload), true, frame_buffer, sizeof(frame_buffer), &frame);
-    TEST_ASSERT_TRUE(hdlc_decode(&frame, out, sizeof(payload) + 2, &out_len, true));
+    TEST_ASSERT_TRUE(
+        hdlc_decode(&frame, out, sizeof(payload) + 2, &out_len, true, 0U, false));
     TEST_ASSERT_EQUAL(sizeof(payload), out_len);
     TEST_ASSERT_EQUAL_UINT8_ARRAY(payload, out, sizeof(payload));
 }
@@ -177,7 +182,8 @@ void test_bitstuff_decode_abort_crc_mismatch(void)
     encode_frame_or_fail(payload, sizeof(payload), true, frame_buffer, sizeof(frame_buffer), &frame);
     frame.payload[1] ^= 0x01;
 
-    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, sizeof(out), &out_len, true));
+    TEST_ASSERT_FALSE(
+        hdlc_decode(&frame, out, sizeof(out), &out_len, true, 0U, false));
     TEST_ASSERT_EQUAL(0, out_len);
 }
 
@@ -189,7 +195,8 @@ void test_bitstuff_decode_abort_unstuff_violation(void)
     uint8_t out[32];
     size_t  out_len = 123;
 
-    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, sizeof(out), &out_len, true));
+    TEST_ASSERT_FALSE(
+        hdlc_decode(&frame, out, sizeof(out), &out_len, true, 0U, false));
     TEST_ASSERT_EQUAL(0, out_len);
 }
 
@@ -202,7 +209,55 @@ void test_bitstuff_decode_abort_bit_order_mismatch(void)
     size_t       out_len = 0;
 
     encode_frame_or_fail(payload, sizeof(payload), true, frame_buffer, sizeof(frame_buffer), &frame);
-    TEST_ASSERT_TRUE(hdlc_decode(&frame, out, sizeof(out), &out_len, false));
+    TEST_ASSERT_TRUE(
+        hdlc_decode(&frame, out, sizeof(out), &out_len, false, 0U, false));
     TEST_ASSERT_EQUAL(sizeof(payload), out_len);
     TEST_ASSERT_EQUAL_UINT8_ARRAY(payload, out, sizeof(payload));
+}
+
+void test_bitstuff_decode_captures_first_crc_failure(void)
+{
+    uint8_t      payload[] = {0x00, 0x00, 0x00, 0x2A, 0x10, 0x20};
+    uint8_t      frame_buffer[128];
+    HDLC_FRAME_T frame;
+    uint8_t      out[32];
+    size_t       out_len = 0;
+
+    hdlc_decode_failure_reset();
+    encode_frame_or_fail(payload, sizeof(payload), true, frame_buffer, sizeof(frame_buffer), &frame);
+    frame.payload[1] ^= 0x01U;
+
+    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, sizeof(out), &out_len, true, 3U, true));
+
+    hdlc_decode_failure_diagnostic_t diagnostic;
+    hdlc_decode_failure_snapshot(&diagnostic);
+    TEST_ASSERT_TRUE(diagnostic.valid);
+    TEST_ASSERT_EQUAL(HDLC_DECODE_FAILURE_CRC_MISMATCH, diagnostic.reason);
+    TEST_ASSERT_EQUAL_size_t(frame.length, diagnostic.encoded_length);
+    TEST_ASSERT_EQUAL_UINT8(3U, diagnostic.sync_bit_offset);
+    TEST_ASSERT_TRUE(diagnostic.align_shift_right);
+    TEST_ASSERT_NOT_EQUAL(diagnostic.received_crc, diagnostic.calculated_crc);
+    TEST_ASSERT_GREATER_THAN_UINT8(0U, diagnostic.prefix_length);
+
+    uint16_t first_received_crc = diagnostic.received_crc;
+    uint8_t  first_sync_offset  = diagnostic.sync_bit_offset;
+
+    frame.payload[1] ^= 0x03U;
+    TEST_ASSERT_FALSE(hdlc_decode(&frame, out, sizeof(out), &out_len, true, 6U, false));
+    hdlc_decode_failure_snapshot(&diagnostic);
+    TEST_ASSERT_EQUAL_UINT16(first_received_crc, diagnostic.received_crc);
+    TEST_ASSERT_EQUAL_UINT8(first_sync_offset, diagnostic.sync_bit_offset);
+}
+
+void test_bitstuff_decode_failure_reset_clears_capture(void)
+{
+    hdlc_decode_failure_diagnostic_t diagnostic;
+
+    hdlc_decode_failure_reset();
+    hdlc_decode_failure_snapshot(&diagnostic);
+
+    TEST_ASSERT_FALSE(diagnostic.valid);
+    TEST_ASSERT_EQUAL(HDLC_DECODE_FAILURE_NONE, diagnostic.reason);
+    TEST_ASSERT_EQUAL_size_t(0U, diagnostic.encoded_length);
+    TEST_ASSERT_EQUAL_UINT8(0U, diagnostic.prefix_length);
 }
