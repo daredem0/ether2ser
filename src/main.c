@@ -31,6 +31,7 @@
 #include "hardware/sync.h"
 #include "hardware/watchdog.h"
 #include "pico/multicore.h"
+#include "pico/flash.h"
 #include "pico/stdio.h"
 #include "pico/time.h"
 
@@ -45,6 +46,7 @@
 #include "system/error.h"
 #include "system/event_loop.h"
 #include "system/event_queue.h"
+#include "system/management_http_app.h"
 #include "system/persistent_config.h"
 #include "version.h"
 
@@ -57,6 +59,7 @@
 
 static void core1_entry(void)
 {
+    (void)flash_safe_execute_core_init();
     __sev();
     __wfe();
     __wfe();
@@ -83,10 +86,8 @@ int main(void)
     // Give the USB CDC a moment to enumerate (harmless even if not using USB)
     sleep_ms(USB_ENUMERATION_DELAY_MS);
 
-    // Initialize W5500
+    // Initialize the shared Ethernet controller before loading its runtime configuration.
     w5500_driver_init();
-    // Initialize GPIOs
-    init_pins();
 
     if (config_is_valid())
     {
@@ -98,30 +99,38 @@ int main(void)
     }
 
     init_app(&app_context, &persistent_config);
+    management_http_app_init(&app_context);
+    gpio_driver_init(app_context.operating_mode);
 
-    if ((err = w5500_open_udp_socket(&app_context.local_config)) != E2S_OK)
-    {
-        fatal_panic(err);
-    }
-    w5500_debug_status();
-
-    // Initialize TX Queue
+    // Queue storage exists in both modes so mode-transition checks have one representation.
     tx_queue_init(&app_context.tx_queue, app_context.tx_queue_buffer);
 
-    // Initialize PIO
-    // Currently anything faster than 38400 is not supported
-    tx_clock_init(pio0, 0, &app_context.v24_config);
-    rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
-    baudrate_estimator_init(V24_RXC);
-    if (app_context.v24_config.external_clock)
+    if (app_context.operating_mode == OPERATING_MODE_BRIDGE)
     {
-        baudrate_estimator_init(V24_TXC_DCE);
+        if ((err = w5500_open_udp_socket(&app_context.local_config)) != E2S_OK)
+        {
+            fatal_panic(err);
+        }
+        w5500_debug_status();
+
+        tx_clock_init(pio0, 0, &app_context.v24_config);
+        rx_clock_init(pio0, 1, &(app_context.v24_config.polarities.rx_polarities));
+        baudrate_estimator_init(V24_RXC);
+        if (app_context.v24_config.external_clock)
+        {
+            baudrate_estimator_init(V24_TXC_DCE);
+        }
+    }
+    else
+    {
+        LOG_INFO("Bridge UDP and V.24 PIO/DMA disabled in gpio mode\r\n");
     }
 
     // Enable watchdog, 5s timeout, disabled in debugging
     watchdog_enable(GLOBAL_WATCHDOG_TIMEOUT_MS, WATCHDOG_DISABLED_FOR_DEBUGGING);
 
     LOG_PLAIN("\r\nv24-eth-bridge: hello from RP2040\r\n");
+    LOG_PLAIN("Operating mode: %s\r\n", operating_mode_name(app_context.operating_mode));
     LOG_PLAIN("\r\nType 'help' in USB serial.\r\n");
     LOG_PLAIN("Version: %s\r\n", VERSION_STRING);
 
@@ -136,8 +145,11 @@ int main(void)
     // Initialize event queue finally
     event_queue_init();
 
-    // Indicate DTE is present just before we enter the event loop
-    gpio_put(V24_DTR, 1);
+    if (app_context.operating_mode == OPERATING_MODE_BRIDGE)
+    {
+        // Indicate DTE is present just before entering the bridge event loop.
+        gpio_put(V24_DTR, 1);
+    }
 
     event_loop(&app_context);
 }

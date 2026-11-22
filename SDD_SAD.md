@@ -314,14 +314,17 @@ Storage policy:
 - Uses last flash sector (`FLASH_TARGET_OFFSET`)
 - Erase sector + program one page for writes
 - `config_wipe` erases and zero-programs marker page
+- Core 1 registers as a `flash_safe_execute` lockout victim before entering the asynchronous log loop; writes proceed only after both cores are flash-safe.
 
 ```mermaid
 flowchart TD
     CFG[Runtime config in app_ctx] --> SAVE[EV_SAVE_CONFIG]
     SAVE --> SNAP[Build config_t snapshot]
-    SNAP --> ERASE[flash_range_erase sector]
+    SNAP --> LOCK[flash_safe_execute locks out core 1]
+    LOCK --> ERASE[flash_range_erase sector]
     ERASE --> PROG[flash_range_program page]
-    PROG --> VALID[magic/version valid on next boot]
+    PROG --> UNLOCK[Release flash-safe zone]
+    UNLOCK --> VALID[magic/version valid on next boot]
 ```
 
 ### 10.2 Runtime Update Policy

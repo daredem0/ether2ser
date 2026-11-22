@@ -18,7 +18,9 @@
 #include <stdbool.h>
 
 // Project Headers
+#include "drivers/gpio_control.h"
 #include "drivers/v24_config.h"
+#include "system/operating_mode.h"
 
 // Generated headers
 
@@ -29,8 +31,15 @@
 V24_POLARITIES_T init_polarities(void);
 
 /**
- * @brief Initialize all board GPIOs used by the application.
+ * @brief Initialize the SIO pin directions for one operating mode.
+ * @param mode Selected startup ownership mode.
  */
-void             init_pins(void);
+void gpio_driver_init(operating_mode_t mode);
+
+/**
+ * @brief Drive a manual GPIO output when mode and signal policy permit it.
+ * @return true when the output was written, false when ownership rejects it.
+ */
+bool gpio_driver_set_manual_output(operating_mode_t mode, gpio_signal_t signal, bool value);
 
 #endif /* GPIO_DRIVER_H */

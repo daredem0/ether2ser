@@ -40,6 +40,7 @@ void init_app(app_ctx_t* app, const config_t* persistent_config)
 {
     app_ctx = app;
     memset(&app->stats, 0, sizeof(app->stats));
+    runtime_metrics_init(&app->runtime_metrics);
     app->need_prompt             = true;
     app->rx_frame_buffer.payload = app->rx_frame_buffer_data;
     app->rx_frame_buffer.length  = 0;
@@ -56,6 +57,9 @@ void init_app(app_ctx_t* app, const config_t* persistent_config)
         app->destination_config = app->persistent_config.remote_config;
         app->v24_config         = app->persistent_config.v24_config;
         app->net_config         = app->persistent_config.net_config;
+        app->operating_mode =
+            operating_mode_from_persisted((uint32_t)app->persistent_config.operating_mode);
+        app->persistent_config.operating_mode = app->operating_mode;
         w5500_set_network(&app->net_config);
         reinit_v24_config(&app->v24_config, app->v24_config.baudrate);
     }
@@ -63,6 +67,7 @@ void init_app(app_ctx_t* app, const config_t* persistent_config)
     {
         // Setup loglevel
         set_loglevel(LOG_LEVEL_DEBUG);
+        app->operating_mode = OPERATING_MODE_DEFAULT;
         // Initialize Network Configuration
         app->local_config = (UDP_CONFIG_T){
             .ip_address = DEFAULT_IP_ADDR,

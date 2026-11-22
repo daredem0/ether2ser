@@ -35,63 +35,16 @@
 #include "protocol/hdlc_decoder.h"
 #include "protocol/hdlc_sync.h"
 #include "system/baudrate_monitor.h"
-#include "system/cli_commands.h"
 #include "system/cli_usb_cdc.h"
 #include "system/common.h"
 #include "system/event_queue.h"
 #include "system/persistent_config.h"
+#include "system/management_http_server.h"
+#include "system/runtime_metrics.h"
+#include "system/runtime_stats.h"
 
 // Generated headers
 
-/**
- * @brief Runtime pipeline statistics and counters.
- */
-typedef struct
-{
-    uint64_t udp_rx_frames;
-    uint64_t hdlc_tx_frames;
-    uint64_t serial_rx_bytes;
-    uint64_t hdlc_frame_ready;
-    uint64_t hdlc_decode_ok;
-    uint64_t hdlc_decode_fail;
-    uint64_t udp_tx_attempt_frames;
-    uint64_t udp_tx_success_frames;
-    uint64_t udp_tx_failed_frames;
-    uint64_t udp_rx_throttle_enter;
-    uint64_t udp_rx_throttle_skips;
-    uint64_t udp_rx_buffer_full_counts;
-    uint64_t udp_tx_buffer_full_counts;
-
-    uint64_t sync_lookahead_wait_syncing;
-    uint64_t sync_lookahead_wait_synced;
-    uint64_t sync_candidate_consume;
-    uint64_t sync_hardcap_drop_events;
-    uint64_t sync_hardcap_drop_bytes;
-
-    uint64_t decode_fail_invalid_frame;
-    uint64_t decode_fail_too_short;
-    uint64_t decode_fail_payload_too_long;
-    uint64_t decode_fail_unstuff_error;
-    uint64_t decode_fail_crc_mismatch;
-
-    uint64_t resync_idle_timeout_count;
-    uint64_t resync_hard_fail_count;
-    uint64_t resync_no_progress_count;
-
-    uint64_t tx_queue_used_max;
-    uint64_t tx_queue_drop_frames;
-    uint64_t event_queue_used_max;
-    uint64_t event_queue_drop_events;
-    uint64_t log_drop_lines;
-    uint64_t log_queue_used_max;
-
-    uint64_t accumulator_pos_max;
-    uint64_t rx_fifo_stall_events;
-    uint64_t serial_rx_drop_acc_full;
-    uint64_t hunt_idle_drop_bytes;
-
-    uint32_t last_report_ms;
-} payload_statistics_t;
 
 /**
  * @brief Global application context shared across modules.
@@ -101,6 +54,7 @@ typedef struct
     config_t persistent_config;
     bool     config_valid;
     bool     need_prompt;
+    operating_mode_t operating_mode;
 
     UDP_CONFIG_T     local_config;
     UDP_CONFIG_T     destination_config;
@@ -120,6 +74,8 @@ typedef struct
 
     uint8_t              tx_queue_buffer[TX_FRAME_QUEUE_SIZE * sizeof(TX_QUEUE_ENTRY_T)];
     TX_QUEUE_T           tx_queue;
+    runtime_metrics_t     runtime_metrics;
+    management_http_server_t http_server;
     payload_statistics_t stats;
     // ... anything else the event loop touches
 } app_ctx_t;

@@ -11,11 +11,20 @@ set(SOURCES
     src/system/event_dispatch.c
     src/system/event_queue.c
     src/system/event_scheduler.c
+    src/system/operating_mode.c
+    src/system/management.c
+    src/system/management_catalog.c
+    src/system/management_cli.c
+    src/system/management_app.c
+    src/system/management_serial.c
+    src/system/management_http.c
+    src/system/management_http_server.c
+    src/system/management_http_w5500.c
+    src/system/management_http_app.c
+    src/system/runtime_metrics.c
     src/system/rx_hunt_filter.c
     src/system/error.c
     src/system/cli_usb_cdc.c
-    src/system/cli_commands.c
-    src/system/cli_parser.c
     src/system/ringbuffer.c
     src/system/log.c
     src/system/baudrate_monitor.c
@@ -26,6 +35,7 @@ set(SOURCES
     src/drivers/pio_tx_rx_driver.c
     src/drivers/tx_queue.c
     src/drivers/v24_tx_state.c
+    src/drivers/gpio_control.c
     src/drivers/gpio_driver.c
     src/protocol/hdlc_common.c
     src/protocol/hdlc_encoder.c
@@ -192,6 +202,7 @@ if(NOT BUILD_TESTS)
         hardware_spi
         hardware_dma
         pico_multicore
+        pico_flash
     )
 
     # Generate C header from the PIO program(s)
@@ -297,8 +308,13 @@ else()
         tests/test_hdlc_encoder.c
         tests/test_hdlc_decoder.c
         tests/test_hdlc_bitstuff_encoder.c
-        tests/test_command_parser.c
+        tests/test_operating_mode.c
+        tests/test_management.c
+        tests/test_runtime_metrics.c
         tests/test_event_queue.c
+        tests/test_management_cli.c
+        tests/test_management_http.c
+        tests/test_management_http_server.c
         tests/test_byte_alignment.c
         tests/test_ringbuffer.c
         tests/test_log.c
@@ -312,6 +328,14 @@ else()
         src/drivers/w5500_socket_io.c
         tests/mock_tx_queue_platform.c
         src/drivers/tx_queue.c
+        src/system/operating_mode.c
+        src/drivers/gpio_control.c
+        src/system/management.c
+        src/system/management_catalog.c
+        src/system/management_cli.c
+        src/system/management_http.c
+        src/system/management_http_server.c
+        src/system/runtime_metrics.c
         src/system/event_scheduler.c
         src/system/rx_hunt_filter.c
         src/drivers/v24_tx_state.c
@@ -320,7 +344,6 @@ else()
         src/protocol/hdlc_encoder.c
         src/protocol/hdlc_decoder.c
         src/protocol/hdlc_sync.c
-        src/system/cli_parser.c
         tests/mock_log.c
         src/system/event_queue.c
         src/system/ringbuffer.c

@@ -22,15 +22,14 @@
 #include "hardware/gpio.h"
 
 // Project Headers
+#include "drivers/gpio_control.h"
 #include "drivers/v24_config.h"
 #include "platform/pinmap.h"
 #include "system/common.h"
+#include "system/operating_mode.h"
 
 // Generated headers
 
-V24_PIN_T outputs[] = {V24_RTS, V24_TXD, V24_DTR, V24_TXC_DTE, V24_TXC_DCE};
-
-V24_PIN_T inputs[] = {V24_DCD, V24_DSR, V24_CTS, V24_RXD, V24_RXC};
 
 V24_POLARITIES_T init_polarities(void)
 {
@@ -50,18 +49,46 @@ V24_POLARITIES_T init_polarities(void)
                               }};
 }
 
-void init_pins(void)
+void gpio_driver_init(operating_mode_t mode)
 {
-    for (size_t i = 0; i < ARRAY_LEN(inputs); i++)
+    LOG_DEBUG("Initializing GPIO ownership for %s mode\r\n", operating_mode_name(mode));
+    for (size_t i = 0U; i < gpio_control_signal_count(); i++)
     {
-        gpio_init(inputs[i]);
-        gpio_set_dir(inputs[i], GPIO_IN);
-        gpio_pull_down(inputs[i]);
+        const gpio_signal_info_t* info = gpio_control_signal_at(i);
+        if (info == NULL || info->reserved)
+        {
+            continue;
+        }
+
+        gpio_init(info->gpio_num);
+        if (info->direction == GPIO_SIGNAL_OUTPUT)
+        {
+            gpio_put(info->gpio_num, 0);
+            gpio_set_dir(info->gpio_num, GPIO_OUT);
+        }
+        else
+        {
+            gpio_set_dir(info->gpio_num, GPIO_IN);
+            gpio_pull_down(info->gpio_num);
+        }
+    }
+}
+
+bool gpio_driver_set_manual_output(operating_mode_t mode, gpio_signal_t signal, bool value)
+{
+    if (!gpio_control_manual_write_allowed(mode, signal))
+    {
+        return false;
     }
 
-    for (size_t i = 0; i < ARRAY_LEN(outputs); i++)
+    for (size_t i = 0U; i < gpio_control_signal_count(); i++)
     {
-        gpio_init(outputs[i]);
-        gpio_set_dir(outputs[i], GPIO_OUT);
+        const gpio_signal_info_t* info = gpio_control_signal_at(i);
+        if (info != NULL && info->signal == signal)
+        {
+            gpio_put(info->gpio_num, value);
+            return true;
+        }
     }
+    return false;
 }

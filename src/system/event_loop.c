@@ -38,6 +38,7 @@
 #include "system/event_dispatch.h"
 #include "system/event_queue.h"
 #include "system/event_scheduler.h"
+#include "system/management_http_app.h"
 #include "system/rx_hunt_filter.h"
 // Generated headers
 
@@ -323,6 +324,16 @@ static void update_statistics(app_ctx_t* app)
     app->stats.event_queue_drop_events = event_queue_get_push_drop_count();
     app->stats.log_drop_lines += log_take_dropped_count();
     app->stats.log_queue_used_max = log_get_high_water_mark();
+
+    const runtime_metric_counters_t metric_counters = {
+        .udp_rx_frames   = app->stats.udp_rx_frames,
+        .hdlc_rx_frames  = app->stats.hdlc_frame_ready,
+        .udp_tx_frames   = app->stats.udp_tx_success_frames,
+        .decode_failures = app->stats.hdlc_decode_fail,
+        .serial_rx_bytes = app->stats.serial_rx_bytes,
+    };
+    (void)runtime_metrics_update(&app->runtime_metrics,
+                                 to_ms_since_boot(get_absolute_time()), &metric_counters);
 }
 
 static void poll_and_dispatch_events(app_ctx_t* app, uint8_t event_budget)
@@ -368,6 +379,19 @@ void event_loop(app_ctx_t* app)
     while (true)
     {
         watchdog_update();
+
+        if (app->operating_mode == OPERATING_MODE_GPIO)
+        {
+            cli_poll();
+            poll_and_dispatch_events(app, 20U);
+            management_http_app_poll(app);
+            if (log_take_emitted_flag())
+            {
+                app->need_prompt = true;
+            }
+            print_prompt(app);
+            continue;
+        }
 
         /*
          * Peer RTS reaches local CTS before the clock holdoff expires. Reset
@@ -465,6 +489,7 @@ void event_loop(app_ctx_t* app)
                 app->need_prompt = true;
             }
             print_prompt(app);
+            management_http_app_poll(app);
         }
     }
 }

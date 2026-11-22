@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import select
 import signal
+import re
 import subprocess
 import sys
 import termios
@@ -23,6 +24,8 @@ import tty
 
 PROMPT = b"ether2ser> "
 QUIET = 0.25  # Firmware may emit prompts during character echo and log draining.
+RESPONSE_END = re.compile(
+    rb"(?m)^@response [0-9]+ end (?P<status>ok|accepted|error [a-z_]+)\r?$")
 DEFAULT_STATE = Path(f"/tmp/ether2ser-console-{os.getuid()}")
 
 
@@ -112,11 +115,12 @@ class Board:
                         last_error = str(error)
             await asyncio.sleep(0.5)
 
-    async def command(self, command, source, timeout, sync=False):
+    async def command(self, command, source, timeout, sync=False, framed=True):
         if not isinstance(command, str) or any(ord(c) < 32 or ord(c) > 126 for c in command):
             raise ValueError("commands must contain only printable ASCII on one line")
-        if len(command) > 127:
-            raise ValueError("firmware command limit is 127 bytes")
+        limit = 126 if framed and not sync else 127
+        if len(command) > limit:
+            raise ValueError(f"firmware command limit is {limit} bytes for this client")
         if not 0.5 <= timeout <= 120:
             raise ValueError("timeout must be between 0.5 and 120 seconds")
         async with self.lock:
@@ -129,7 +133,8 @@ class Board:
             deadline = time.monotonic() + timeout
             try:
                 # A blank line for sync completes any old partial CLI input.
-                data = (command + "\r").encode("ascii")
+                prefix = "@" if framed and not sync else ""
+                data = (prefix + command + "\r").encode("ascii")
                 while data:
                     try:
                         count = os.write(self.fd, data)
@@ -142,11 +147,21 @@ class Board:
                     if self.fd is None:
                         raise OSError("device disconnected during command")
                     now = time.monotonic()
-                    if PROMPT in self.response and now - self.last_rx >= QUIET:
+                    if not sync and framed:
+                        match = RESPONSE_END.search(self.response)
+                        if match is not None:
+                            self.needs_sync = False
+                            output = self.response.decode(errors="replace")
+                            status = match.group("status").decode()
+                            if status.startswith("error "):
+                                return {"ok": False, "error": status[6:], "output": output}
+                            return {"ok": True, "output": output}
+                    elif PROMPT in self.response and now - self.last_rx >= QUIET:
                         self.needs_sync = False
                         return {"ok": True, "output": self.response.decode(errors="replace")}
                     if now >= deadline:
-                        raise TimeoutError("no quiet firmware prompt before timeout; command was not retried")
+                        expected = "quiet firmware prompt" if sync else "firmware response terminator"
+                        raise TimeoutError(f"no {expected} before timeout; command was not retried")
                     self.changed.clear()
                     with contextlib.suppress(asyncio.TimeoutError):
                         await asyncio.wait_for(self.changed.wait(), min(QUIET, deadline - now))
@@ -213,9 +228,10 @@ async def serve(state, devices):
                         return
                     if op not in ("send", "sync"):
                         raise ValueError("unknown operation")
-                    result = await board.command(request.get("command", ""),
-                                                 request.get("source", "agent"),
-                                                 float(request.get("timeout", 8)), op == "sync")
+                    result = await board.command(
+                        request.get("command", ""), request.get("source", "agent"),
+                        float(request.get("timeout", 8)), op == "sync",
+                        bool(request.get("framed", True)))
                 writer.write(encode(result))
                 await writer.drain()
                 if stop_requested:
@@ -287,7 +303,7 @@ def client(state, board):
             def submit(command):
                 result = asyncio.run(rpc(state, {"op": "sync" if not command else "send",
                                                 "board": board, "command": command,
-                                                "source": "human"}))
+                                                "source": "human", "framed": False}))
                 return result
 
             print(f"{board}: Enter sends a complete line; empty Enter syncs; Ctrl-C/D exits.\r")

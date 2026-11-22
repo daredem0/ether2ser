@@ -25,7 +25,7 @@
 #include "boards/pico.h"
 #include "hardware/flash.h"
 #include "hardware/regs/addressmap.h"
-#include "hardware/sync.h"
+#include "pico/flash.h"
 
 // Project Headers
 #include "system/common.h"
@@ -36,62 +36,64 @@
 #define FLASH_TARGET_OFFSET (PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE)
 
 #define CONFIG_MAGIC 0xCAFEBABE
+#define CONFIG_VERSION_CURRENT 1U
+#define CONFIG_VERSION_WITH_OPERATING_MODE 1U
 #define BYTES_PER_KIBIBYTE 1024U
 #define RAM_TOTAL_KIBIBYTES 264U
 #define RAM_BASE_ADDRESS 0x20000000U
 #define W55RP20_FLASH_TOTAL_BYTES (2U * BYTES_PER_KIBIBYTE * BYTES_PER_KIBIBYTE)
+#define FLASH_SAFE_EXECUTE_TIMEOUT_MS 1000U
+
+void memory_status_snapshot(management_memory_snapshot_t* snapshot)
+{
+    if (snapshot == NULL)
+    {
+        return;
+    }
+    extern char bss_end_sym asm("__bss_end__");
+    extern char flash_binary_start_sym asm("__flash_binary_start");
+    extern char flash_binary_end_sym asm("__flash_binary_end");
+
+    snapshot->ram_total = RAM_TOTAL_KIBIBYTES * BYTES_PER_KIBIBYTE;
+    snapshot->ram_static_used = (uint32_t)&bss_end_sym - RAM_BASE_ADDRESS;
+    const struct mallinfo current_mallinfo = mallinfo();
+    snapshot->heap_allocated = (uint32_t)current_mallinfo.uordblks;
+    snapshot->ram_free =
+        snapshot->ram_total - snapshot->ram_static_used - snapshot->heap_allocated;
+
+    const uintptr_t flash_start = (uintptr_t)&flash_binary_start_sym;
+    const uintptr_t flash_end = (uintptr_t)&flash_binary_end_sym;
+    snapshot->flash_used = (uint32_t)(flash_end - flash_start);
+    snapshot->flash_total = W55RP20_FLASH_TOTAL_BYTES;
+    snapshot->flash_free = snapshot->flash_total - snapshot->flash_used;
+}
 
 void print_memory_usage(void)
 {
-    extern char stack_limit_sym asm("__StackLimit");
-    extern char bss_end_sym asm("__bss_end__");
-    extern char heap_start_sym asm("__heap_start");
-    extern char heap_end_sym asm("__heap_end");
-    (void)stack_limit_sym;
-    (void)bss_end_sym;
-    (void)heap_start_sym;
-    (void)heap_end_sym;
-
-    // RAM starts at RAM_BASE_ADDRESS and spans RAM_TOTAL_KIBIBYTES KiB.
-    uint32_t total_ram = RAM_TOTAL_KIBIBYTES * BYTES_PER_KIBIBYTE;
-
-    // Static data (data + bss sections)
-    uint32_t static_used = (uint32_t)&bss_end_sym - RAM_BASE_ADDRESS;
-
-    // Use mallinfo for accurate heap stats
-    struct mallinfo current_mallinfo = mallinfo();
-    uint32_t        heap_used        = current_mallinfo.uordblks; // Bytes allocated
-
+    management_memory_snapshot_t snapshot;
+    memory_status_snapshot(&snapshot);
     LOG_PLAIN("=== Memory Usage ===\n");
-    LOG_PLAIN("Static RAM (data+bss): %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)static_used,
-              (double)static_used / (double)BYTES_PER_KIBIBYTE);
-    LOG_PLAIN("Heap allocated: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)heap_used,
-              (double)heap_used / (double)BYTES_PER_KIBIBYTE);
-    LOG_PLAIN("Total RAM: %" PRIu32 " bytes (%.1f KB)\n", (uint32_t)total_ram,
-              (double)total_ram / (double)BYTES_PER_KIBIBYTE);
-
-    uint32_t free_ram = (uint32_t)(total_ram - static_used - heap_used);
-    LOG_PLAIN("Approx free: %" PRIu32 " bytes (%.1f KB)\n", free_ram,
-              (double)free_ram / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("Static RAM (data+bss): %" PRIu32 " bytes (%.1f KB)\n",
+              snapshot.ram_static_used,
+              (double)snapshot.ram_static_used / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("Heap allocated: %" PRIu32 " bytes (%.1f KB)\n",
+              snapshot.heap_allocated,
+              (double)snapshot.heap_allocated / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("Total RAM: %" PRIu32 " bytes (%.1f KB)\n", snapshot.ram_total,
+              (double)snapshot.ram_total / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("Approx free: %" PRIu32 " bytes (%.1f KB)\n", snapshot.ram_free,
+              (double)snapshot.ram_free / (double)BYTES_PER_KIBIBYTE);
 }
 
 void print_flash_usage(void)
 {
-    extern char flash_binary_start_sym asm("__flash_binary_start");
-    extern char flash_binary_end_sym asm("__flash_binary_end");
-
-    uintptr_t flash_start = (uintptr_t)&flash_binary_start_sym;
-    uintptr_t flash_end   = (uintptr_t)&flash_binary_end_sym;
-
-    uint32_t flash_used  = (uint32_t)(flash_end - flash_start);
-    uint32_t total_flash = W55RP20_FLASH_TOTAL_BYTES;
-    uint32_t flash_free  = total_flash - flash_used;
-
+    management_memory_snapshot_t snapshot;
+    memory_status_snapshot(&snapshot);
     LOG_PLAIN("=== Flash Usage ===\n");
-    LOG_PLAIN("Flash used: %" PRIu32 " bytes (%.1f KB)\n", flash_used,
-              (double)flash_used / (double)BYTES_PER_KIBIBYTE);
-    LOG_PLAIN("Total flash: %" PRIu32 " bytes\n", total_flash);
-    LOG_PLAIN("Flash free: %" PRIu32 " bytes\n", flash_free);
+    LOG_PLAIN("Flash used: %" PRIu32 " bytes (%.1f KB)\n", snapshot.flash_used,
+              (double)snapshot.flash_used / (double)BYTES_PER_KIBIBYTE);
+    LOG_PLAIN("Total flash: %" PRIu32 " bytes\n", snapshot.flash_total);
+    LOG_PLAIN("Flash free: %" PRIu32 " bytes\n", snapshot.flash_free);
 }
 
 // Read: just cast the flash address
@@ -108,16 +110,30 @@ bool config_read(config_t* cfg)
         return false;
     }
     memcpy(cfg, tmp_cnfg, sizeof(config_t));
+    if (cfg->version < CONFIG_VERSION_WITH_OPERATING_MODE)
+    {
+        cfg->operating_mode = OPERATING_MODE_DEFAULT;
+    }
     return true;
 }
 
-void config_wipe(void)
+static void config_program_page(void* param)
 {
-    uint8_t  buf[FLASH_PAGE_SIZE] = {0}; // 256 bytes, pad with zeros
-    uint32_t ints                 = save_and_disable_interrupts();
+    const uint8_t* page = (const uint8_t*)param;
     flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-    flash_range_program(FLASH_TARGET_OFFSET, buf, FLASH_PAGE_SIZE);
-    restore_interrupts(ints);
+    flash_range_program(FLASH_TARGET_OFFSET, page, FLASH_PAGE_SIZE);
+}
+
+static bool config_commit_page(const uint8_t* page)
+{
+    return flash_safe_execute(config_program_page, (void*)page,
+                              FLASH_SAFE_EXECUTE_TIMEOUT_MS) == PICO_OK;
+}
+
+bool config_wipe(void)
+{
+    uint8_t buf[FLASH_PAGE_SIZE] = {0};
+    return config_commit_page(buf);
 }
 
 bool config_is_valid(void)
@@ -137,6 +153,7 @@ void dump_config(void)
 
     LOG_INFO("Config:\r\n");
     LOG_INFO("  magic=0x%08" PRIX32 " version=%" PRIu32 "\r\n", cfg->magic, cfg->version);
+    LOG_INFO("  mode=%s\r\n", operating_mode_name(cfg->operating_mode));
     LOG_INFO("  local=%u.%u.%u.%u:%u\r\n", cfg->local_config.ip_address[0],
              cfg->local_config.ip_address[1], cfg->local_config.ip_address[2],
              cfg->local_config.ip_address[3], cfg->local_config.port);
@@ -174,16 +191,14 @@ void dump_config(void)
 }
 
 // Write: erase then program
-void config_write(const config_t* cfg)
+bool config_write(const config_t* cfg)
 {
     assert(FLASH_PAGE_SIZE > sizeof(config_t));
-    uint8_t   buf[FLASH_PAGE_SIZE] = {0}; // 256 bytes, pad with zeros
-    config_t* cfg_mut              = (config_t*)cfg;
-    cfg_mut->magic                 = CONFIG_MAGIC;
-    memcpy(buf, cfg_mut, sizeof(config_t));
+    uint8_t  buf[FLASH_PAGE_SIZE] = {0};
+    config_t stored              = *cfg;
+    stored.magic                 = CONFIG_MAGIC;
+    stored.version               = CONFIG_VERSION_CURRENT;
+    memcpy(buf, &stored, sizeof(stored));
 
-    uint32_t ints = save_and_disable_interrupts();
-    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-    flash_range_program(FLASH_TARGET_OFFSET, buf, FLASH_PAGE_SIZE);
-    restore_interrupts(ints);
+    return config_commit_page(buf);
 }

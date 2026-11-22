@@ -20,7 +20,6 @@
 #include <stdint.h>
 
 // Project Headers
-#include "drivers/v24_config.h"
 
 // Generated headers
 /**
@@ -36,50 +35,10 @@ typedef enum
     EV_NONE = 0,
     EV_CLI_LINE,
     EV_SAVE_CONFIG,
-    EV_STATUS,
-    EV_MEM,
     EV_WIPE_CONFIG,
-    EV_SET_NET_SETTINGS,
-    EV_GET_NET_SETTINGS,
-    EV_SET_V24_SETTINGS,
-    EV_GET_V24_SETTINGS,
     EV_REBOOT
 } event_type_t;
 
-/**
- * @brief Typed payload selector for configuration-oriented events.
- */
-typedef enum
-{
-    NET_IP_REMOTE,
-    NET_IP_GATEWAY,
-    NET_IP_LOCAL,
-    NET_IP_MASK,
-    NET_PORT_LOCAL,
-    NET_PORT_REMOTE,
-    V24_BAUDRATE,
-    V24_POLARITIES,
-    V24_CLOCK_MODE,
-    SYS_REBOOT
-} event_queue_data_types_t;
-
-/**
- * @brief Generic event payload wrapper for network/V.24 config operations.
- */
-typedef struct
-{
-    /** Payload value discriminator. */
-    event_queue_data_types_t id;
-    /** Typed payload value. */
-    union
-    {
-        uint8_t          ip[4];
-        uint16_t         port;
-        V24_POLARITIES_T polarities;
-        V24_BAUDRATE_T   baudrate;
-        bool             v24_clock_mode;
-    } value;
-} event_queue_data_t;
 
 /**
  * @brief Event queue entry.

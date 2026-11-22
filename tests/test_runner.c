@@ -73,41 +73,55 @@ extern void test_bitstuff_decode_abort_bit_order_mismatch(void);
 extern void test_bitstuff_decode_captures_first_crc_failure(void);
 extern void test_bitstuff_decode_failure_reset_clears_capture(void);
 
-// CLI Parser declarations
-extern void test_cli_parse_command_only(void);
-extern void test_cli_parse_command_and_args(void);
-extern void test_cli_parse_empty_line(void);
-extern void test_cli_parse_space_only_line(void);
-extern void test_cli_parse_leading_spaces(void);
-extern void test_cli_parse_cmd_truncation(void);
-extern void test_cli_parse_args_truncation(void);
-extern void test_cli_parse_exact_capacity_cmd_and_args(void);
-extern void test_cli_parse_null_params(void);
-extern void test_cli_parse_zero_capacity(void);
-extern void test_cli_parse_set_args_unknown_pin(void);
-extern void test_cli_parse_set_args_cli_usage_set(void);
-extern void test_cli_parse_set_args_input_only(void);
-extern void test_cli_parse_get_args_cli_usage_get(void);
-extern void test_cli_parse_get_args_cli_unknown_pin(void);
-extern void test_cli_parse_set_args_cli_ok(void);
-extern void test_cli_parse_get_args_cli_ok(void);
-extern void test_cli_parse_set_args_invalid_value_upper_bound(void);
-extern void test_cli_parse_set_args_invalid_value_lower_bound(void);
-extern void test_cli_parse_set_args_extra_space_at_end(void);
-extern void test_cli_parse_set_args_extra_space_between_pin_and_args(void);
-extern void test_parse_set_ip_args_plain_ok(void);
-extern void test_parse_set_ip_args_with_ip_prefix_ok(void);
-extern void test_parse_set_ip_args_invalid_values_fail(void);
-extern void test_parse_set_net_ip_args_ok_and_prefix_required(void);
-extern void test_parse_set_ip_remote_args_ok_and_fail(void);
-extern void test_parse_set_gateway_args_ok_and_fail(void);
-extern void test_parse_set_udp_port_local_args_ok_and_fail(void);
-extern void test_parse_set_udp_port_remote_args_ok_and_fail(void);
-extern void test_parse_set_v24_polarities_empty_or_null_args_ok(void);
-extern void test_parse_set_v24_polarities_tokens_ok(void);
-extern void test_parse_set_v24_polarities_invalid_token_fails(void);
-extern void test_parse_set_v24_polarities_null_output_fails(void);
-extern void test_parse_set_v24_baudrate_valid_and_invalid(void);
+
+// Operating mode and manual GPIO policy tests
+extern void test_operating_mode_defaults_and_invalid_storage_use_bridge(void);
+extern void test_operating_mode_restores_gpio_from_storage(void);
+extern void test_operating_mode_change_requires_idle_pipeline(void);
+extern void test_bridge_mode_rejects_every_manual_gpio_write(void);
+extern void test_gpio_mode_allows_only_nonreserved_outputs(void);
+extern void test_gpio_catalog_includes_external_clock_and_reserved_reset(void);
+
+// Transport-neutral management tests
+extern void test_management_catalog_paths_are_unique(void);
+extern void test_management_catalog_exposes_common_mode_and_status_resources(void);
+extern void test_management_get_mode_returns_runtime_mode(void);
+extern void test_management_set_mode_prepares_persisted_reboot_effect(void);
+extern void test_management_set_mode_rejects_busy_pipeline(void);
+extern void test_management_set_mode_is_idempotent(void);
+extern void test_management_gpio_write_uses_common_mode_policy(void);
+extern void test_management_gpio_write_rejects_input_and_reserved_signals(void);
+extern void test_management_local_ip_is_accepted_without_forcing_reboot(void);
+
+// Query-independent runtime metrics tests
+extern void test_runtime_metrics_first_sample_establishes_baseline(void);
+extern void test_runtime_metrics_updates_after_fixed_interval(void);
+extern void test_runtime_metrics_snapshot_is_observational(void);
+extern void test_runtime_metrics_ignores_subinterval_polling(void);
+
+// Streamlined serial management tests
+extern void test_management_cli_parses_get_status(void);
+extern void test_management_cli_parses_semantic_mode_and_clock_values(void);
+extern void test_management_cli_parses_gpio_path_and_level(void);
+extern void test_management_cli_parses_actions_and_wipe_confirmation(void);
+extern void test_management_cli_rejects_unknown_trailing_and_oversized_lines(void);
+extern void test_management_cli_formats_framed_success_and_error(void);
+extern void test_management_cli_human_commands_keep_original_shortcuts(void);
+extern void test_management_cli_human_commands_accept_original_category_syntax(void);
+extern void test_management_cli_help_is_human_readable(void);
+extern void test_management_cli_help_provides_targeted_usage(void);
+
+// HTTP REST management tests
+extern void test_management_http_maps_get_and_nested_paths(void);
+extern void test_management_http_maps_put_values_through_common_request_semantics(void);
+extern void test_management_http_maps_actions_and_enforces_wipe_confirmation(void);
+extern void test_management_http_rejects_incomplete_oversized_and_unsupported_requests(void);
+extern void test_management_http_formats_bounded_json_success_and_error(void);
+extern void test_management_http_server_opens_socket_two_nonblocking_on_port_80(void);
+extern void test_management_http_server_listens_without_blocking(void);
+extern void test_management_http_server_accumulates_fragments_and_does_one_io_per_poll(void);
+extern void test_management_http_server_sends_incrementally_then_applies_effect(void);
+extern void test_management_http_formats_shared_status_and_config_snapshots(void);
 
 // Event Queue declarations
 extern void test_event_queue_empty_after_init(void);
@@ -277,41 +291,55 @@ int main(void) {
     RUN_TEST(test_bitstuff_decode_captures_first_crc_failure);
     RUN_TEST(test_bitstuff_decode_failure_reset_clears_capture);
 
-    // CLI Parser Tests
-    RUN_TEST(test_cli_parse_command_only);
-    RUN_TEST(test_cli_parse_command_and_args);
-    RUN_TEST(test_cli_parse_empty_line);
-    RUN_TEST(test_cli_parse_space_only_line);
-    RUN_TEST(test_cli_parse_leading_spaces);
-    RUN_TEST(test_cli_parse_cmd_truncation);
-    RUN_TEST(test_cli_parse_args_truncation);
-    RUN_TEST(test_cli_parse_exact_capacity_cmd_and_args);
-    RUN_TEST(test_cli_parse_null_params);
-    RUN_TEST(test_cli_parse_zero_capacity);
-    RUN_TEST(test_cli_parse_set_args_unknown_pin);
-    RUN_TEST(test_cli_parse_set_args_cli_usage_set);
-    RUN_TEST(test_cli_parse_set_args_input_only);
-    RUN_TEST(test_cli_parse_get_args_cli_usage_get);
-    RUN_TEST(test_cli_parse_get_args_cli_unknown_pin);
-    RUN_TEST(test_cli_parse_set_args_cli_ok);
-    RUN_TEST(test_cli_parse_get_args_cli_ok);
-    RUN_TEST(test_cli_parse_set_args_invalid_value_upper_bound);
-    RUN_TEST(test_cli_parse_set_args_invalid_value_lower_bound);
-    RUN_TEST(test_cli_parse_set_args_extra_space_at_end);
-    RUN_TEST(test_cli_parse_set_args_extra_space_between_pin_and_args);
-    RUN_TEST(test_parse_set_ip_args_plain_ok);
-    RUN_TEST(test_parse_set_ip_args_with_ip_prefix_ok);
-    RUN_TEST(test_parse_set_ip_args_invalid_values_fail);
-    RUN_TEST(test_parse_set_net_ip_args_ok_and_prefix_required);
-    RUN_TEST(test_parse_set_ip_remote_args_ok_and_fail);
-    RUN_TEST(test_parse_set_gateway_args_ok_and_fail);
-    RUN_TEST(test_parse_set_udp_port_local_args_ok_and_fail);
-    RUN_TEST(test_parse_set_udp_port_remote_args_ok_and_fail);
-    RUN_TEST(test_parse_set_v24_polarities_empty_or_null_args_ok);
-    RUN_TEST(test_parse_set_v24_polarities_tokens_ok);
-    RUN_TEST(test_parse_set_v24_polarities_invalid_token_fails);
-    RUN_TEST(test_parse_set_v24_polarities_null_output_fails);
-    RUN_TEST(test_parse_set_v24_baudrate_valid_and_invalid);
+
+    // Operating mode and manual GPIO policy tests
+    RUN_TEST(test_operating_mode_defaults_and_invalid_storage_use_bridge);
+    RUN_TEST(test_operating_mode_restores_gpio_from_storage);
+    RUN_TEST(test_operating_mode_change_requires_idle_pipeline);
+    RUN_TEST(test_bridge_mode_rejects_every_manual_gpio_write);
+    RUN_TEST(test_gpio_mode_allows_only_nonreserved_outputs);
+    RUN_TEST(test_gpio_catalog_includes_external_clock_and_reserved_reset);
+
+    // Transport-neutral management tests
+    RUN_TEST(test_management_catalog_paths_are_unique);
+    RUN_TEST(test_management_catalog_exposes_common_mode_and_status_resources);
+    RUN_TEST(test_management_get_mode_returns_runtime_mode);
+    RUN_TEST(test_management_set_mode_prepares_persisted_reboot_effect);
+    RUN_TEST(test_management_set_mode_rejects_busy_pipeline);
+    RUN_TEST(test_management_set_mode_is_idempotent);
+    RUN_TEST(test_management_gpio_write_uses_common_mode_policy);
+    RUN_TEST(test_management_gpio_write_rejects_input_and_reserved_signals);
+    RUN_TEST(test_management_local_ip_is_accepted_without_forcing_reboot);
+
+    // Query-independent runtime metrics tests
+    RUN_TEST(test_runtime_metrics_first_sample_establishes_baseline);
+    RUN_TEST(test_runtime_metrics_updates_after_fixed_interval);
+    RUN_TEST(test_runtime_metrics_snapshot_is_observational);
+    RUN_TEST(test_runtime_metrics_ignores_subinterval_polling);
+
+    // Streamlined serial management tests
+    RUN_TEST(test_management_cli_parses_get_status);
+    RUN_TEST(test_management_cli_parses_semantic_mode_and_clock_values);
+    RUN_TEST(test_management_cli_parses_gpio_path_and_level);
+    RUN_TEST(test_management_cli_parses_actions_and_wipe_confirmation);
+    RUN_TEST(test_management_cli_rejects_unknown_trailing_and_oversized_lines);
+    RUN_TEST(test_management_cli_formats_framed_success_and_error);
+    RUN_TEST(test_management_cli_human_commands_keep_original_shortcuts);
+    RUN_TEST(test_management_cli_human_commands_accept_original_category_syntax);
+    RUN_TEST(test_management_cli_help_is_human_readable);
+    RUN_TEST(test_management_cli_help_provides_targeted_usage);
+
+    // HTTP REST management tests
+    RUN_TEST(test_management_http_maps_get_and_nested_paths);
+    RUN_TEST(test_management_http_maps_put_values_through_common_request_semantics);
+    RUN_TEST(test_management_http_maps_actions_and_enforces_wipe_confirmation);
+    RUN_TEST(test_management_http_rejects_incomplete_oversized_and_unsupported_requests);
+    RUN_TEST(test_management_http_formats_bounded_json_success_and_error);
+    RUN_TEST(test_management_http_server_opens_socket_two_nonblocking_on_port_80);
+    RUN_TEST(test_management_http_server_listens_without_blocking);
+    RUN_TEST(test_management_http_server_accumulates_fragments_and_does_one_io_per_poll);
+    RUN_TEST(test_management_http_formats_shared_status_and_config_snapshots);
+    RUN_TEST(test_management_http_server_sends_incrementally_then_applies_effect);
 
     // Event Queue Tests
     RUN_TEST(test_event_queue_empty_after_init);

@@ -39,14 +39,30 @@ class FakeBoard:
             try:
                 pending += os.read(self.master, 1024)
                 while b"\r" in pending:
-                    command, pending = pending.split(b"\r", 1)
-                    self.commands.append(command.decode())
+                    raw_command, pending = pending.split(b"\r", 1)
+                    self.commands.append(raw_command.decode())
+                    framed = raw_command.startswith(b"@")
+                    command = raw_command[1:] if framed else raw_command
                     if command == b"timeout":
                         continue
-                    # The real CLI can emit intermediate prompts while echoing.
-                    os.write(self.master, command + b"\r\nether2ser> ")
-                    time.sleep(0.08)
-                    os.write(self.master, b"\r\nresult:" + command + b"\r\nether2ser> ")
+                    if command == b"":
+                        os.write(self.master, b"\r\nether2ser> ")
+                        continue
+                    os.write(self.master, raw_command + b"\r\n")
+                    if not framed:
+                        os.write(self.master, b"result:" + command +
+                                 b"\r\nether2ser> ")
+                        continue
+                    # Intermediate prompts and logs must not complete automation.
+                    os.write(self.master, b"ether2ser> ")
+                    for _ in range(3):
+                        time.sleep(0.1)
+                        os.write(self.master, b"\r\nbackground log\r\n")
+                    os.write(self.master, b"\r\n@response 1 begin test\r\nresult:" + command +
+                             b"\r\n@response 1 end ok\r\n")
+                    # The next prompt arrives after the shortest command timeout.
+                    time.sleep(0.6)
+                    os.write(self.master, b"ether2ser> ")
             except OSError:
                 break
 
@@ -100,37 +116,40 @@ class SharedConsoleTest(unittest.TestCase):
             if all(board["connected"] for board in status["boards"].values()):
                 break
             await asyncio.sleep(0.02)
-        self.assertFalse((await request("send", command="status"))["ok"])
+        self.assertFalse((await request("send", command="get status"))["ok"])
         for board in ("a", "b"):
             self.assertTrue((await request("sync", board))["ok"])
+        marker_result = await request("send", command="get status", timeout=0.5)
+        self.assertTrue(marker_result["ok"], marker_result)
         reader, writer = await asyncio.open_unix_connection(str(state / "broker.sock"))
         writer.write(console.encode({"op": "watch", "board": "a"}))
         await writer.drain()
         await reader.readline()  # history
         results = await asyncio.gather(
-            request("send", command="status", source="human"),
-            request("send", command="net", source="agent"),
-            request("send", "b", command="mem"))
+            request("send", command="get status", source="human"),
+            request("send", command="get net", source="agent"),
+            request("send", "b", command="get memory"))
         self.assertTrue(all(result["ok"] for result in results), results)
-        self.assertIn("result:status", results[0]["output"])
-        self.assertNotIn("result:net", results[0]["output"])
-        self.assertIn("result:net", results[1]["output"])
-        self.assertEqual(a.commands[-2:], ["status", "net"])
-        self.assertEqual(b.commands[-1], "mem")
+        self.assertIn("result:get status", results[0]["output"])
+        self.assertNotIn("result:get net", results[0]["output"])
+        self.assertIn("result:get net", results[1]["output"])
+        self.assertEqual(a.commands[-2:], ["@get status", "@get net"])
+        self.assertEqual(b.commands[-1], "@get memory")
         seen = []
         while True:
             event = json.loads(await asyncio.wait_for(reader.readline(), 2))
             seen.append(event)
-            if event["kind"] == "rx" and b"result:net" in base64.b64decode(event["data"]):
+            if event["kind"] == "rx" and b"result:get net" in base64.b64decode(event["data"]):
                 break
         self.assertEqual(sum(e["kind"] == "tx" for e in seen), 2)
         self.assertFalse((await request("send", command="x" * 128))["ok"])
-        self.assertFalse((await request("send", command="status\nreboot"))["ok"])
+        self.assertFalse((await request("send", command="x" * 127))["ok"])
+        self.assertFalse((await request("send", command="get status\nreboot"))["ok"])
         failed = await request("send", command="timeout", timeout=0.5)
         self.assertFalse(failed["ok"])
-        self.assertFalse((await request("send", command="net"))["ok"])
+        self.assertFalse((await request("send", command="get net"))["ok"])
         self.assertTrue((await request("sync"))["ok"])
-        self.assertTrue((await request("send", command="status"))["ok"])
+        self.assertTrue((await request("send", command="get status"))["ok"])
         writer.close()
         await writer.wait_closed()
         # An unfinished human command stays in the client while agent input runs.
@@ -144,14 +163,14 @@ class SharedConsoleTest(unittest.TestCase):
                     if b"[input]" in os.read(terminal_master, 65536):
                         break
                 await asyncio.sleep(0.02)
-            os.write(terminal_master, b"stat")
-            self.assertTrue((await request("send", command="net"))["ok"])
+            os.write(terminal_master, b"get stat")
+            self.assertTrue((await request("send", command="get net"))["ok"])
             os.write(terminal_master, b"us\r")
             for _ in range(100):
-                if a.commands[-2:] == ["net", "status"]:
+                if a.commands[-2:] == ["@get net", "get status"]:
                     break
                 await asyncio.sleep(0.02)
-            self.assertEqual(a.commands[-2:], ["net", "status"])
+            self.assertEqual(a.commands[-2:], ["@get net", "get status"])
             os.write(terminal_master, b"\x03")
             await asyncio.to_thread(human.wait, 3)
             self.assertEqual(human.returncode, 0)

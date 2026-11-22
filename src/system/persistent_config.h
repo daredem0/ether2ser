@@ -27,6 +27,8 @@
 #include "drivers/pio_tx_rx_driver.h"
 #include "drivers/w5500_driver.h"
 #include "system/common.h"
+#include "system/operating_mode.h"
+#include "system/management_status.h"
 
 // Generated headers
 
@@ -49,6 +51,8 @@ typedef struct
     V24_CONFIG_T     v24_config;
     /** Default runtime log level. */
     log_level_t      log_level;
+    /** Startup ownership mode for the V.24 GPIO surface. */
+    operating_mode_t operating_mode;
 } config_t;
 
 /**
@@ -61,8 +65,9 @@ bool config_read(config_t* cfg);
 /**
  * @brief Write configuration to flash.
  * @param cfg Source config object.
+ * @return true when the flash operation completed safely.
  */
-void config_write(const config_t* cfg);
+bool config_write(const config_t* cfg);
 
 /**
  * @brief Check if flash configuration magic marker is valid.
@@ -77,8 +82,9 @@ void dump_config(void);
 
 /**
  * @brief Erase persistent configuration sector.
+ * @return true when the flash operation completed safely.
  */
-void config_wipe(void);
+bool config_wipe(void);
 
 /**
  * @brief Print RAM usage statistics.
@@ -89,5 +95,11 @@ void print_memory_usage(void);
  * @brief Print flash usage statistics.
  */
 void print_flash_usage(void);
+
+/**
+ * @brief Capture RAM and flash usage without emitting transport-specific output.
+ * @param snapshot Destination snapshot.
+ */
+void memory_status_snapshot(management_memory_snapshot_t* snapshot);
 
 #endif /* PERSISTENT_CONFIG_H */

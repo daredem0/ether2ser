@@ -40,11 +40,11 @@ void test_event_queue_full_when_capacity_reached(void)
     event_queue_init();
     for (size_t i = 0; i < EVENT_QUEUE_CAPACITY - 1; i++)
     {
-        event_t ev = make_event(EV_MEM, (uintptr_t)i, i);
+        event_t ev = make_event(EV_CLI_LINE, (uintptr_t)i, i);
         TEST_ASSERT_TRUE(event_queue_push(&ev));
     }
     TEST_ASSERT_TRUE(event_queue_is_full());
-    event_t extra = make_event(EV_MEM, 0xdead, 1);
+    event_t extra = make_event(EV_CLI_LINE, 0xdead, 1);
     TEST_ASSERT_FALSE(event_queue_push(&extra));
 }
 
@@ -61,7 +61,7 @@ void test_event_queue_wraparound_preserves_order(void)
 
     for (size_t i = 0; i < EVENT_QUEUE_CAPACITY - 1; i++)
     {
-        event_t ev = make_event(EV_MEM, (uintptr_t)(0x1000 + i), i);
+        event_t ev = make_event(EV_CLI_LINE, (uintptr_t)(0x1000 + i), i);
         TEST_ASSERT_TRUE(event_queue_push(&ev));
     }
 
@@ -69,7 +69,7 @@ void test_event_queue_wraparound_preserves_order(void)
     {
         event_t out = {0};
         TEST_ASSERT_TRUE(event_queue_pop(&out));
-        TEST_ASSERT_EQUAL(EV_MEM, out.type);
+        TEST_ASSERT_EQUAL(EV_CLI_LINE, out.type);
         TEST_ASSERT_EQUAL_PTR((const void*)(0x1000 + i), out.data.ptr);
         TEST_ASSERT_EQUAL(i, out.data_len);
     }
@@ -84,7 +84,7 @@ void test_event_queue_wraparound_preserves_order(void)
     {
         event_t out = {0};
         TEST_ASSERT_TRUE(event_queue_pop(&out));
-        TEST_ASSERT_EQUAL(EV_MEM, out.type);
+        TEST_ASSERT_EQUAL(EV_CLI_LINE, out.type);
         TEST_ASSERT_EQUAL_PTR((const void*)(0x1000 + i), out.data.ptr);
         TEST_ASSERT_EQUAL(i, out.data_len);
     }
@@ -104,7 +104,7 @@ void test_event_queue_wraparound_preserves_order(void)
 void test_event_get_payload_ptr_inline_ok(void)
 {
     event_t ev = {
-        .type = EV_STATUS,
+        .type = EV_CLI_LINE,
         .data_len = 4,
         .is_inline = true,
     };
@@ -123,7 +123,7 @@ void test_event_get_payload_ptr_inline_ok(void)
 void test_event_get_payload_ptr_inline_too_small_fails(void)
 {
     event_t ev = {
-        .type = EV_STATUS,
+        .type = EV_CLI_LINE,
         .data_len = 3,
         .is_inline = true,
     };
@@ -135,7 +135,7 @@ void test_event_get_payload_ptr_pointer_ok(void)
 {
     uint32_t payload = 0xCAFEBABE;
     event_t  ev = {
-         .type = EV_STATUS,
+         .type = EV_CLI_LINE,
          .data.ptr = &payload,
          .data_len = sizeof(payload),
          .is_inline = false,
@@ -150,7 +150,7 @@ void test_event_get_payload_ptr_pointer_invalid_fails(void)
 {
     uint32_t payload = 0x12345678;
     event_t  ev = {
-         .type = EV_STATUS,
+         .type = EV_CLI_LINE,
          .data.ptr = &payload,
          .data_len = sizeof(payload) - 1,
          .is_inline = false,

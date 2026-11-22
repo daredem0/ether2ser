@@ -41,6 +41,7 @@ void cli_poll(void)
 {
     static char    line_buffer[CLI_BUFFER_SIZE];
     static uint8_t buffer_len = 0;
+    static bool    discard_until_newline = false;
     static char    cli_line_pool[CLI_EVENT_POOL_SIZE][CLI_BUFFER_SIZE];
     static uint8_t cli_line_pool_write = 0;
 
@@ -53,6 +54,13 @@ void cli_poll(void)
 
         if (input_char == '\n' || input_char == '\r')
         {
+            if (discard_until_newline)
+            {
+                LOG_PLAIN("\r\nerror: command too long\r\n");
+                discard_until_newline = false;
+                buffer_len            = 0U;
+                continue;
+            }
             // add new line before processing command
             LOG_PLAIN("\r\n");
             line_buffer[buffer_len] = '\0';
@@ -90,20 +98,31 @@ void cli_poll(void)
             buffer_len = 0;
         }
         else if (input_char == ASCII_BACKSPACE || input_char == ASCII_DELETE)
-        { // backspace
-            LOG_PLAIN("\b \b");
-            if (buffer_len)
+        {
+            if (!discard_until_newline)
             {
-                buffer_len--;
+                LOG_PLAIN("\b \b");
+                if (buffer_len)
+                {
+                    buffer_len--;
+                }
             }
         }
         else if (input_char >= ASCII_FIRST_PRINTABLE && input_char <= ASCII_LAST_PRINTABLE)
         {
-            if (buffer_len < sizeof(line_buffer) - 1)
+            if (discard_until_newline)
             {
-                // Echo character back and sore it in buffer
+                continue;
+            }
+            if (buffer_len < sizeof(line_buffer) - 1U)
+            {
                 LOG_PLAIN("%c", (char)input_char);
                 line_buffer[buffer_len++] = (char)input_char;
+            }
+            else
+            {
+                discard_until_newline = true;
+                buffer_len            = 0U;
             }
         }
         else

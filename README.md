@@ -4,7 +4,7 @@ Ethernet ↔ synchronous V.24 (RS-232/V.28) bridge firmware for RP2040 + W5500 (
 **What It Does**
 - Bridges UDP frames to synchronous V.24 via HDLC framing/deframing.
 - Uses RP2040 PIO for clocked TX/RX.
-- Provides a USB CDC CLI for configuration and status.
+- Provides the same management resources over framed USB CDC commands and HTTP/1.1 REST.
 - Stores configuration in flash.
 
 **Hardware**
@@ -56,109 +56,102 @@ cmake --build build --target flash_elf_ex_blink_leds
 ```
 - UF2 files are in `build/` after a successful build.
 
-**Usage**
-- Connect to the board’s USB CDC serial.
-- Run `help` for available commands.
+**Management Interfaces**
+- USB CDC is a human-facing command console. Interactive commands use short
+  verbs and formatted output; they do not show protocol framing.
+- Commands:
+```text
+help [resource]
+status
+mem
+net
+config
+v24
+mode [bridge|gpio]
+pins
+pininfo <signal>
+get|set gpio <signal> [value]
+get|set net <setting> [value]
+get|set v24 <setting> [value]
+get|set loglevel [value]
+save
+wipe wipe
+reboot
+```
 - Examples:
 ```text
-set net ip 192.168.29.2/24
+status
+mode gpio
+set gpio rts 1
+mode bridge
+set net ip.local 192.168.29.2/24
 set net ip.remote 192.168.29.5
 set net udp.port.local 6969
 set v24 baudrate 9600
-set v24 polarities txd,rxd,rts
+save
 ```
+- `tools/serial_console.py send` adds a reserved `@` prefix and receives
+  `@response` markers for reliable automation. The interactive console client
+  sends normal unframed commands, so humans see only the formatted response.
+- `bridge` owns the V.24 pins and rejects manual GPIO writes. `gpio` disables the
+  UDP/V.24 bridge and permits writes only to non-reserved output signals. Mode
+  changes are persisted and rebooted.
+- HTTP uses the configured W5500 IPv4 address and fixed TCP port 80; no additional
+  persistent network setting is required. Socket 2 is reserved for one bounded,
+  nonblocking HTTP connection.
+- REST paths are the command resource paths with dots replaced by slashes:
+```text
+GET  /api/v1/status
+GET  /api/v1/config
+PUT  /api/v1/system/mode       {"value":"gpio"}
+PUT  /api/v1/gpio/rts          {"value":1}
+PUT  /api/v1/v24/baudrate      {"value":16000}
+POST /api/v1/actions/save
+POST /api/v1/actions/wipe      {"confirm":"wipe"}
+POST /api/v1/actions/reboot
+```
+- HTTP responses are JSON and close the connection. Effects that can disrupt the
+  connection are applied only after the TCP connection has closed.
+- The HTTP service has no authentication or TLS. Use it only on the trusted,
+  isolated LAN assumed by this firmware.
 - Defaults are defined in `src/drivers/w5500_driver.h`.
 - The W5500 MAC is derived from the static IPv4 address as `02:e2:<IPv4 bytes>`. For example, `192.168.29.20` uses `02:e2:c0:a8:1d:14`. Boards on one L2 segment must have distinct IPv4 addresses.
 
 **Status Output**
-- The `status` command prints live pipeline diagnostics.
-- Example:
+- `status` returns the shared runtime snapshot as an aligned, human-readable
+  report. REST returns the same snapshot as structured JSON.
+- Serial example:
 ```text
-ether2ser> status
 status: ok
-Current Baudrate estimation on pin 4: 109010.0 Hz
-Current Baudrate estimation on pin 0: 108940.0 Hz
-Current Baudrate estimation based on DMA: 109008 Hz
+Operating mode: bridge
+Current Baudrate estimation on pin 4: 16000.0 Hz
+Current Baudrate estimation on pin 0: 16000.0 Hz
+Current Baudrate estimation based on DMA: 16000 Hz
 PIPE STATS
   Traffic
     Frames    : udp_rx=420  hdlc_tx=420  hdlc_rx=420
     UDP TX    : attempts=420  ok=420  fail=0
     Backlog   : tx->ready_gap=0  ready->udp_gap=0
-    Serial    : rx_bytes=630410  tx_bytes=630410
-    Rates     : udp_rx=420000/s  hdlc_rx=420000/s  udp_tx=420000/s  fail=0/s  rx_bytes=630410/s
   Decode / Sync
     Decode    : frame_ready=420  ok=420  fail=0
     FailReason: invalid=0  short=0  long=0  unstuff=0  crc=0
-    FirstFail : none
-    SyncState : HUNTING
-    SyncWait  : syncing=0  synced=0
-    SyncMaint : consume=420  hardcap_events=0  hardcap_bytes=0
-    Resync    : idle=0  hard=0  no_progress=0
-    Accum     : pos=0  proc=0  state=0  off=0  cand_valid=0  cand_end=0
-    RX Health : acc_pos_max=4  rx_fifo_stall=0  rx_drop_acc_full=0
-               hunt_idle_drop=0  dma_ovf_words=0
   Buffers
     TX Queue  : used=0/64  active=0
-    HighWater : tx=0  event=1  log=4
-    W5500 Buf : rx_no_room_events=0  tx_full_events=0
     Drops     : tx=0  event=0  log=0
-    Recons    : len=0
-    Throttle  : udp_rx_enter=0  udp_rx_skips=0
     PIO TX    : stalled=1  underruns=0  cts_restarts=0
-    CTS       : level=0  edges=0  restart=1
 ```
-- Field meanings
+- Rate fields are sampled by the event loop on a fixed one-second interval.
+  Querying status does not reset or distort the sampling interval.
 
-`General`
-
-| Name | Meaning | Debug hint |
+| Report section | Meaning | Healthy indication |
 |---|---|---|
-| `Current Baudrate estimation on pin …` | Measured clock frequency from the GPIO edge monitor on the named pin. | If this is far from configured baud, debug physical clock/sampling before protocol logic. GPIO edge monitoring can undercount at high external-clock rates. |
-| `Current Baudrate estimation based on DMA` | Effective RX clock frequency calculated as the serial DMA byte rate multiplied by eight. The first sample uses byte count divided by uptime; later samples cover the interval since the previous `status`. | Prefer this estimate over GPIO edge monitoring when continuous external clock and idle data are present. Very short sampling intervals reduce precision. |
-
-`Traffic`
-
-| Name | Meaning | Debug hint |
-|---|---|---|
-| `Frames` | Stage counters across the pipeline (`udp_rx`, `hdlc_tx`, `hdlc_rx`). | Compare columns to locate where frames are being lost. |
-| `udp_rx` | UDP frames accepted from Ethernet. | If low, issue is upstream/network side. |
-| `hdlc_tx` | Frames encoded and queued to serial TX. | `udp_rx` and `hdlc_tx` should track closely. |
-| `hdlc_rx` | HDLC frame candidates detected on serial RX. | Much larger than `hdlc_tx` usually means desync/false framing. |
-| `UDP TX` | W5500 send outcomes: every decoded datagram increments `attempts`, exact-length vendor sends increment `ok`, and negative or short sends increment `fail`. | Healthy traffic has `attempts == ok` and `fail == 0`; host receipt remains the end-to-end delivery proof. |
-| `Backlog` | Gap metrics between stages. | `tx->ready_gap` grows when RX cannot keep up; `ready->udp_gap` includes decode failures and failed UDP sends. |
-| `tx->ready_gap` | `hdlc_tx - hdlc_rx`. | Persistent growth means receive/framing lag. |
-| `ready->udp_gap` | `hdlc_rx - UDP TX ok`. | Persistent growth points at decode integrity or UDP send failures. |
-| `Serial` | Cumulative byte counters on wire (`rx_bytes`, `tx_bytes`). | Large divergence indicates one direction not flowing cleanly. |
-| `Rates` | Per-second deltas from previous `status`; `udp_tx` uses successful sends. | First sample or very short interval can look inflated. |
-
-`Decode / Sync`
-
-| Name | Meaning | Debug hint |
-|---|---|---|
-| `Decode` | Decoder outcomes (`frame_ready`, `ok`, `fail`). | `fail` near zero is expected in stable runs. |
-| `frame_ready` | HDLC candidates emitted by sync layer. | If this overshoots TX by a lot, suspect framing alignment/noise. |
-| `ok` | Successful decode + CRC validation. | Should track UDP TX `attempts`. |
-| `fail` | Failed decode attempts. | Use `FailReason` to identify root cause. |
-| `FailReason` | Breakdown (`invalid`, `short`, `long`, `unstuff`, `crc`). | `unstuff` dominance suggests bitstream corruption/alignment; `crc` points to data corruption after framing. |
-| `FirstFail` | First failed decode retained since boot: reason, encoded/decoded length, raw bits consumed, sync alignment, received/calculated CRC, and first 12 de-stuffed bytes. A four-byte big-endian prefix is also shown as `seq_be`. | Correlate `seq_be` with the sender's missing sequence. `raw_seen` is decoder progress, not the corrupt-bit location; a CRC failure is only identified after the full candidate is consumed. |
-| `SyncState` | Current sync FSM state (`HUNTING`, `SYNCING`, `SYNCED`). | Long time in `SYNCING`/`SYNCED` with low progress can indicate stuck candidate flow. |
-| `SyncWait` | Lookahead waits for cross-byte alignment in `SYNCING`/`SYNCED`. | Fast growth indicates frequent boundary stalls. |
-| `SyncMaint` | Maintenance counters (`consume`, `hardcap_events`, `hardcap_bytes`). | `hardcap_*` should remain near zero in healthy operation. |
-| `Resync` | Recovery reason counters (`idle`, `hard`, `no_progress`). | Spikes indicate unstable decode path or over-aggressive thresholds. |
-| `Accum` | Internal accumulator live state (`pos`, `proc`, `state`, `off`, candidate fields). | Non-zero `pos`/`proc` for long periods without progress indicates parser stall. |
-| `RX Health` | RX path health (`acc_pos_max`, `rx_fifo_stall`, `rx_drop_acc_full`, `hunt_idle_drop`, `dma_ovf_words`). | Rising stall/overflow/drop counters indicate receive-capacity loss. `hunt_idle_drop` counts only redundant external-clock idle bytes discarded while the accumulator retains its single-byte overlap; it must not include bytes after a possible frame start. |
-
-`Buffers`
-
-| Name | Meaning | Debug hint |
-|---|---|---|
-| `TX Queue` | Current TX queue occupancy (`used/capacity`, `active`). | `used` near capacity indicates sustained overload. |
-| `used` | Number of queued TX frames. | Trend matters more than instantaneous value. |
-| `active` | `1` if one frame is currently being drained to TX FIFO. | `active=0` with `used>0` indicates drain path issue. |
-| `HighWater` | Peak occupancy since boot (`tx`, `event`, `log`). | Useful to size buffers and detect near-overflow phases. |
-| `Drops` | Cumulative dropped items (`tx`, `event`, `log`). | Any non-zero drop counter indicates data/control loss. |
-| `Recons` | Current reconstructed frame length pending decode. | Large lingering values can indicate stuck/incomplete candidate handling. |
-| `PIO TX` | TX PIO stall state and cumulative recovery counts (`underruns`, `cts_restarts`). | `stalled=1` is normal after a completed frame; rising `underruns` means the active frame exhausted the FIFO and was restarted from byte zero. Rising `cts_restarts` means a CTS edge interrupted an active frame. |
+| Baudrate estimates | GPIO clock estimates and DMA-byte-rate estimate. | DMA estimate near the applied clock; GPIO edge monitoring may undercount at high rates. |
+| `Traffic / Frames` | UDP ingress, HDLC TX, and HDLC RX stage counters. | Counters track without a growing stage gap. |
+| `Traffic / UDP TX` | Datagram attempts, exact-length sends, and failures. | `attempts == ok`, `fail == 0`; only host receipt proves delivery. |
+| `Decode / Sync` | Decode totals, reason counters, synchronization and retained first failure. | No increasing CRC, unstuff, invalid, short, or long failures. |
+| `RX Health` | Accumulator high-water, FIFO stalls, dropped bytes, idle filtering and DMA overflow. | Stall, full-drop, and overflow counters remain zero. |
+| `Buffers` | Current/peak bounded-buffer use, throttling and drops. | Capacity headroom and zero drops. |
+| `PIO TX` / `CTS` | TX stall, underrun recovery, CTS restarts and current CTS state. | A completed frame may leave `stalled=1`; underrun/restart counters should not grow in stable traffic. |
 
 **UDP Test Scripts**
 - `tests/udp_cli_sender.sh`
@@ -233,8 +226,8 @@ python3 tools/serial_console.py launch \
 ```
 
 Change the paths if you move USB ports or use another PC. In each pane,
-press empty Enter to synchronize, then type commands such as `status` or
-`net`. Commands are edited locally and submitted as whole lines, so agent
+press empty Enter to synchronize, then use commands such as `get status` or
+`get net`. Commands are edited locally and submitted as whole lines, so agent
 input cannot be inserted into your unfinished command. Ctrl-C/D closes a
 pane client. The broker stays running when clients/windows close.
 
@@ -243,19 +236,19 @@ From another terminal, or an agent execution tool:
 ```bash
 python3 tools/serial_console.py status
 python3 tools/serial_console.py sync pico-a
-python3 tools/serial_console.py send pico-a status
+python3 tools/serial_console.py send pico-a "get status"
 python3 tools/serial_console.py sync pico-b
-python3 tools/serial_console.py send pico-b net --json
+python3 tools/serial_console.py send pico-b "get net"
 ```
 
 Commands to the same board are serialized; the two boards operate
-independently. Command responses include echoed input and any concurrent
-firmware logs. Completion requires a firmware prompt followed by 250 ms
-of quiet; this is a heuristic for the existing text CLI, not a structured
-firmware protocol. Timeout returns partial output and a nonzero exit code,
-does not retry, and requires `sync` before another command. Persistent
-background logging may prevent a quiet prompt. The usual firmware effects
-still apply: `set` can save to flash, and `reboot` interrupts the console.
+independently. The broker completes a command only on its matching
+`@response <sequence> end ...` marker, so prompts and concurrent firmware
+logs cannot terminate a response early. A firmware `error` marker or timeout
+returns a nonzero result. Timeout does not retry and requires `sync` before
+another command. Persistent background logging does not affect framed command
+completion. `save` writes flash, and mode changes or `reboot` interrupt the
+console after their response.
 
 The broker reconnects to the same USB path after a reboot; synchronize
 again after reconnecting. Logs are in `/tmp/ether2ser-console-UID/` by
